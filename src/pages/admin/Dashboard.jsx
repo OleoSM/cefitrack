@@ -64,7 +64,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 max-w-7xl">
       {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard icon={Users}         label="Total Alumnos"    value={students.length} sub={`${groups.length} grupos activos`} color="bg-navy-900" onClick={()=>navigate('/admin/alumnos')} />
         <StatCard icon={CalendarCheck} label="Asistencia Hoy"   value={`${presentHoy}/${students.length}`} sub="Datos estimados" color="bg-emerald-600" onClick={()=>navigate('/admin/asistencias')} />
         <StatCard icon={TrendingUp}    label="Promedio General"  value="8.1" sub="↑ +0.3 vs mes anterior" color="bg-blue-600" onClick={()=>navigate('/admin/rankings')} />
@@ -72,9 +72,9 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row 1 */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Area chart */}
-        <div className="card xl:col-span-2 p-5">
+        <div className="card lg:col-span-2 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="section-title">Evolución del Promedio</h2>
@@ -136,9 +136,9 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row 2 + activity */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Bar chart */}
-        <div className="card xl:col-span-2 p-5">
+        <div className="card lg:col-span-2 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="section-title">Rendimiento por Materia</h2>
@@ -183,7 +183,7 @@ export default function Dashboard() {
       </div>
 
       {/* Top students + At risk */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Top 5 */}
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">

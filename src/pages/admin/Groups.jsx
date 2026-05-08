@@ -37,7 +37,7 @@ export default function Groups() {
   return (
     <div className="max-w-5xl space-y-5">
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {[
           { label:'Total Grupos',   value:groups.length },
           { label:'Total Alumnos',  value:totalStudents },

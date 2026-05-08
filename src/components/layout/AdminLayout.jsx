@@ -1,21 +1,22 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
-  LayoutDashboard, CalendarCheck, Users, BookOpen, BarChart2,
+  LayoutDashboard, CalendarCheck, Users, BookOpen,
   BrainCircuit, Upload, LogOut, GraduationCap, ClipboardList, Trophy,
-  ChevronRight, Bell
+  ChevronRight, Bell, Menu, X
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const nav = [
-  { to:'/admin',             label:'Tablero',         icon:LayoutDashboard, exact:true },
-  { to:'/admin/asistencias', label:'Pasar Lista',      icon:CalendarCheck },
-  { to:'/admin/grupos',      label:'Grupos',           icon:BookOpen },
-  { to:'/admin/alumnos',     label:'Alumnos',          icon:Users },
-  { to:'/admin/evaluaciones',label:'Evaluaciones',     icon:ClipboardList },
-  { to:'/admin/rankings',    label:'Rankings',         icon:Trophy },
-  { to:'/admin/ia',          label:'Análisis con IA',  icon:BrainCircuit },
-  { to:'/admin/importar',    label:'Importar Alumnos', icon:Upload },
+  { to:'/admin',              label:'Tablero',         icon:LayoutDashboard, exact:true },
+  { to:'/admin/asistencias',  label:'Pasar Lista',     icon:CalendarCheck },
+  { to:'/admin/grupos',       label:'Grupos',          icon:BookOpen },
+  { to:'/admin/alumnos',      label:'Alumnos',         icon:Users },
+  { to:'/admin/evaluaciones', label:'Evaluaciones',    icon:ClipboardList },
+  { to:'/admin/rankings',     label:'Rankings',        icon:Trophy },
+  { to:'/admin/ia',           label:'Análisis con IA', icon:BrainCircuit },
+  { to:'/admin/importar',     label:'Importar',        icon:Upload },
 ]
 
 const pageTitles = {
@@ -30,33 +31,52 @@ const pageTitles = {
 }
 
 export default function AdminLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const { currentUser, logout } = useAuth()
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
   const { pathname } = useLocation()
 
   const handleLogout = () => { logout(); navigate('/login') }
+  const closeSidebar  = () => setSidebarOpen(false)
 
   const pageTitle = Object.entries(pageTitles)
-    .sort((a,b) => b[0].length - a[0].length)
+    .sort((a, b) => b[0].length - a[0].length)
     .find(([k]) => pathname.startsWith(k))?.[1] ?? 'EduTrack'
 
-  const initials = currentUser?.name.split(' ').slice(0,2).map(n=>n[0]).join('') ?? 'PS'
+  const initials = currentUser?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'PS'
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
+
+      {/* ── Mobile overlay backdrop ──────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={closeSidebar}
+        />
+      )}
+
       {/* ── Sidebar ──────────────────────────────────────────── */}
-      <aside className="w-64 flex-shrink-0 bg-navy-900 flex flex-col overflow-hidden">
-        {/* Logo */}
-        <div className="px-5 py-5 border-b border-navy-800">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gold-500 flex items-center justify-center flex-shrink-0">
-              <GraduationCap size={20} className="text-white" />
-            </div>
-            <div>
-              <p className="text-white font-bold text-lg leading-none">EduTrack</p>
-              <p className="text-navy-300 text-xs mt-0.5">Plataforma Educativa</p>
-            </div>
+      <aside className={clsx(
+        'fixed inset-y-0 left-0 z-50 w-64 bg-navy-900 flex flex-col transition-transform duration-300 ease-in-out',
+        'lg:static lg:translate-x-0 lg:z-auto lg:flex-shrink-0',
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        {/* Logo + mobile close button */}
+        <div className="px-5 py-5 border-b border-navy-800 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-gold-500 flex items-center justify-center flex-shrink-0">
+            <GraduationCap size={20} className="text-white" />
           </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-bold text-lg leading-none">EduTrack</p>
+            <p className="text-navy-300 text-xs mt-0.5">Plataforma Educativa</p>
+          </div>
+          <button
+            onClick={closeSidebar}
+            className="lg:hidden text-navy-400 hover:text-white transition-colors p-1 rounded"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Nav */}
@@ -67,6 +87,7 @@ export default function AdminLayout() {
               key={to}
               to={to}
               end={exact}
+              onClick={closeSidebar}
               className={({ isActive }) => clsx(
                 'nav-item group',
                 isActive
@@ -99,27 +120,38 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      {/* ── Main ─────────────────────────────────────────────── */}
+      {/* ── Main area ────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
         {/* Topbar */}
-        <header className="bg-white border-b border-slate-200 px-6 h-14 flex items-center justify-between flex-shrink-0">
-          <h1 className="text-base font-semibold text-slate-800">{pageTitle}</h1>
-          <div className="flex items-center gap-3">
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-6 h-14 flex items-center justify-between flex-shrink-0 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 flex-shrink-0"
+            >
+              <Menu size={20} />
+            </button>
+            <h1 className="text-sm sm:text-base font-semibold text-slate-800 truncate">{pageTitle}</h1>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             <button className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500">
               <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
             </button>
             <div className="flex items-center gap-2 text-sm text-slate-600">
-              <div className="w-7 h-7 rounded-full bg-navy-900 flex items-center justify-center text-white text-[11px] font-bold">
+              <div className="w-7 h-7 rounded-full bg-navy-900 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">
                 {initials}
               </div>
-              <span className="font-medium hidden sm:inline">{currentUser?.name.split(' ').slice(0,2).join(' ')}</span>
+              <span className="font-medium hidden md:inline">{currentUser?.name.split(' ').slice(0, 2).join(' ')}</span>
             </div>
           </div>
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
           <div className="animate-fade-in">
             <Outlet />
           </div>

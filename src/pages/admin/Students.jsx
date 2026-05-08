@@ -69,16 +69,17 @@ export default function Students() {
 
       {/* Table */}
       <div className="card overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="table-header">Alumno</th>
               <th className="table-header">Grupo</th>
               <th className="table-header">Asistencia</th>
               <th className="table-header">Promedio</th>
-              <th className="table-header">Tareas</th>
+              <th className="table-header hidden md:table-cell">Tareas</th>
               <th className="table-header">Estado</th>
-              <th className="table-header">Tutor</th>
+              <th className="table-header hidden lg:table-cell">Tutor</th>
               <th className="table-header"></th>
             </tr>
           </thead>
@@ -95,20 +96,20 @@ export default function Students() {
                       <div className="w-9 h-9 rounded-full bg-navy-100 flex items-center justify-center text-navy-800 text-xs font-bold flex-shrink-0">
                         {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                       </div>
-                      <div>
-                        <p className="font-semibold text-slate-800">{s.name}</p>
-                        <p className="text-[11px] text-slate-400">{s.email}</p>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 truncate">{s.name}</p>
+                        <p className="text-[11px] text-slate-400 hidden sm:block truncate">{s.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="table-cell">
-                    <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">
                       {grp?.name}
                     </span>
                   </td>
                   <td className="table-cell">
                     <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="w-12 sm:w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full rounded-full" style={{ width:`${s.attendanceRate}%`, background: s.attendanceRate>=90?'#10b981':s.attendanceRate>=75?'#3b82f6':'#ef4444' }}/>
                       </div>
                       <span className={`text-xs font-bold ${attColor}`}>{s.attendanceRate}%</span>
@@ -117,7 +118,7 @@ export default function Students() {
                   <td className="table-cell">
                     <span className={`font-bold text-base ${gradeColor}`}>{s.avgGrade}</span>
                   </td>
-                  <td className="table-cell">
+                  <td className="table-cell hidden md:table-cell">
                     <div className="flex items-center gap-1.5">
                       <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full rounded-full bg-blue-500" style={{ width:`${(s.assignmentsDone/s.assignmentsTotal)*100}%` }}/>
@@ -131,7 +132,7 @@ export default function Students() {
                       {cfg.label}
                     </span>
                   </td>
-                  <td className="table-cell">
+                  <td className="table-cell hidden lg:table-cell">
                     <div>
                       <p className="text-xs font-medium text-slate-700">{s.tutor.name}</p>
                       <p className="text-[11px] text-slate-400">{s.tutor.email}</p>
@@ -154,6 +155,7 @@ export default function Students() {
             <p>No se encontraron alumnos con ese criterio.</p>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

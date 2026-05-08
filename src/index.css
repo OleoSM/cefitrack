@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-slate-100; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-slate-400; }
+}
+
+@layer components {
+  .stat-card {
+    @apply bg-white rounded-xl p-5 shadow-card border border-slate-100;
+  }
+  .page-title {
+    @apply text-2xl font-bold text-slate-800;
+  }
+  .section-title {
+    @apply text-lg font-semibold text-slate-700;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .btn-primary {
+    @apply bg-navy-900 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-navy-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2;
+  }
+  .btn-secondary {
+    @apply bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50 transition-colors flex items-center gap-2;
+  }
+  .btn-accent {
+    @apply bg-gold-500 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-gold-600 transition-colors flex items-center gap-2;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-card border border-slate-100 overflow-hidden;
+  }
+  .input-field {
+    @apply w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600 focus:border-transparent transition-shadow;
+  }
+  .table-header {
+    @apply text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4;
+  }
+  .table-cell {
+    @apply py-3 px-4 text-sm text-slate-700;
+  }
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn .25s ease-out both; }
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}

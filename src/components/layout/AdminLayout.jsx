@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import LoadingPage from '../LoadingPage'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, CalendarCheck, Users, BookOpen,
@@ -129,6 +130,7 @@ export default function AdminLayout() {
             {/* Hamburger — mobile only */}
             <button
               onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir menú"
               className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 flex-shrink-0"
             >
               <Menu size={20} />
@@ -137,9 +139,9 @@ export default function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <button className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500">
+            <button aria-label="Notificaciones" className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500">
               <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
             </button>
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <div className="w-7 h-7 rounded-full bg-navy-900 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">
@@ -152,9 +154,11 @@ export default function AdminLayout() {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
-          <div className="animate-fade-in">
-            <Outlet />
-          </div>
+          <Suspense fallback={<LoadingPage />}>
+            <div key={pathname} className="animate-page-in">
+              <Outlet />
+            </div>
+          </Suspense>
         </main>
       </div>
     </div>

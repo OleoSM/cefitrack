@@ -1,30 +1,35 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
-import Login from './pages/Login'
-import AdminLayout from './components/layout/AdminLayout'
+import Login        from './pages/Login'
+import AdminLayout  from './components/layout/AdminLayout'
 import StudentLayout from './components/layout/StudentLayout'
+import LoadingPage  from './components/LoadingPage'
 
-import Dashboard      from './pages/admin/Dashboard'
-import Attendance     from './pages/admin/Attendance'
-import QRScanner      from './pages/admin/QRScanner'
-import SessionQR      from './pages/admin/SessionQR'
-import Groups         from './pages/admin/Groups'
-import GroupDetail    from './pages/admin/GroupDetail'
-import Students       from './pages/admin/Students'
-import StudentProfile from './pages/admin/StudentProfile'
-import Evaluations    from './pages/admin/Evaluations'
-import Rankings       from './pages/admin/Rankings'
-import AIInsights     from './pages/admin/AIInsights'
-import ImportStudents from './pages/admin/ImportStudents'
+/* ── Admin pages (lazy) ──────────────────────────────────── */
+const Dashboard      = lazy(() => import('./pages/admin/Dashboard'))
+const Attendance     = lazy(() => import('./pages/admin/Attendance'))
+const QRScanner      = lazy(() => import('./pages/admin/QRScanner'))
+const SessionQR      = lazy(() => import('./pages/admin/SessionQR'))
+const Groups         = lazy(() => import('./pages/admin/Groups'))
+const GroupDetail    = lazy(() => import('./pages/admin/GroupDetail'))
+const Students       = lazy(() => import('./pages/admin/Students'))
+const StudentProfile = lazy(() => import('./pages/admin/StudentProfile'))
+const Evaluations    = lazy(() => import('./pages/admin/Evaluations'))
+const Rankings       = lazy(() => import('./pages/admin/Rankings'))
+const AIInsights     = lazy(() => import('./pages/admin/AIInsights'))
+const ImportStudents = lazy(() => import('./pages/admin/ImportStudents'))
 
-import StudentDashboard from './pages/student/Dashboard'
-import MyGrades         from './pages/student/MyGrades'
-import MyAttendance     from './pages/student/MyAttendance'
-import AIReport         from './pages/student/AIReport'
-import MyQR             from './pages/student/MyQR'
-import ScanQR           from './pages/student/ScanQR'
+/* ── Student pages (lazy) ────────────────────────────────── */
+const StudentDashboard = lazy(() => import('./pages/student/Dashboard'))
+const MyGrades         = lazy(() => import('./pages/student/MyGrades'))
+const MyAttendance     = lazy(() => import('./pages/student/MyAttendance'))
+const AIReport         = lazy(() => import('./pages/student/AIReport'))
+const MyQR             = lazy(() => import('./pages/student/MyQR'))
+const ScanQR           = lazy(() => import('./pages/student/ScanQR'))
 
+/* ── Route guards ────────────────────────────────────────── */
 function ProtectedAdmin({ children }) {
   const { currentUser } = useAuth()
   if (!currentUser) return <Navigate to="/login" replace />
@@ -51,42 +56,48 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<RootRedirect />} />
+        <Suspense fallback={
+          <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+            <LoadingPage />
+          </div>
+        }>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<RootRedirect />} />
 
-          {/* ── Admin ──────────────────────────────────────── */}
-          <Route path="/admin" element={
-            <ProtectedAdmin><AdminLayout /></ProtectedAdmin>
-          }>
-            <Route index element={<Dashboard />} />
-            <Route path="asistencias"          element={<Attendance />} />
-            <Route path="asistencias/qr"       element={<QRScanner />} />
-            <Route path="asistencias/qr-sesion" element={<SessionQR />} />
-            <Route path="grupos"             element={<Groups />} />
-            <Route path="grupos/:groupId"    element={<GroupDetail />} />
-            <Route path="alumnos"            element={<Students />} />
-            <Route path="alumnos/:studentId" element={<StudentProfile />} />
-            <Route path="evaluaciones"       element={<Evaluations />} />
-            <Route path="rankings"           element={<Rankings />} />
-            <Route path="ia"                 element={<AIInsights />} />
-            <Route path="importar"           element={<ImportStudents />} />
-          </Route>
+            {/* ── Admin ──────────────────────────────────────── */}
+            <Route path="/admin" element={
+              <ProtectedAdmin><AdminLayout /></ProtectedAdmin>
+            }>
+              <Route index                        element={<Dashboard />} />
+              <Route path="asistencias"           element={<Attendance />} />
+              <Route path="asistencias/qr"        element={<QRScanner />} />
+              <Route path="asistencias/qr-sesion" element={<SessionQR />} />
+              <Route path="grupos"                element={<Groups />} />
+              <Route path="grupos/:groupId"       element={<GroupDetail />} />
+              <Route path="alumnos"               element={<Students />} />
+              <Route path="alumnos/:studentId"    element={<StudentProfile />} />
+              <Route path="evaluaciones"          element={<Evaluations />} />
+              <Route path="rankings"              element={<Rankings />} />
+              <Route path="ia"                    element={<AIInsights />} />
+              <Route path="importar"              element={<ImportStudents />} />
+            </Route>
 
-          {/* ── Alumno / Tutor (misma vista) ────────────────── */}
-          <Route path="/student" element={
-            <ProtectedStudent><StudentLayout /></ProtectedStudent>
-          }>
-            <Route index element={<StudentDashboard />} />
-            <Route path="calificaciones" element={<MyGrades />} />
-            <Route path="asistencias"   element={<MyAttendance />} />
-            <Route path="reporte-ia"    element={<AIReport />} />
-            <Route path="mi-qr"         element={<MyQR />} />
-            <Route path="escanear-qr"   element={<ScanQR />} />
-          </Route>
+            {/* ── Alumno / Tutor ─────────────────────────────── */}
+            <Route path="/student" element={
+              <ProtectedStudent><StudentLayout /></ProtectedStudent>
+            }>
+              <Route index                          element={<StudentDashboard />} />
+              <Route path="calificaciones"          element={<MyGrades />} />
+              <Route path="asistencias"             element={<MyAttendance />} />
+              <Route path="reporte-ia"              element={<AIReport />} />
+              <Route path="mi-qr"                   element={<MyQR />} />
+              <Route path="escanear-qr"             element={<ScanQR />} />
+            </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   )

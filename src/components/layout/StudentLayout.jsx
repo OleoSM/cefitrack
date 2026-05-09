@@ -1,9 +1,10 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { LayoutDashboard, BookOpen, CalendarCheck, BrainCircuit, QrCode, LogOut, GraduationCap, Menu, X } from 'lucide-react'
 import { getStudentById, groups } from '../../data/mockData'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import clsx from 'clsx'
+import LoadingPage from '../LoadingPage'
 
 const nav = [
   { to:'/student',                label:'Mi Panel',       icon:LayoutDashboard, exact:true },
@@ -15,6 +16,7 @@ const nav = [
 
 export default function StudentLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { pathname } = useLocation()
   const { currentUser, logout } = useAuth()
   const navigate = useNavigate()
   const student  = getStudentById(currentUser?.studentId)
@@ -101,6 +103,7 @@ export default function StudentLayout() {
             {/* Hamburger — mobile only */}
             <button
               onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir menú"
               className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 flex-shrink-0"
             >
               <Menu size={20} />
@@ -125,9 +128,11 @@ export default function StudentLayout() {
 
         {/* Scrollable content — bottom padding for mobile bottom nav */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 pb-20 lg:pb-6">
-          <div className="animate-fade-in">
-            <Outlet />
-          </div>
+          <Suspense fallback={<LoadingPage />}>
+            <div key={pathname} className="animate-page-in">
+              <Outlet />
+            </div>
+          </Suspense>
         </main>
 
         {/* ── Bottom nav (mobile only) ─────────────────────── */}

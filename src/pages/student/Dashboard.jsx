@@ -1,184 +1,455 @@
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell, ResponsiveContainer
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell, ResponsiveContainer,
 } from 'recharts'
-import { BookOpen, CalendarCheck, FileText, BrainCircuit, TrendingUp, ArrowRight } from 'lucide-react'
 import {
-  getStudentById, getGroupById, getEvalsByStudent, getAttendByStudent,
-  studentGradeTrend, attendanceColors
-} from '../../data/mockData'
+  BookOpen, CalendarCheck, BrainCircuit, ArrowRight, Target, Zap, Trophy, Info,
+} from 'lucide-react'
+import { getStudentById, getGroupById, getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
+import { promedioPonderado, rankingGrupo, statsAsistencia, getStudentEvals, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
+import { useStudentTheme } from '../../context/StudentThemeContext'
+import Dropdown from '../../components/ui/Dropdown'
 
-const PIE_COLORS = ['#10b981','#f59e0b','#ef4444','#3b82f6']
+const PIE_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6']
+const MATERIA_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa', '#f472b6', '#22d3ee']
+
+/* Popup de desglose al hacer hover/tap (fondo oscuro siempre, exento del tema claro via .kw) */
+function HoverInfo({ trigger, children }) {
+  const [open, setOpen] = useState(false)
+  const [shift, setShift] = useState(0)
+  const popRef = useRef(null)
+
+  /* Reposiciona el popup si se sale del viewport (tarjetas pegadas a los bordes) */
+  useLayoutEffect(() => {
+    if (!open) { setShift(0); return }
+    const el = popRef.current
+    if (!el) return
+    const pad = 12
+    const r = el.getBoundingClientRect()
+    let dx = 0
+    if (r.right > window.innerWidth - pad) dx = window.innerWidth - pad - r.right
+    if (r.left + dx < pad) dx = pad - r.left
+    setShift(dx)
+  }, [open])
+
+  return (
+    <div className="relative cursor-help"
+      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
+      onClick={() => setOpen(o => !o)}>
+      {trigger}
+      {open && (
+        <div ref={popRef} className="absolute z-40 top-full mt-2 left-1/2 w-64 max-w-[calc(100vw-24px)]"
+          style={{ transform: `translateX(calc(-50% + ${shift}px))` }}>
+          <div className="kw rounded-xl p-3.5 text-left animate-fade-in"
+            style={{ background: '#0f1020', border: '1px solid rgba(255,255,255,.14)', boxShadow: '0 18px 48px rgba(0,0,0,.55)' }}>
+            {children}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function StudentDashboard() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
-  const s = getStudentById(currentUser?.studentId)
+  const { t, card } = useStudentTheme()
+
+  const s   = getStudentById(currentUser?.studentId)
   const grp = getGroupById(s?.groupId)
-  const evals = getEvalsByStudent(s?.id).slice(-5)
-  const att = getAttendByStudent(s?.id)
-  const trend = studentGradeTrend[s?.id]
 
-  if (!s) return <div className="text-slate-500">Perfil no disponible.</div>
+  const [ultimasFilter, setUltimasFilter] = useState('todas')
+  const [hiddenMaterias, setHiddenMaterias] = useState([])
 
-  const attCounts = {
-    presente:    att.filter(a=>a.status==='presente').length,
-    tardanza:    att.filter(a=>a.status==='tardanza').length,
-    ausente:     att.filter(a=>a.status==='ausente').length,
-    justificado: att.filter(a=>a.status==='justificado').length,
-  }
-  const attPie = Object.entries(attCounts).map(([k,v]) => ({ name: attendanceColors[k].label, value:v }))
+  /* ── Pipeline oficial: promedio ponderado + lugar en el grupo ── */
+  const pipeline = useMemo(() => {
+    if (!s) return null
+    const pond    = promedioPonderado(s)
+    const ranking = rankingGrupo(s.groupId, pond.pesos)
+    const myPos   = ranking.findIndex(x => x.id === s.id) + 1
+    const asis    = statsAsistencia(s.id)
+    const evs     = getStudentEvals(s.id)
+    const evo     = evolucionPorMateria(s.id)
+    return { pond, ranking, myPos, asis, evs, evo }
+  }, [s])
 
-  const gradeColor = s.avgGrade >= 8.5 ? 'text-emerald-600' : s.avgGrade >= 7 ? 'text-blue-600' : 'text-amber-600'
-  const attColor   = s.attendanceRate >= 85 ? 'text-emerald-600' : s.attendanceRate >= 75 ? 'text-amber-600' : 'text-red-600'
+  if (!s || !pipeline) return <div style={{ color: t.t3 }}>Perfil no disponible.</div>
+
+  const { pond, ranking, myPos, asis, evs, evo } = pipeline
+  const lastSim = getLastSimulacro(s.id)
+  const targetSchool = getTargetSchool(s.id)
+  const allSims = getSimulacrosByStudent(s.id)
+
+  const attPie = Object.entries(asis.counts).map(([k, v]) => ({ name: attendanceColors[k].label, value: v }))
+
+  /* ── Últimas evaluaciones/exámenes/tareas ── */
+  const ultimasOptions = [
+    { value: 'todas',    label: 'Últimas evaluaciones' },
+    { value: 'examenes', label: 'Últimos exámenes' },
+    { value: 'tareas',   label: 'Últimas tareas' },
+  ]
+  const ultimas = [...evs]
+    .filter(e => ultimasFilter === 'examenes' ? esExamen(e.tipo) : ultimasFilter === 'tareas' ? esTarea(e.tipo) : true)
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+    .slice(0, 5)
+
+  const toggleMateria = m =>
+    setHiddenMaterias(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
+
+  const gradeColor = g => g >= 8.5 ? '#34d399' : g >= 7 ? '#60a5fa' : '#f59e0b'
+
+  const { desglose, pesos } = pond
 
   return (
-    <div className="max-w-5xl space-y-5">
-      {/* Welcome */}
-      <div className="rounded-2xl bg-gradient-to-r from-navy-900 to-navy-700 p-6 text-white">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-xl font-bold flex-shrink-0">
-            {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
+    <div className="max-w-6xl space-y-5">
+
+      {/* ══ Tarjeta de bienvenida (color personalizable en Configuración) ══ */}
+      <div className="kw rounded-2xl p-5 sm:p-6 text-white"
+        style={{ background: card.grad, border: '1px solid rgba(255,255,255,.10)' }}>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/10 flex items-center justify-center text-lg sm:text-xl font-bold flex-shrink-0">
+            {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
           </div>
-          <div>
-            <p className="text-navy-300 text-sm">Bienvenido de vuelta</p>
-            <h1 className="text-xl font-bold">{s.name}</h1>
-            <p className="text-navy-400 text-sm mt-0.5">{grp?.name} — {grp?.subject}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-white/45">Bienvenido de vuelta</p>
+            <h1 className="text-lg sm:text-xl font-bold truncate">{s.name}</h1>
+            <p className="text-xs sm:text-sm mt-0.5 text-white/40 truncate">{grp?.name} — {grp?.subject}</p>
           </div>
-          <div className="ml-auto hidden sm:flex gap-3">
-            <div className="text-center px-4 py-2 rounded-xl bg-white/10">
-              <p className={`text-2xl font-bold ${gradeColor === 'text-emerald-600' ? 'text-emerald-300' : 'text-gold-300'}`}>{s.avgGrade}</p>
-              <p className="text-[11px] text-navy-300">Promedio</p>
-            </div>
-            <div className="text-center px-4 py-2 rounded-xl bg-white/10">
-              <p className="text-2xl font-bold text-gold-300">#1</p>
-              <p className="text-[11px] text-navy-300">Lugar en grupo</p>
-            </div>
+
+          <div className="flex gap-3 w-full sm:w-auto sm:ml-auto">
+            {/* Promedio ponderado + tooltip de desglose */}
+            <HoverInfo trigger={
+              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl bg-white/10 min-w-[96px]">
+                <p className="text-2xl font-bold tabular-nums text-white flex items-center justify-center gap-1">
+                  {pond.promedio}
+                  <Info size={11} className="text-white/40"/>
+                </p>
+                <p className="text-[11px] text-white/45">Promedio</p>
+              </div>
+            }>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(255,255,255,.40)' }}>
+                ¿Cómo se calcula tu promedio?
+              </p>
+              {[
+                { l: `Exámenes (${pesos.examenes}%)`,  v: desglose.examenes.valor.toFixed(1) },
+                { l: `Tareas (${pesos.tareas}%)`,      v: `${desglose.tareas.done}/${desglose.tareas.total} → ${desglose.tareas.valor.toFixed(1)}` },
+                { l: `Asistencia (${pesos.asistencia}%)`, v: `${desglose.asistencia.pct}% → ${desglose.asistencia.valor.toFixed(1)}` },
+              ].map(row => (
+                <div key={row.l} className="flex items-center justify-between py-1 text-xs">
+                  <span style={{ color: 'rgba(255,255,255,.55)' }}>{row.l}</span>
+                  <span className="font-bold tabular-nums" style={{ color: 'rgba(255,255,255,.85)' }}>{row.v}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-2 mt-1 text-xs"
+                style={{ borderTop: '1px solid rgba(255,255,255,.10)' }}>
+                <span className="font-bold" style={{ color: 'rgba(255,255,255,.70)' }}>Promedio ponderado</span>
+                <span className="font-bold text-sm" style={{ color: '#34d399' }}>{pond.promedio}</span>
+              </div>
+            </HoverInfo>
+
+            {/* Lugar en grupo + tooltip */}
+            <HoverInfo trigger={
+              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl bg-white/10 min-w-[96px]">
+                <p className="text-2xl font-bold tabular-nums text-amber-300 flex items-center justify-center gap-1">
+                  #{myPos}
+                  <Info size={11} className="text-white/40"/>
+                </p>
+                <p className="text-[11px] text-white/45">Lugar en grupo</p>
+              </div>
+            }>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(255,255,255,.40)' }}>
+                Lugar en el grupo
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,.60)' }}>
+                Es el orden del grupo según el <strong style={{ color: 'rgba(255,255,255,.85)' }}>promedio ponderado</strong>{' '}
+                (Exámenes {pesos.examenes}% · Tareas {pesos.tareas}% · Asistencia {pesos.asistencia}%).
+              </p>
+              <p className="text-xs mt-2 font-semibold" style={{ color: '#fbbf24' }}>
+                Estás en el lugar #{myPos} de {ranking.length} alumnos.
+              </p>
+              {myPos > 1 && (
+                <p className="text-[11px] mt-1.5" style={{ color: 'rgba(255,255,255,.45)' }}>
+                  El lugar #{myPos - 1} tiene promedio {ranking[myPos - 2].promedio} — te faltan{' '}
+                  {(ranking[myPos - 2].promedio - pond.promedio).toFixed(1)} puntos.
+                </p>
+              )}
+            </HoverInfo>
           </div>
         </div>
       </div>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* ══ KPI cards ══ */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { icon:TrendingUp,  label:'Promedio General',   value:s.avgGrade,                    color:'bg-emerald-600', nav:'/student/calificaciones' },
-          { icon:CalendarCheck,label:'Asistencia',        value:`${s.attendanceRate}%`,         color:'bg-blue-600',   nav:'/student/asistencias' },
-          { icon:BookOpen,    label:'Tareas Entregadas',  value:`${s.assignmentsDone}/${s.assignmentsTotal}`, color:'bg-amber-500', nav:'/student/calificaciones' },
-          { icon:BrainCircuit,label:'Reporte IA',         value:'Ver',                          color:'bg-purple-600', nav:'/student/reporte-ia' },
-        ].map(({ icon:Icon, label, value, color, nav }) => (
-          <button key={label} onClick={() => navigate(nav)}
-            className="stat-card text-left hover:shadow-card-md transition-all hover:-translate-y-0.5 group w-full">
-            <div className={`w-9 h-9 rounded-xl ${color} flex items-center justify-center mb-3`}>
-              <Icon size={18} className="text-white"/>
+          { icon: Zap,           label: 'Último Simulacro',  value: lastSim ? `${lastSim.aciertos}/${lastSim.total}` : '—',
+            sub: lastSim?.folio, color: 'bg-emerald-600',
+            go: () => document.getElementById('prediccion')?.scrollIntoView({ behavior: 'smooth' }) },
+          { icon: CalendarCheck, label: 'Asistencia',        value: `${asis.pct}%`,
+            sub: `${asis.counts.presente} presentes`, color: 'bg-blue-600', go: () => navigate('/student/asistencias') },
+          { icon: BookOpen,      label: 'Tareas Entregadas', value: `${s.assignmentsDone}/${s.assignmentsTotal}`,
+            sub: `${Math.round(s.assignmentsDone / s.assignmentsTotal * 100)}% completado`, color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
+          { icon: BrainCircuit,  label: 'Reporte IA',        value: 'Ver',
+            sub: 'Análisis personalizado', color: 'bg-purple-600', go: () => navigate('/student/reporte-ia') },
+        ].map(({ icon: Icon, label, value, sub, color, go }) => (
+          <button key={label} onClick={go}
+            className="stat-card text-left transition-all group w-full flex flex-col">
+            <div className="flex items-start justify-between w-full">
+              <div className={`w-9 h-9 rounded-xl ${color} flex items-center justify-center mb-3`}>
+                <Icon size={18} className="text-white"/>
+              </div>
+              {sub && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: t.softBg, color: t.t3, border: `1px solid ${t.cardBorder}` }}>
+                  {sub}
+                </span>
+              )}
             </div>
-            <p className="text-2xl font-bold text-slate-800">{value}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+            <p className="text-xl sm:text-2xl font-bold tabular-nums" style={{ color: t.t1 }}>{value}</p>
+            <p className="text-xs mt-0.5" style={{ color: t.t3 }}>{label}</p>
+            <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold transition-colors"
+              style={{ color: t.light ? t.accent : 'rgba(255,255,255,.45)' }}>
+              Ver más <ArrowRight size={11} className="transition-transform group-hover:translate-x-0.5"/>
+            </span>
           </button>
         ))}
       </div>
 
+      {/* ══ Predicción de escuela ══ */}
+      {(lastSim || targetSchool) && (() => {
+        const score   = lastSim?.aciertos ?? null
+        const cutoff  = targetSchool?.corte ?? null
+        const gap     = score !== null && cutoff !== null ? cutoff - score : null
+        const reached = gap !== null && gap <= 0
+        const pct     = score !== null && cutoff !== null ? Math.min(100, Math.round((score / cutoff) * 100)) : null
+        const barColor = reached ? '#34d399' : pct >= 80 ? '#fbbf24' : '#60a5fa'
+        return (
+          <div id="prediccion" className="card p-5 relative overflow-hidden">
+            <div className="relative flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{
+                background: reached ? 'rgba(52,211,153,.15)' : 'rgba(96,165,250,.12)',
+                border: reached ? '1px solid rgba(52,211,153,.25)' : '1px solid rgba(96,165,250,.20)',
+              }}>
+                {reached ? <Trophy size={20} style={{ color: '#34d399' }}/> : <Target size={20} style={{ color: '#60a5fa' }}/>}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: t.t3 }}>
+                    Último Simulacro vs Objetivo
+                  </p>
+                  {allSims.length > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                      style={{ background: t.softBg, color: t.t3 }}>
+                      {allSims.length} simulacro{allSims.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                {reached ? (
+                  <p className="text-sm font-semibold mt-1" style={{ color: '#34d399' }}>
+                    ¡Alcanzaste el puntaje de corte de {targetSchool?.nombre}!
+                  </p>
+                ) : gap !== null ? (
+                  <p className="text-sm font-semibold mt-1" style={{ color: t.t2 }}>
+                    Te faltan <span style={{ color: t.light ? t.warn : '#fbbf24', fontWeight: 800 }}>{gap} aciertos</span> para{' '}
+                    <span style={{ color: t.t1 }}>{targetSchool?.nombre}</span>
+                  </p>
+                ) : (
+                  <p className="text-sm mt-1" style={{ color: t.t3 }}>Aún no hay simulacros registrados</p>
+                )}
+                {pct !== null && (
+                  <div className="mt-3">
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: t.softBg }}>
+                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: barColor }}/>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px]" style={{ color: t.t4 }}>0 aciertos</span>
+                      <span className="text-[10px]" style={{ color: t.t4 }}>Corte: {cutoff}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+                {score !== null && (
+                  <div className="text-center">
+                    <p className="text-3xl sm:text-4xl font-black tabular-nums" style={{ color: barColor, lineHeight: 1 }}>{score}</p>
+                    <p className="text-[10px] mt-1 font-medium" style={{ color: t.t4 }}>tu puntaje</p>
+                  </div>
+                )}
+                {score !== null && cutoff !== null && <div className="text-xl font-bold" style={{ color: t.t4 }}>/</div>}
+                {cutoff !== null && (
+                  <div className="text-center">
+                    <p className="text-3xl sm:text-4xl font-black tabular-nums" style={{ color: t.t4, lineHeight: 1 }}>{cutoff}</p>
+                    <p className="text-[10px] mt-1 font-medium" style={{ color: t.t4 }}>objetivo</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            {lastSim && (
+              <p className="relative text-[11px] mt-3 pt-3" style={{ borderTop: `1px solid ${t.divider}`, color: t.t4 }}>
+                <Zap size={10} className="inline mr-1 -mt-0.5" style={{ color: barColor }}/>
+                {lastSim.folio ? `${lastSim.folio} · ` : ''}Simulacro del{' '}
+                {new Date(lastSim.fecha + 'T12:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {' · '}{lastSim.aciertos}/{lastSim.total} aciertos
+              </p>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ══ Evolución + Asistencia ══ */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Grade trend */}
-        <div className="card p-5 xl:col-span-2">
-          <div className="flex items-center justify-between mb-4">
+        {/* Gráfica de líneas por materia (conectada a evaluaciones) */}
+        <div className="card p-4 sm:p-5 xl:col-span-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-1.5">
             <h2 className="section-title">Evolución de mis Calificaciones</h2>
-            <button onClick={()=>navigate('/student/calificaciones')} className="text-xs text-navy-700 hover:underline flex items-center gap-1">
-              Ver todas <ArrowRight size={12}/>
+            <button onClick={() => navigate('/student/calificaciones')}
+              className="text-xs font-bold hover:underline flex items-center gap-1"
+              style={{ color: t.light ? t.accent : 'rgba(255,255,255,.45)' }}>
+              Ver más <ArrowRight size={12}/>
             </button>
           </div>
-          {trend ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={trend} margin={{ top:5, right:5, bottom:0, left:-20 }}>
-                <defs>
-                  {['#3b82f6','#10b981','#f59e0b'].map((c,i)=>(
-                    <linearGradient key={i} id={`sg${i}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={c} stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor={c} stopOpacity={0}/>
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                <XAxis dataKey="mes" tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false}/>
-                <YAxis domain={[4,10]} tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{ fontSize:11, borderRadius:8 }}/>
-                {Object.keys(trend[0]).filter(k=>k!=='mes').map((k,i)=>(
-                  <Area key={k} type="monotone" dataKey={k} name={k} stroke={['#3b82f6','#10b981','#f59e0b'][i]} fill={`url(#sg${i})`} strokeWidth={2}/>
-                ))}
-              </AreaChart>
+          <p className="text-[11px] mb-3" style={{ color: t.t4 }}>
+            Materias ponderadas en tu promedio — registradas por tu docente.
+          </p>
+
+          {/* Checkboxes para mostrar/ocultar materias */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {evo.materias.map((m, i) => {
+              const hidden = hiddenMaterias.includes(m)
+              const color = MATERIA_COLORS[i % MATERIA_COLORS.length]
+              return (
+                <button key={m} onClick={() => toggleMateria(m)}
+                  className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
+                  style={{
+                    background: hidden ? 'transparent' : (t.light ? `${color}14` : 'rgba(255,255,255,.05)'),
+                    border: `1px solid ${hidden ? t.cardBorder : color}55`,
+                    color: hidden ? t.t4 : (t.light ? t.t2 : t.t2),
+                    textDecoration: hidden ? 'line-through' : 'none',
+                  }}>
+                  <span className="w-3 h-3 rounded flex items-center justify-center flex-shrink-0"
+                    style={{ background: hidden ? 'transparent' : color, border: `1.5px solid ${color}` }}>
+                    {!hidden && (
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </span>
+                  {m}
+                </button>
+              )
+            })}
+          </div>
+
+          {evo.data.length ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={evo.data} margin={{ top: 5, right: 8, bottom: 0, left: -22 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={t.grid}/>
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false}/>
+                <YAxis domain={[4, 10]} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false}/>
+                <Tooltip wrapperStyle={{ outline: 'none' }}
+                  cursor={{ stroke: t.grid, strokeWidth: 1 }}
+                  contentStyle={{ fontSize: 11, borderRadius: 10, background: t.tooltipBg, border: `1px solid ${t.tooltipBorder}`, color: t.tooltipText }}/>
+                {evo.materias.filter(m => !hiddenMaterias.includes(m)).map(m => {
+                  const i = evo.materias.indexOf(m)
+                  const color = MATERIA_COLORS[i % MATERIA_COLORS.length]
+                  return (
+                    <Line key={m} type="monotone" dataKey={m} name={m}
+                      stroke={color} strokeWidth={2.5}
+                      dot={{ r: 3, fill: color, strokeWidth: 0 }}
+                      activeDot={{ r: 5 }}
+                      connectNulls />
+                  )
+                })}
+              </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Sin datos</div>
+            <div className="h-48 flex items-center justify-center text-sm" style={{ color: t.t4 }}>Sin datos</div>
           )}
         </div>
 
-        {/* Attendance pie */}
-        <div className="card p-5">
+        {/* Asistencia pie */}
+        <div className="card p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="section-title">Mi Asistencia</h2>
-            <button onClick={()=>navigate('/student/asistencias')} className="text-xs text-navy-700 hover:underline">Ver detalle</button>
+            <button onClick={() => navigate('/student/asistencias')}
+              className="text-xs font-bold hover:underline flex items-center gap-1"
+              style={{ color: t.light ? t.accent : 'rgba(255,255,255,.45)' }}>
+              Ver más <ArrowRight size={12}/>
+            </button>
           </div>
           <div className="flex items-center justify-center">
             <div className="relative">
               <ResponsiveContainer width={150} height={150}>
                 <PieChart>
                   <Pie data={attPie} cx="50%" cy="50%" innerRadius={45} outerRadius={68} dataKey="value" stroke="none">
-                    {attPie.map((_,i)=><Cell key={i} fill={PIE_COLORS[i]}/>)}
+                    {attPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]}/>)}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-2xl font-bold ${attColor}`}>{s.attendanceRate}%</span>
-                <span className="text-[10px] text-slate-500">asistencia</span>
+                <span className="text-2xl font-bold tabular-nums" style={{ color: gradeColor(asis.pct / 10) }}>{asis.pct}%</span>
+                <span className="text-[10px]" style={{ color: t.t3 }}>asistencia</span>
               </div>
             </div>
           </div>
           <div className="space-y-1.5 mt-2">
-            {attPie.map((d,i)=>(
+            {attPie.map((d, i) => (
               <div key={d.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background:PIE_COLORS[i] }}/>
-                  <span className="text-slate-600">{d.name}</span>
+                  <span className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i] }}/>
+                  <span style={{ color: t.t2 }}>{d.name}</span>
                 </div>
-                <span className="font-bold text-slate-700">{d.value}</span>
+                <span className="font-bold tabular-nums" style={{ color: t.t1 }}>{d.value}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Recent evals */}
+      {/* ══ Últimas evaluaciones / exámenes / tareas (dropdown) ══ */}
       <div className="card overflow-hidden">
-        <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="section-title">Últimas Evaluaciones</h2>
-          <button onClick={()=>navigate('/student/calificaciones')} className="text-xs text-navy-700 hover:underline flex items-center gap-1">
-            Ver todas <ArrowRight size={12}/>
+        <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 flex-wrap"
+          style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
+          <Dropdown value={ultimasFilter} onChange={setUltimasFilter} options={ultimasOptions}/>
+          <button onClick={() => navigate('/student/calificaciones')}
+            className="text-xs font-bold hover:underline flex items-center gap-1"
+            style={{ color: t.light ? t.accent : 'rgba(255,255,255,.45)' }}>
+            Ver más <ArrowRight size={12}/>
           </button>
         </div>
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="table-header">Materia</th>
-              <th className="table-header">Tipo</th>
-              <th className="table-header">Calificación</th>
-              <th className="table-header">Fecha</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {evals.map(e => {
-              const c = e.calificacion>=8?'text-emerald-600':e.calificacion>=6?'text-blue-600':'text-red-600'
-              return (
-                <tr key={e.id} className="hover:bg-slate-50/50">
-                  <td className="table-cell font-medium text-slate-800">{e.materia}</td>
-                  <td className="table-cell"><span className="badge bg-slate-100 text-slate-600">{e.tipo}</span></td>
-                  <td className="table-cell"><span className={`font-bold text-lg ${c}`}>{e.calificacion}</span></td>
-                  <td className="table-cell text-slate-500 text-xs">{e.fecha}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[480px]">
+            <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
+              <tr>
+                <th className="table-header">Materia</th>
+                <th className="table-header">Tipo</th>
+                <th className="table-header">Calificación</th>
+                <th className="table-header">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ultimas.length === 0 && (
+                <tr><td colSpan={4} className="table-cell text-center py-8" style={{ color: t.t4 }}>
+                  Sin registros de este tipo.
+                </td></tr>
+              )}
+              {ultimas.map(e => (
+                <tr key={e.id} className="transition-colors" style={{ borderBottom: `1px solid ${t.divider}` }}>
+                  <td className="table-cell font-medium" style={{ color: t.t1 }}>{e.materia}</td>
+                  <td className="table-cell">
+                    <span className="badge text-[11px]" style={{ background: t.softBg, color: t.t2, border: `1px solid ${t.cardBorder}` }}>{e.tipo}</span>
+                  </td>
+                  <td className="table-cell">
+                    <span className="font-bold text-lg tabular-nums" style={{ color: gradeColor(e.calificacion) }}>{e.calificacion}</span>
+                  </td>
+                  <td className="table-cell text-xs" style={{ color: t.t3 }}>{e.fecha}</td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

@@ -2,70 +2,286 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────────
+   BASE
+───────────────────────────────────────────────────────────────── */
 @layer base {
   * { box-sizing: border-box; }
+
   body {
-    font-family: 'Inter', system-ui, sans-serif;
-    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: 'Manrope', system-ui, sans-serif;
+    /* Negro con tinte azul marino institucional (logo SIGA CEFIMAT) */
+    background: #070b16;
+    color: rgba(255,255,255,.85);
+    @apply antialiased;
+    letter-spacing: -0.01em;
   }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-slate-100; }
-  ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-slate-400; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.25); }
+
+  h1,h2,h3,h4,h5,h6 { letter-spacing: -0.02em; font-weight: 700; color: rgba(255,255,255,.90); }
+
+  /* Selects dark */
+  select option { background: #111118; color: rgba(255,255,255,.85); }
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   COMPONENT LAYER
+───────────────────────────────────────────────────────────────── */
 @layer components {
+
+  /* ── Stat cards ── */
   .stat-card {
-    @apply bg-white rounded-xl p-5 shadow-card border border-slate-100;
+    @apply rounded-2xl p-5 transition-all duration-300 cursor-pointer;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.08);
   }
-  .page-title {
-    @apply text-2xl font-bold text-slate-800;
+  .stat-card:hover {
+    @apply -translate-y-1;
+    background: rgba(255,255,255,.08);
+    border-color: rgba(255,255,255,.14);
+    box-shadow: 0 12px 40px rgba(0,0,0,.45);
   }
-  .section-title {
-    @apply text-lg font-semibold text-slate-700;
-  }
-  .badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
-  }
-  .btn-primary {
-    @apply bg-navy-900 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-navy-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2;
-  }
-  .btn-secondary {
-    @apply bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50 transition-colors flex items-center gap-2;
-  }
-  .btn-accent {
-    @apply bg-gold-500 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-gold-600 transition-colors flex items-center gap-2;
-  }
+
+  /* ── Cards ── */
   .card {
-    @apply bg-white rounded-xl shadow-card border border-slate-100 overflow-hidden;
+    @apply rounded-2xl overflow-hidden;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.08);
   }
-  .input-field {
-    @apply w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600 focus:border-transparent transition-shadow;
+  .card-hover {
+    @apply transition-all duration-300;
   }
+  .card-hover:hover {
+    @apply -translate-y-0.5;
+    background: rgba(255,255,255,.08);
+    border-color: rgba(255,255,255,.13);
+    box-shadow: 0 12px 32px rgba(0,0,0,.4);
+  }
+
+  /* ── Glass card (for dark backgrounds) ── */
+  .glass-card {
+    background: rgba(255,255,255,.06);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.12);
+    @apply rounded-xl;
+  }
+  .glass-card-md {
+    background: rgba(255,255,255,.09);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,.16);
+    @apply rounded-xl;
+  }
+
+  /* ── Typography helpers ── */
+  .page-title    { @apply text-2xl font-bold tracking-tight; color: rgba(255,255,255,.90); }
+  .section-title { @apply text-sm font-semibold; color: rgba(255,255,255,.60); }
+
+  /* ── Badge pill ── */
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
+  }
+  .badge-dot {
+    @apply w-1.5 h-1.5 rounded-full flex-shrink-0;
+  }
+
+  /* ── Buttons ── */
+  .btn-primary {
+    @apply bg-white text-black px-4 py-2.5 rounded-xl font-bold text-sm
+           transition-all duration-200 disabled:opacity-50
+           disabled:cursor-not-allowed flex items-center gap-2 active:scale-95;
+  }
+  .btn-primary:hover:not(:disabled) { background: rgba(255,255,255,.90); }
+
+  .btn-secondary {
+    @apply px-4 py-2.5 rounded-xl font-semibold text-sm
+           transition-all duration-200 flex items-center gap-2 active:scale-95;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+    color: rgba(255,255,255,.75);
+  }
+  .btn-secondary:hover {
+    background: rgba(255,255,255,.11);
+    border-color: rgba(255,255,255,.20);
+    color: rgba(255,255,255,.95);
+  }
+
+  .btn-accent {
+    @apply bg-amber-500 text-black px-4 py-2.5 rounded-xl font-bold text-sm
+           hover:bg-amber-400 transition-all duration-200 flex items-center gap-2 active:scale-95;
+  }
+
+  /* ── Pill button with text-slide hover (EuVerse signature) ── */
+  .btn-pill {
+    @apply relative overflow-hidden rounded-full px-6 py-2.5 font-semibold text-sm
+           flex items-center justify-center gap-2 transition-all duration-200 active:scale-95;
+  }
+  .btn-pill-primary {
+    @apply btn-pill bg-navy-900 text-white hover:bg-navy-800;
+  }
+  .btn-pill-ghost {
+    @apply btn-pill border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300;
+  }
+  .btn-pill-gold {
+    @apply btn-pill bg-gold-500 text-white hover:bg-gold-600;
+  }
+  /* Inner wrapper for slide effect */
+  .btn-slide-wrap {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 1.2em;
+    position: relative;
+  }
+  .btn-slide-wrap span {
+    display: block;
+    line-height: 1.2em;
+    transition: transform .3s cubic-bezier(0.16,1,0.3,1);
+    white-space: nowrap;
+  }
+  .btn-slide-wrap span:last-child {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+  }
+  .btn-pill:hover .btn-slide-wrap span:first-child  { transform: translateY(-100%); }
+  .btn-pill:hover .btn-slide-wrap span:last-child   { transform: translateY(-100%); }
+
+  /* ── Form inputs (unified dark) ── */
+  .input-field, .input-dark {
+    @apply w-full rounded-xl px-3.5 py-2.5 text-sm text-white outline-none transition-all duration-200;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.10);
+  }
+  .input-field::placeholder, .input-dark::placeholder { color: rgba(255,255,255,.25); }
+  .input-field:hover:not(:focus), .input-dark:hover:not(:focus) { border-color: rgba(255,255,255,.16); }
+  .input-field:focus, .input-dark:focus {
+    background: rgba(255,255,255,.09);
+    border-color: rgba(255,255,255,.24);
+    box-shadow: 0 0 0 3px rgba(255,255,255,.05);
+  }
+
+  /* ── Table ── */
   .table-header {
-    @apply text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4;
+    @apply text-left text-[11px] font-bold uppercase tracking-wider py-3 px-4;
+    color: rgba(255,255,255,.35);
   }
-  .table-cell {
-    @apply py-3 px-4 text-sm text-slate-700;
-  }
+  .table-cell { @apply py-3 px-4 text-sm; color: rgba(255,255,255,.72); }
+
+  /* ── Nav item (sidebar) ── */
   .nav-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+           transition-all duration-200 cursor-pointer select-none;
   }
+
+  /* ── Dark glass inputs (login page) ── */
+  .input-dark {
+    @apply w-full rounded-xl px-3.5 py-2.5 text-sm text-white outline-none transition-all duration-200;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.10);
+  }
+  .input-dark::placeholder { color: rgba(255,255,255,.22); }
+  .input-dark:hover:not(:focus) { border-color: rgba(255,255,255,.16); }
+  .input-dark:focus {
+    background: rgba(255,255,255,.09);
+    border-color: rgba(255,255,255,.24);
+    box-shadow: 0 0 0 3px rgba(255,255,255,.05);
+  }
+
+  /* ── Login glass card ── */
+  .login-card {
+    background: rgba(0,0,0,.48);
+    backdrop-filter: blur(36px);
+    -webkit-backdrop-filter: blur(36px);
+    border: 1px solid rgba(255,255,255,.09);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.07),
+      0 40px 100px rgba(0,0,0,.70),
+      0 8px 32px rgba(0,0,0,.40);
+  }
+
+  /* ── Demo credential buttons ── */
+  .demo-btn {
+    @apply w-full flex items-center gap-3 p-2.5 rounded-xl transition-all duration-200 text-left;
+    border: 1px solid transparent;
+    background: transparent;
+  }
+  .demo-btn:hover {
+    background: rgba(255,255,255,.04);
+    border-color: rgba(255,255,255,.09);
+  }
+
+  /* ── Marquee strip ── */
+  .marquee-container {
+    @apply overflow-hidden;
+    mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+  }
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    animation: marquee 28s linear infinite;
+  }
+  .marquee-track:hover { animation-play-state: paused; }
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   ANIMATIONS
+───────────────────────────────────────────────────────────────── */
+
+/* NeonCheckbox — partículas */
+@keyframes neonParticle {
+  0%   { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx,0px)), calc(-50% + var(--dy,0px))) scale(0); opacity: 0; }
+}
+.neon-particle { animation: neonParticle 0.5s ease-out forwards; }
+
+/* NeonCheckbox — anillos */
+@keyframes neonRing {
+  0%   { transform: scale(0.3); opacity: 0.9; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.neon-ring { animation: neonRing 0.55s ease-out forwards; }
+
+/* Marquee */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Fade in (page elements) */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-in { animation: fadeIn .25s ease-out both; }
+.animate-fade-in { animation: fadeIn .28s ease-out both; }
 
-/* Page transition — smoother, slightly longer for route changes */
+/* Page route transition */
 @keyframes pageIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-page-in { animation: pageIn .22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-page-in { animation: pageIn .24s cubic-bezier(0.22,1,0.36,1) both; }
 
+/* Stagger — assign to list items */
+@keyframes staggerIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stagger-1 { animation: staggerIn .36s ease-out .04s both; }
+.stagger-2 { animation: staggerIn .36s ease-out .09s both; }
+.stagger-3 { animation: staggerIn .36s ease-out .14s both; }
+.stagger-4 { animation: staggerIn .36s ease-out .19s both; }
+.stagger-5 { animation: staggerIn .36s ease-out .24s both; }
+.stagger-6 { animation: staggerIn .36s ease-out .29s both; }
+.stagger-7 { animation: staggerIn .36s ease-out .34s both; }
+.stagger-8 { animation: staggerIn .36s ease-out .39s both; }
+
+/* Skeleton shimmer */
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -73,10 +289,28 @@
 .skeleton {
   background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
+  animation: shimmer 1.5s infinite;
+  @apply rounded;
 }
 
-/* ── QR result screen animations ─────────────────── */
+/* Float (decorative circles) */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-10px) rotate(1deg); }
+  66%       { transform: translateY(-5px) rotate(-1deg); }
+}
+.animate-float    { animation: float 7s ease-in-out infinite; }
+.animate-float-slow { animation: float 11s ease-in-out infinite reverse; }
+.animate-float-xs { animation: float 5s ease-in-out infinite .5s; }
+
+/* Glow pulse (status dots) */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(251,191,36,0); }
+}
+.glow-pulse { animation: glowPulse 2s ease-in-out infinite; }
+
+/* QR / success animations */
 @keyframes scaleIn {
   from { transform: scale(0); opacity: 0; }
   to   { transform: scale(1); opacity: 1; }
@@ -89,12 +323,72 @@
   to { stroke-dashoffset: 0; }
 }
 
-.animate-scale-in {
-  animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+.animate-scale-in    { animation: scaleIn    .5s cubic-bezier(0.34,1.56,0.64,1) both; }
+.animate-slide-up-fade { animation: slideUpFade .4s ease-out both; }
+.animate-draw        { animation: drawStroke .55s ease-out .3s forwards; }
+
+/* ─────────────────────────────────────────────────────────────────
+   FLIP CARD (credencial anverso/reverso)
+───────────────────────────────────────────────────────────────── */
+.flip-outer { perspective: 1200px; }
+.flip-inner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .7s cubic-bezier(.4,.2,.2,1);
 }
-.animate-slide-up-fade {
-  animation: slideUpFade 0.4s ease-out both;
+.flip-inner.is-flipped { transform: rotateY(180deg); }
+.flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
-.animate-draw {
-  animation: drawStroke 0.55s ease-out 0.3s forwards;
+.flip-front { position: relative; z-index: 2; display:flex; justify-content:center; }
+.flip-back  { position: absolute; inset: 0; transform: rotateY(180deg); display:flex; justify-content:center; align-items:flex-start; }
+
+/* ─────────────────────────────────────────────────────────────────
+   TEMAS CLAROS DEL PORTAL ALUMNO (Identidad Politécnica / UNAM)
+   Se activan con [data-stheme-light] en el layout del alumno.
+───────────────────────────────────────────────────────────────── */
+[data-stheme-light] .card,
+[data-stheme-light] .stat-card {
+  background: #ffffff;
+  border-color: rgba(15,23,42,.10);
+  box-shadow: 0 1px 3px rgba(15,23,42,.05), 0 8px 24px rgba(15,23,42,.05);
 }
+[data-stheme-light] .stat-card:hover {
+  background: #ffffff;
+  border-color: rgba(15,23,42,.20);
+  box-shadow: 0 14px 36px rgba(15,23,42,.12);
+}
+[data-stheme-light] .page-title    { color: #0f172a; }
+[data-stheme-light] .section-title { color: #475569; }
+[data-stheme-light] .table-header  { color: #94a3b8; }
+[data-stheme-light] .table-cell    { color: #334155; }
+[data-stheme-light] .demo-btn:hover { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); }
+
+/* Texto blanco escrito inline queda ilegible sobre fondo blanco:
+   se fuerza a slate dentro del contenido. Los bloques con fondo de
+   color propio (tarjeta de bienvenida, tooltips) usan la clase .kw
+   o clases Tailwind (text-white) y quedan exentos. */
+[data-stheme-light] main [style*="color: rgba(255, 255, 255"]:not(.kw):not(.kw *) {
+  color: #475569 !important;
+}
+
+/* ── Html5Qrcode — dark theme overrides ── */
+#qr-reader { border: none !important; background: #0a0a14 !important; }
+#qr-reader video { width: 100% !important; object-fit: cover !important; }
+#qr-reader__dashboard { padding: 0 !important; }
+#qr-reader__dashboard section { background: #0a0a14 !important; padding: 0 !important; }
+#qr-reader__dashboard section p { color: rgba(255,255,255,.55) !important; font-size: 11px !important; }
+#qr-reader__status_span { display: none !important; }
+#qr-reader__header_message { display: none !important; }
+#qr-reader__filescan_input { display: none !important; }
+#qr-reader__dashboard_section_swaplink { display: none !important; }
+#qr-reader__camera_selection {
+  background: rgba(255,255,255,.07) !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  color: rgba(255,255,255,.75) !important;
+  border-radius: 8px !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+}
+#qr-reader__torch_button { display: none !important; }

@@ -1,162 +1,245 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Filter, ArrowRight, Users } from 'lucide-react'
+import { Search, Users, ArrowRight } from 'lucide-react'
 import { students, groups, statusConfig } from '../../data/mockData'
+import {
+  DataTable, DataTableRow,
+  DataTableAvatar, DataTableBadge, DataTableBar,
+} from '../../components/ui/DataTable'
+import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
+import { useGroupColors } from '../../hooks/useGroupColors'
+
+const attColor   = r => r >= 90 ? '#34d399' : r >= 75 ? '#60a5fa' : '#f87171'
+const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
+
+const COLUMNS = [
+  { key:'name',    label:'Alumno',     className:'flex-grow min-w-[180px]' },
+  { key:'group',   label:'Grupo',      className:'w-28' },
+  { key:'att',     label:'Asistencia', className:'w-36 hidden sm:flex' },
+  { key:'grade',   label:'Promedio',   className:'w-24' },
+  { key:'tasks',   label:'Tareas',     className:'w-32 hidden md:flex' },
+  { key:'status',  label:'Estado',     className:'w-28' },
+  { key:'contact', label:'Contacto',   className:'w-40 hidden lg:flex' },
+  { key:'action',  label:'',           className:'w-10' },
+]
 
 export default function Students() {
   const navigate = useNavigate()
+  const { getAccent } = useGroupColors()
+
   const [query, setQuery]         = useState('')
   const [groupFilter, setGroup]   = useState('all')
   const [statusFilter, setStatus] = useState('all')
   const [sort, setSort]           = useState('name')
+  const [visual, setVisual]       = useState(false)   // ← modo visual
 
   const filtered = students
     .filter(s => {
-      const matchQ = s.name.toLowerCase().includes(query.toLowerCase()) ||
-                     s.email.toLowerCase().includes(query.toLowerCase())
-      const matchG = groupFilter === 'all' || s.groupId === groupFilter
-      const matchS = statusFilter === 'all' || s.status === statusFilter
-      return matchQ && matchG && matchS
+      const q = query.toLowerCase()
+      return (s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q))
+        && (groupFilter === 'all' || s.groupId === groupFilter)
+        && (statusFilter === 'all' || s.status === statusFilter)
     })
-    .sort((a,b) => {
-      if (sort === 'grade')    return b.avgGrade - a.avgGrade
-      if (sort === 'attend')   return b.attendanceRate - a.attendanceRate
-      if (sort === 'rank')     return a.rank - b.rank
+    .sort((a, b) => {
+      if (sort === 'grade')  return b.avgGrade - a.avgGrade
+      if (sort === 'attend') return b.attendanceRate - a.attendanceRate
+      if (sort === 'rank')   return a.rank - b.rank
       return a.name.localeCompare(b.name)
     })
 
   return (
     <div className="max-w-6xl space-y-4">
-      {/* Filters */}
+
+      {/* ── Filtros ─────────────────────────────────────────── */}
       <div className="card p-4">
         <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-48">
+          <div className="flex-1 min-w-[160px]">
             <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-              <input value={query} onChange={e=>setQuery(e.target.value)}
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2"
+                style={{ color:'rgba(255,255,255,.25)' }} />
+              <input value={query} onChange={e => setQuery(e.target.value)}
                 placeholder="Buscar alumno…" className="input-field pl-9" />
             </div>
           </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1">Grupo</label>
-            <select value={groupFilter} onChange={e=>setGroup(e.target.value)} className="input-field text-sm">
-              <option value="all">Todos los grupos</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1">Estado</label>
-            <select value={statusFilter} onChange={e=>setStatus(e.target.value)} className="input-field text-sm">
-              <option value="all">Todos</option>
-              {Object.entries(statusConfig).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1">Ordenar por</label>
-            <select value={sort} onChange={e=>setSort(e.target.value)} className="input-field text-sm">
-              <option value="name">Nombre A-Z</option>
-              <option value="grade">Mayor promedio</option>
-              <option value="attend">Mayor asistencia</option>
-              <option value="rank">Ranking</option>
-            </select>
+
+          {[
+            { label:'Grupo', value:groupFilter, setter:setGroup,
+              opts:[{v:'all',l:'Todos los grupos'}, ...groups.map(g=>({v:g.id,l:g.name}))] },
+            { label:'Estado', value:statusFilter, setter:setStatus,
+              opts:[{v:'all',l:'Todos'}, ...Object.entries(statusConfig).map(([k,v])=>({v:k,l:v.label}))] },
+            { label:'Ordenar', value:sort, setter:setSort,
+              opts:[{v:'name',l:'Nombre A-Z'},{v:'grade',l:'Mayor promedio'},{v:'attend',l:'Mayor asistencia'},{v:'rank',l:'Ranking'}] },
+          ].map(({ label, value, setter, opts }) => (
+            <div key={label}>
+              <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
+                style={{ color:'rgba(255,255,255,.30)' }}>{label}</label>
+              <select value={value} onChange={e => setter(e.target.value)} className="input-field text-sm">
+                {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </div>
+          ))}
+
+          {/* ── Checkbox modo visual ──────────────────────────── */}
+          <div className="flex items-end pb-0.5">
+            <NeonCheckbox
+              checked={visual}
+              onChange={e => setVisual(e.target.checked)}
+              label="Vista por grupo"
+              color="#a78bfa"
+            />
           </div>
         </div>
-        <p className="text-xs text-slate-400 mt-3 flex items-center gap-1.5">
-          <Users size={12}/>
+
+        <p className="text-[11px] mt-3 flex items-center gap-1.5" style={{ color:'rgba(255,255,255,.28)' }}>
+          <Users size={11} />
           {filtered.length} de {students.length} alumnos
+          {visual && (
+            <span className="ml-2 flex items-center gap-1.5">
+              {groups.map(g => {
+                const accent = getAccent(g.id)
+                return (
+                  <span key={g.id} className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full" style={{ background: accent }} />
+                    <span style={{ color:'rgba(255,255,255,.40)' }}>{g.name}</span>
+                  </span>
+                )
+              })}
+            </span>
+          )}
         </p>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px]">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="table-header">Alumno</th>
-              <th className="table-header">Grupo</th>
-              <th className="table-header">Asistencia</th>
-              <th className="table-header">Promedio</th>
-              <th className="table-header hidden md:table-cell">Tareas</th>
-              <th className="table-header">Estado</th>
-              <th className="table-header hidden lg:table-cell">Tutor</th>
-              <th className="table-header"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {filtered.map(s => {
-              const cfg = statusConfig[s.status]
-              const grp = groups.find(g => g.id === s.groupId)
-              const attColor = s.attendanceRate >= 90 ? 'text-emerald-600' : s.attendanceRate >= 75 ? 'text-amber-600' : 'text-red-600'
-              const gradeColor = s.avgGrade >= 8.5 ? 'text-emerald-600' : s.avgGrade >= 7 ? 'text-blue-600' : 'text-red-600'
-              return (
-                <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="table-cell">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-navy-100 flex items-center justify-center text-navy-800 text-xs font-bold flex-shrink-0">
-                        {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-800 truncate">{s.name}</p>
-                        <p className="text-[11px] text-slate-400 hidden sm:block truncate">{s.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="table-cell">
-                    <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+      {/* ── Tabla ───────────────────────────────────────────── */}
+      <DataTable
+        columns={COLUMNS}
+        isEmpty={filtered.length === 0}
+        emptyIcon={<Users size={36} />}
+        emptyText="No se encontraron alumnos con ese criterio.">
+
+        {filtered.map(s => {
+          const cfg         = statusConfig[s.status]
+          const grp         = groups.find(g => g.id === s.groupId)
+          const ac          = attColor(s.attendanceRate)
+          const groupAccent = getAccent(s.groupId)   // mismo color que Groups / Attendance / Registrar
+
+          /* En modo visual: la fila toma el color del grupo */
+          const rowStyle = visual
+            ? {
+                borderLeft:  `3px solid ${groupAccent}`,
+                background:  `${groupAccent}0d`,
+              }
+            : {}
+
+          // El avatar siempre muestra el color del grupo (coincide con el resto de la app)
+          const avatarColor = ac
+
+          return (
+            <DataTableRow
+              key={s.id}
+              onClick={() => navigate(`/admin/alumnos/${s.id}`)}
+              style={rowStyle}
+              cells={[
+                /* Alumno */
+                {
+                  className: 'flex-grow min-w-[180px]',
+                  content: (
+                    <DataTableAvatar
+                      initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
+                      statusColor={avatarColor}
+                      name={s.name}
+                      sub={s.email}
+                      accentColor={groupAccent}
+                    />
+                  ),
+                },
+                /* Grupo */
+                {
+                  className: 'w-28',
+                  content: (
+                    <span
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full transition-all duration-300"
+                      style={visual
+                        ? { background:`${groupAccent}25`, color: groupAccent, border:`1px solid ${groupAccent}55` }
+                        : { background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.55)' }
+                      }>
                       {grp?.name}
                     </span>
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex items-center gap-2">
-                      <div className="w-12 sm:w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width:`${s.attendanceRate}%`, background: s.attendanceRate>=90?'#10b981':s.attendanceRate>=75?'#3b82f6':'#ef4444' }}/>
-                      </div>
-                      <span className={`text-xs font-bold ${attColor}`}>{s.attendanceRate}%</span>
-                    </div>
-                  </td>
-                  <td className="table-cell">
-                    <span className={`font-bold text-base ${gradeColor}`}>{s.avgGrade}</span>
-                  </td>
-                  <td className="table-cell hidden md:table-cell">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full bg-blue-500" style={{ width:`${(s.assignmentsDone/s.assignmentsTotal)*100}%` }}/>
-                      </div>
-                      <span className="text-xs text-slate-600">{s.assignmentsDone}/{s.assignmentsTotal}</span>
-                    </div>
-                  </td>
-                  <td className="table-cell">
-                    <span className={`badge ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}/>
-                      {cfg.label}
+                  ),
+                },
+                /* Asistencia */
+                {
+                  className: 'w-36 hidden sm:flex',
+                  content: (
+                    <DataTableBar
+                      value={s.attendanceRate}
+                      color={visual ? groupAccent : ac}
+                      label={`${s.attendanceRate}%`}
+                    />
+                  ),
+                },
+                /* Promedio */
+                {
+                  className: 'w-24',
+                  content: (
+                    <span className={`text-base font-bold ${gradeColor(s.avgGrade)}`}>
+                      {s.avgGrade}
                     </span>
-                  </td>
-                  <td className="table-cell hidden lg:table-cell">
-                    <div>
-                      <p className="text-xs font-medium text-slate-700">{s.tutor.name}</p>
-                      <p className="text-[11px] text-slate-400">{s.tutor.email}</p>
+                  ),
+                },
+                /* Tareas */
+                {
+                  className: 'w-32 hidden md:flex',
+                  content: (
+                    <DataTableBar
+                      value={s.assignmentsDone}
+                      max={s.assignmentsTotal}
+                      color={visual ? groupAccent : '#60a5fa'}
+                      label={`${s.assignmentsDone}/${s.assignmentsTotal}`}
+                    />
+                  ),
+                },
+                /* Estado */
+                {
+                  className: 'w-28',
+                  content: (
+                    <DataTableBadge
+                      label={cfg.label}
+                      dot={cfg.dot}
+                      bg={cfg.bg}
+                      color={cfg.color}
+                      border={cfg.border}
+                    />
+                  ),
+                },
+                /* Contacto */
+                {
+                  className: 'w-40 hidden lg:flex flex-col',
+                  content: (
+                    <>
+                      <p className="text-xs font-medium truncate" style={{ color:'rgba(255,255,255,.62)' }}>
+                        {s.tutor.name}
+                      </p>
+                      <p className="text-[11px] truncate" style={{ color:'rgba(255,255,255,.30)' }}>
+                        {s.tutor.email}
+                      </p>
+                    </>
+                  ),
+                },
+                /* Acción */
+                {
+                  className: 'w-10 flex justify-end',
+                  content: (
+                    <div className="p-1.5 rounded-lg" style={{ color: visual ? `${groupAccent}99` : 'rgba(255,255,255,.28)' }}>
+                      <ArrowRight size={14} />
                     </div>
-                  </td>
-                  <td className="table-cell">
-                    <button onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
-                      className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-700">
-                      <ArrowRight size={15}/>
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-slate-400">
-            <Users size={32} className="mx-auto mb-2 opacity-30"/>
-            <p>No se encontraron alumnos con ese criterio.</p>
-          </div>
-        )}
-        </div>
-      </div>
+                  ),
+                },
+              ]}
+            />
+          )
+        })}
+      </DataTable>
+
     </div>
   )
 }

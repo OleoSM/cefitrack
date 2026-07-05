@@ -122,7 +122,7 @@ export default function ScanQR() {
 
     const parts = raw.slice(SESSION_PREFIX.length).split(':')
     if (parts.length < 3) {
-      setResult({ ok:false, title:'QR inválido', body:'Este código no corresponde a una sesión de EduTrack.' })
+      setResult({ ok:false, title:'QR inválido', body:'Este código no corresponde a una sesión de SIGA CEFIMAT.' })
       return
     }
 

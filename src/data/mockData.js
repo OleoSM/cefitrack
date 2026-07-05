@@ -3,7 +3,6 @@ export const users = [
   { id: 'u1', name: 'Prof. Mario Sánchez Vega', email: 'admin@edutrack.mx', password: '123456', role: 'admin' },
   { id: 'u2', name: 'Ana García López',         email: 'ana.garcia@edutrack.mx', password: '123456', role: 'student', studentId: 's1' },
   { id: 'u3', name: 'Carlos Martínez H.',       email: 'carlos.mtz@edutrack.mx', password: '123456', role: 'student', studentId: 's2' },
-  { id: 'u4', name: 'Tutor de Ana García',      email: 'tutor@edutrack.mx',      password: '123456', role: 'tutor',   studentId: 's1' },
 ]
 
 // ─── GRUPOS ───────────────────────────────────────────────────────────────────
@@ -15,26 +14,26 @@ export const groups = [
 
 // ─── ALUMNOS ──────────────────────────────────────────────────────────────────
 export const students = [
-  { id:'s1',  name:'Ana García López',           email:'ana.garcia@edutrack.mx',    groupId:'g1', tutor:{ name:'Carmen López',     email:'carmen.lopez@gmail.com',   phone:'555-0101' }, attendanceRate:95, avgGrade:9.2, assignmentsDone:18, assignmentsTotal:20, rank:1,  status:'excellent' },
-  { id:'s2',  name:'Carlos Martínez Hernández',  email:'carlos.mtz@edutrack.mx',    groupId:'g1', tutor:{ name:'Roberto Martínez', email:'roberto.mtz@gmail.com',    phone:'555-0102' }, attendanceRate:72, avgGrade:6.8, assignmentsDone:12, assignmentsTotal:20, rank:12, status:'at-risk'   },
-  { id:'s3',  name:'María Rodríguez Sánchez',    email:'maria.rdz@edutrack.mx',     groupId:'g1', tutor:{ name:'Luis Rodríguez',   email:'luis.rdz@gmail.com',       phone:'555-0103' }, attendanceRate:88, avgGrade:8.1, assignmentsDone:17, assignmentsTotal:20, rank:5,  status:'good'      },
-  { id:'s4',  name:'José Luis Pérez Torres',     email:'joseluis.pt@edutrack.mx',   groupId:'g1', tutor:{ name:'María Pérez',      email:'maria.perez@gmail.com',    phone:'555-0104' }, attendanceRate:91, avgGrade:7.9, assignmentsDone:16, assignmentsTotal:20, rank:7,  status:'good'      },
-  { id:'s5',  name:'Laura Domínguez Flores',     email:'laura.df@edutrack.mx',      groupId:'g1', tutor:{ name:'Pedro Domínguez',  email:'pedro.dom@gmail.com',      phone:'555-0105' }, attendanceRate:97, avgGrade:8.9, assignmentsDone:19, assignmentsTotal:20, rank:2,  status:'excellent' },
-  { id:'s6',  name:'Roberto Jiménez Castro',     email:'roberto.jc@edutrack.mx',    groupId:'g1', tutor:{ name:'Elena Castro',     email:'elena.cast@gmail.com',     phone:'555-0106' }, attendanceRate:65, avgGrade:5.9, assignmentsDone:9,  assignmentsTotal:20, rank:18, status:'critical'  },
-  { id:'s7',  name:'Sofía Morales Gutiérrez',    email:'sofia.mg@edutrack.mx',      groupId:'g1', tutor:{ name:'Ana Gutiérrez',    email:'ana.gut@gmail.com',        phone:'555-0107' }, attendanceRate:85, avgGrade:7.5, assignmentsDone:15, assignmentsTotal:20, rank:9,  status:'good'      },
-  { id:'s8',  name:'Diego Ramírez Vargas',       email:'diego.rv@edutrack.mx',      groupId:'g2', tutor:{ name:'Jorge Ramírez',    email:'jorge.ram@gmail.com',      phone:'555-0108' }, attendanceRate:93, avgGrade:8.7, assignmentsDone:18, assignmentsTotal:20, rank:3,  status:'excellent' },
-  { id:'s9',  name:'Valentina Cruz Mendoza',     email:'valentina.cm@edutrack.mx',  groupId:'g2', tutor:{ name:'Sandra Mendoza',   email:'sandra.men@gmail.com',     phone:'555-0109' }, attendanceRate:78, avgGrade:7.2, assignmentsDone:14, assignmentsTotal:20, rank:11, status:'warning'   },
-  { id:'s10', name:'Andrés López Aguilar',       email:'andres.la@edutrack.mx',     groupId:'g2', tutor:{ name:'Patricia Aguilar', email:'patricia.ag@gmail.com',    phone:'555-0110' }, attendanceRate:90, avgGrade:8.3, assignmentsDone:17, assignmentsTotal:20, rank:4,  status:'excellent' },
-  { id:'s11', name:'Isabela Hernández Ramos',    email:'isabela.hr@edutrack.mx',    groupId:'g2', tutor:{ name:'Marco Hernández',  email:'marco.hern@gmail.com',     phone:'555-0111' }, attendanceRate:82, avgGrade:7.6, assignmentsDone:15, assignmentsTotal:20, rank:8,  status:'good'      },
-  { id:'s12', name:'Miguel Ángel Torres Reyes',  email:'miguel.tr@edutrack.mx',     groupId:'g2', tutor:{ name:'Rosa Reyes',       email:'rosa.reyes@gmail.com',     phone:'555-0112' }, attendanceRate:68, avgGrade:6.3, assignmentsDone:11, assignmentsTotal:20, rank:15, status:'at-risk'   },
-  { id:'s13', name:'Fernanda González Medina',   email:'fernanda.gm@edutrack.mx',   groupId:'g2', tutor:{ name:'Carlos González',  email:'carlos.gon@gmail.com',     phone:'555-0113' }, attendanceRate:96, avgGrade:9.0, assignmentsDone:20, assignmentsTotal:20, rank:1,  status:'excellent' },
-  { id:'s14', name:'Alejandro Sánchez Muñoz',    email:'alejandro.sm@edutrack.mx',  groupId:'g2', tutor:{ name:'Isabel Muñoz',     email:'isabel.mun@gmail.com',     phone:'555-0114' }, attendanceRate:87, avgGrade:7.8, assignmentsDone:16, assignmentsTotal:20, rank:6,  status:'good'      },
-  { id:'s15', name:'Camila Flores Ortiz',        email:'camila.fo@edutrack.mx',     groupId:'g3', tutor:{ name:'Hugo Flores',      email:'hugo.flo@gmail.com',       phone:'555-0115' }, attendanceRate:94, avgGrade:8.8, assignmentsDone:19, assignmentsTotal:20, rank:2,  status:'excellent' },
-  { id:'s16', name:'Eduardo Martínez Díaz',      email:'eduardo.md@edutrack.mx',    groupId:'g3', tutor:{ name:'Gloria Díaz',      email:'gloria.diaz@gmail.com',    phone:'555-0116' }, attendanceRate:75, avgGrade:6.9, assignmentsDone:13, assignmentsTotal:20, rank:13, status:'at-risk'   },
-  { id:'s17', name:'Andrea Jiménez Villanueva',  email:'andrea.jv@edutrack.mx',     groupId:'g3', tutor:{ name:'Felipe Jiménez',   email:'felipe.jim@gmail.com',     phone:'555-0117' }, attendanceRate:89, avgGrade:8.2, assignmentsDone:17, assignmentsTotal:20, rank:4,  status:'good'      },
-  { id:'s18', name:'Ricardo García Moreno',      email:'ricardo.gm@edutrack.mx',    groupId:'g3', tutor:{ name:'Teresa Moreno',    email:'teresa.mor@gmail.com',     phone:'555-0118' }, attendanceRate:60, avgGrade:5.5, assignmentsDone:8,  assignmentsTotal:20, rank:20, status:'critical'  },
-  { id:'s19', name:'Daniela Pérez Salazar',      email:'daniela.ps@edutrack.mx',    groupId:'g3', tutor:{ name:'Arturo Pérez',     email:'arturo.per@gmail.com',     phone:'555-0119' }, attendanceRate:91, avgGrade:8.6, assignmentsDone:18, assignmentsTotal:20, rank:3,  status:'excellent' },
-  { id:'s20', name:'Sebastián Ruiz Contreras',   email:'sebastian.rc@edutrack.mx',  groupId:'g3', tutor:{ name:'Martha Contreras', email:'martha.con@gmail.com',     phone:'555-0120' }, attendanceRate:83, avgGrade:7.7, assignmentsDone:15, assignmentsTotal:20, rank:7,  status:'good'      },
+  { id:'s1',  name:'Ana García López',           email:'ana.garcia@edutrack.mx',    groupId:'g1', tutor:{ name:'Carmen López',     email:'carmen.lopez@gmail.com',   phone:'555-0101' }, attendanceRate:95, avgGrade:9.2, assignmentsDone:18, assignmentsTotal:20, rank:1,  status:'excellent', termsStatus:'firmado',   signatureDataUrl:null, signedAt:'31 de mayo de 2026, 09:14', curpDoc:'curp_ana_garcia.pdf',       ineTutorDoc:'ine_carmen_lopez.jpg',      waAdded:true  },
+  { id:'s2',  name:'Carlos Martínez Hernández',  email:'carlos.mtz@edutrack.mx',    groupId:'g1', tutor:{ name:'Roberto Martínez', email:'roberto.mtz@gmail.com',    phone:'555-0102' }, attendanceRate:72, avgGrade:6.8, assignmentsDone:12, assignmentsTotal:20, rank:12, status:'at-risk',   termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
+  { id:'s3',  name:'María Rodríguez Sánchez',    email:'maria.rdz@edutrack.mx',     groupId:'g1', tutor:{ name:'Luis Rodríguez',   email:'luis.rdz@gmail.com',       phone:'555-0103' }, attendanceRate:88, avgGrade:8.1, assignmentsDone:17, assignmentsTotal:20, rank:5,  status:'good',      termsStatus:'firmado',   signatureDataUrl:null, signedAt:'28 de mayo de 2026, 11:02', curpDoc:'curp_maria_rdz.pdf',        ineTutorDoc:'ine_luis_rdz.pdf',          waAdded:true  },
+  { id:'s4',  name:'José Luis Pérez Torres',     email:'joseluis.pt@edutrack.mx',   groupId:'g1', tutor:{ name:'María Pérez',      email:'maria.perez@gmail.com',    phone:'555-0104' }, attendanceRate:91, avgGrade:7.9, assignmentsDone:16, assignmentsTotal:20, rank:7,  status:'good',      termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
+  { id:'s5',  name:'Laura Domínguez Flores',     email:'laura.df@edutrack.mx',      groupId:'g1', tutor:{ name:'Pedro Domínguez',  email:'pedro.dom@gmail.com',      phone:'555-0105' }, attendanceRate:97, avgGrade:8.9, assignmentsDone:19, assignmentsTotal:20, rank:2,  status:'excellent', termsStatus:'firmado',   signatureDataUrl:null, signedAt:'30 de mayo de 2026, 08:45', curpDoc:'curp_laura_df.pdf',         ineTutorDoc:'ine_pedro_dom.jpg',         waAdded:true  },
+  { id:'s6',  name:'Roberto Jiménez Castro',     email:'roberto.jc@edutrack.mx',    groupId:'g1', tutor:{ name:'Elena Castro',     email:'elena.cast@gmail.com',     phone:'555-0106' }, attendanceRate:65, avgGrade:5.9, assignmentsDone:9,  assignmentsTotal:20, rank:18, status:'critical',  termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
+  { id:'s7',  name:'Sofía Morales Gutiérrez',    email:'sofia.mg@edutrack.mx',      groupId:'g1', tutor:{ name:'Ana Gutiérrez',    email:'ana.gut@gmail.com',        phone:'555-0107' }, attendanceRate:85, avgGrade:7.5, assignmentsDone:15, assignmentsTotal:20, rank:9,  status:'good',      termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:'curp_sofia_mg.jpg',         ineTutorDoc:null,                        waAdded:false },
+  { id:'s8',  name:'Diego Ramírez Vargas',       email:'diego.rv@edutrack.mx',      groupId:'g2', tutor:{ name:'Jorge Ramírez',    email:'jorge.ram@gmail.com',      phone:'555-0108' }, attendanceRate:93, avgGrade:8.7, assignmentsDone:18, assignmentsTotal:20, rank:3,  status:'excellent', termsStatus:'firmado',   signatureDataUrl:null, signedAt:'25 de mayo de 2026, 14:30', curpDoc:'curp_diego_rv.pdf',         ineTutorDoc:'ine_jorge_ram.pdf',         waAdded:true  },
+  { id:'s9',  name:'Valentina Cruz Mendoza',     email:'valentina.cm@edutrack.mx',  groupId:'g2', tutor:{ name:'Sandra Mendoza',   email:'sandra.men@gmail.com',     phone:'555-0109' }, attendanceRate:78, avgGrade:7.2, assignmentsDone:14, assignmentsTotal:20, rank:11, status:'warning',   termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
+  { id:'s10', name:'Andrés López Aguilar',       email:'andres.la@edutrack.mx',     groupId:'g2', tutor:{ name:'Patricia Aguilar', email:'patricia.ag@gmail.com',    phone:'555-0110' }, attendanceRate:90, avgGrade:8.3, assignmentsDone:17, assignmentsTotal:20, rank:4,  status:'excellent', termsStatus:'firmado',   signatureDataUrl:null, signedAt:'29 de mayo de 2026, 10:15', curpDoc:'curp_andres_la.pdf',        ineTutorDoc:'ine_patricia_ag.jpg',       waAdded:true  },
+  { id:'s11', name:'Isabela Hernández Ramos',    email:'isabela.hr@edutrack.mx',    groupId:'g2', tutor:{ name:'Marco Hernández',  email:'marco.hern@gmail.com',     phone:'555-0111' }, attendanceRate:82, avgGrade:7.6, assignmentsDone:15, assignmentsTotal:20, rank:8,  status:'good',      termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:'curp_isabela_hr.pdf',       ineTutorDoc:null,                        waAdded:false },
+  { id:'s12', name:'Miguel Ángel Torres Reyes',  email:'miguel.tr@edutrack.mx',     groupId:'g2', tutor:{ name:'Rosa Reyes',       email:'rosa.reyes@gmail.com',     phone:'555-0112' }, attendanceRate:68, avgGrade:6.3, assignmentsDone:11, assignmentsTotal:20, rank:15, status:'at-risk',   termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
+  { id:'s13', name:'Fernanda González Medina',   email:'fernanda.gm@edutrack.mx',   groupId:'g2', tutor:{ name:'Carlos González',  email:'carlos.gon@gmail.com',     phone:'555-0113' }, attendanceRate:96, avgGrade:9.0, assignmentsDone:20, assignmentsTotal:20, rank:1,  status:'excellent', termsStatus:'firmado',   signatureDataUrl:null, signedAt:'27 de mayo de 2026, 09:55', curpDoc:'curp_fernanda_gm.pdf',      ineTutorDoc:'ine_carlos_gon.pdf',        waAdded:true  },
+  { id:'s14', name:'Alejandro Sánchez Muñoz',    email:'alejandro.sm@edutrack.mx',  groupId:'g2', tutor:{ name:'Isabel Muñoz',     email:'isabel.mun@gmail.com',     phone:'555-0114' }, attendanceRate:87, avgGrade:7.8, assignmentsDone:16, assignmentsTotal:20, rank:6,  status:'good',      termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
+  { id:'s15', name:'Camila Flores Ortiz',        email:'camila.fo@edutrack.mx',     groupId:'g3', tutor:{ name:'Hugo Flores',      email:'hugo.flo@gmail.com',       phone:'555-0115' }, attendanceRate:94, avgGrade:8.8, assignmentsDone:19, assignmentsTotal:20, rank:2,  status:'excellent', termsStatus:'firmado',   signatureDataUrl:null, signedAt:'26 de mayo de 2026, 16:00', curpDoc:'curp_camila_fo.jpg',        ineTutorDoc:'ine_hugo_flo.pdf',          waAdded:true  },
+  { id:'s16', name:'Eduardo Martínez Díaz',      email:'eduardo.md@edutrack.mx',    groupId:'g3', tutor:{ name:'Gloria Díaz',      email:'gloria.diaz@gmail.com',    phone:'555-0116' }, attendanceRate:75, avgGrade:6.9, assignmentsDone:13, assignmentsTotal:20, rank:13, status:'at-risk',   termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
+  { id:'s17', name:'Andrea Jiménez Villanueva',  email:'andrea.jv@edutrack.mx',     groupId:'g3', tutor:{ name:'Felipe Jiménez',   email:'felipe.jim@gmail.com',     phone:'555-0117' }, attendanceRate:89, avgGrade:8.2, assignmentsDone:17, assignmentsTotal:20, rank:4,  status:'good',      termsStatus:'firmado',   signatureDataUrl:null, signedAt:'31 de mayo de 2026, 07:30', curpDoc:'curp_andrea_jv.pdf',        ineTutorDoc:'ine_felipe_jim.jpg',        waAdded:false },
+  { id:'s18', name:'Ricardo García Moreno',      email:'ricardo.gm@edutrack.mx',    groupId:'g3', tutor:{ name:'Teresa Moreno',    email:'teresa.mor@gmail.com',     phone:'555-0118' }, attendanceRate:60, avgGrade:5.5, assignmentsDone:8,  assignmentsTotal:20, rank:20, status:'critical',  termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
+  { id:'s19', name:'Daniela Pérez Salazar',      email:'daniela.ps@edutrack.mx',    groupId:'g3', tutor:{ name:'Arturo Pérez',     email:'arturo.per@gmail.com',     phone:'555-0119' }, attendanceRate:91, avgGrade:8.6, assignmentsDone:18, assignmentsTotal:20, rank:3,  status:'excellent', termsStatus:'firmado',   signatureDataUrl:null, signedAt:'30 de mayo de 2026, 13:20', curpDoc:'curp_daniela_ps.pdf',       ineTutorDoc:'ine_arturo_per.pdf',        waAdded:true  },
+  { id:'s20', name:'Sebastián Ruiz Contreras',   email:'sebastian.rc@edutrack.mx',  groupId:'g3', tutor:{ name:'Martha Contreras', email:'martha.con@gmail.com',     phone:'555-0120' }, attendanceRate:83, avgGrade:7.7, assignmentsDone:15, assignmentsTotal:20, rank:7,  status:'good',      termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null,                        ineTutorDoc:null,                        waAdded:false },
 ]
 
 // ─── TENDENCIA MENSUAL (últimos 6 meses) ─────────────────────────────────────
@@ -81,7 +80,13 @@ export const attendance = students.flatMap(s => {
     if (s.attendanceRate >= 90) status = rand < 0.92 ? 'presente' : rand < 0.96 ? 'tardanza' : 'ausente'
     else if (s.attendanceRate >= 75) status = rand < 0.78 ? 'presente' : rand < 0.88 ? 'ausente' : 'tardanza'
     else status = rand < 0.60 ? 'presente' : rand < 0.75 ? 'ausente' : rand < 0.88 ? 'tardanza' : 'justificado'
-    records.push({ id:`att-${s.id}-${d}`, studentId:s.id, groupId:s.groupId, date, status })
+    // Hora determinista basada en día: presente 07:55–08:04, tardanza 08:06–08:24, ausente null
+    const time = status === 'ausente' || status === 'justificado'
+      ? null
+      : status === 'tardanza'
+        ? `08:${String(6 + (d % 19)).padStart(2,'0')}`
+        : `07:${String(55 + (d % 9)).padStart(2,'0')}`
+    records.push({ id:`att-${s.id}-${d}`, studentId:s.id, groupId:s.groupId, date, status, time })
   }
   return records
 })
@@ -211,6 +216,51 @@ export const importHistory = [
   { id:'imp2', fecha:'2025-09-05', archivo:'Ajuste_Grupo_C.csv',      alumnos:2,  estado:'completado' },
 ]
 
+// ─── ESCUELAS (placeholder — puntajes de corte por definir) ──────────────────
+export const schools = [
+  { id:'unam-medicina',  nombre:'UNAM — Medicina',                   tipo:'unam', area:9, corte:117 },
+  { id:'unam-derecho',   nombre:'UNAM — Derecho',                    tipo:'unam', area:5, corte:108 },
+  { id:'unam-psico',     nombre:'UNAM — Psicología',                 tipo:'unam', area:4, corte:95  },
+  { id:'unam-ing',       nombre:'UNAM — Ingeniería',                 tipo:'unam', area:1, corte:99  },
+  { id:'unam-arq',       nombre:'UNAM — Arquitectura',               tipo:'unam', area:2, corte:92  },
+  { id:'unam-economia',  nombre:'UNAM — Economía',                   tipo:'unam', area:3, corte:89  },
+  { id:'unam-contaduria',nombre:'UNAM — Contaduría',                 tipo:'unam', area:6, corte:86  },
+  { id:'ipn-escom',      nombre:'IPN — ESCOM',                       tipo:'ipn',  area:null, corte:80 },
+  { id:'ipn-esime',      nombre:'IPN — ESIME',                       tipo:'ipn',  area:null, corte:77 },
+  { id:'ipn-enmh',       nombre:'IPN — ENMH (Medicina)',             tipo:'ipn',  area:null, corte:95 },
+  { id:'ecoems-cch',     nombre:'CCH (UNAM)',                        tipo:'ecoems', area:null, corte:55 },
+  { id:'ecoems-prepa',   nombre:'ENP (UNAM)',                        tipo:'ecoems', area:null, corte:58 },
+  { id:'ecoems-cetis',   nombre:'CECyT / CETIS (IPN)',               tipo:'ecoems', area:null, corte:45 },
+]
+
+// ─── SIMULACROS ───────────────────────────────────────────────────────────────
+// folio: EX-nn = simulacro presencial · EXD-nn = examen digital (ver src/lib/folios.js)
+export const simulacros = [
+  { id:'sim-s1-1', studentId:'s1', folio:'EX-01',  modalidad:'presencial', fecha:'2026-03-15', aciertos:72,  total:128, duracion:'2h 10min' },
+  { id:'sim-s1-2', studentId:'s1', folio:'EX-02',  modalidad:'presencial', fecha:'2026-04-05', aciertos:88,  total:128, duracion:'2h 05min' },
+  { id:'sim-s1-3', studentId:'s1', folio:'EXD-01', modalidad:'digital',    fecha:'2026-04-26', aciertos:97,  total:128, duracion:'2h 12min' },
+  { id:'sim-s2-1', studentId:'s2', folio:'EX-01',  modalidad:'presencial', fecha:'2026-03-15', aciertos:45,  total:128, duracion:'2h 18min' },
+  { id:'sim-s2-2', studentId:'s2', folio:'EX-02',  modalidad:'presencial', fecha:'2026-04-05', aciertos:53,  total:128, duracion:'2h 20min' },
+  { id:'sim-s2-3', studentId:'s2', folio:'EXD-01', modalidad:'digital',    fecha:'2026-04-26', aciertos:61,  total:128, duracion:'2h 14min' },
+]
+
+// Escuela objetivo por alumno (targetSchoolId → schools[])
+// El alumno lo elige desde su portal; por ahora hardcodeado en mock
+const studentTargetSchools = {
+  s1: 'unam-medicina',
+  s2: 'unam-psico',
+}
+
+export const getSimulacrosByStudent = sid => simulacros.filter(s => s.studentId === sid)
+export const getLastSimulacro       = sid => {
+  const list = simulacros.filter(s => s.studentId === sid).sort((a,b) => b.fecha.localeCompare(a.fecha))
+  return list[0] ?? null
+}
+export const getTargetSchool = sid => {
+  const schoolId = studentTargetSchools[sid]
+  return schools.find(s => s.id === schoolId) ?? null
+}
+
 // ─── ACTIVIDAD RECIENTE ───────────────────────────────────────────────────────
 export const recentActivity = [
   { id:1, tipo:'asistencia',   texto:'Lista de asistencia Grupo A registrada',              hora:'Hace 2 horas',  icon:'check-circle' },
@@ -230,16 +280,16 @@ export const getReportsByStudent= sid => reports.filter(r => r.studentId === sid
 export const getInsightByStudent= sid => aiInsights.find(a => a.studentId === sid)
 
 export const statusConfig = {
-  excellent: { label:'Excelente', color:'text-emerald-700', bg:'bg-emerald-50',  border:'border-emerald-200', dot:'bg-emerald-500' },
-  good:      { label:'Bueno',     color:'text-blue-700',    bg:'bg-blue-50',     border:'border-blue-200',    dot:'bg-blue-500'    },
-  warning:   { label:'Atención',  color:'text-amber-700',   bg:'bg-amber-50',    border:'border-amber-200',   dot:'bg-amber-500'   },
-  'at-risk': { label:'En Riesgo', color:'text-orange-700',  bg:'bg-orange-50',   border:'border-orange-200',  dot:'bg-orange-500'  },
-  critical:  { label:'Crítico',   color:'text-red-700',     bg:'bg-red-50',      border:'border-red-200',     dot:'bg-red-500'     },
+  excellent: { label:'Excelente', color:'text-emerald-400', bg:'bg-emerald-500/15',  border:'border-emerald-500/30', dot:'bg-emerald-400' },
+  good:      { label:'Bueno',     color:'text-blue-400',    bg:'bg-blue-500/15',     border:'border-blue-500/30',    dot:'bg-blue-400'    },
+  warning:   { label:'Atención',  color:'text-amber-400',   bg:'bg-amber-500/15',    border:'border-amber-500/30',   dot:'bg-amber-400'   },
+  'at-risk': { label:'En Riesgo', color:'text-orange-400',  bg:'bg-orange-500/15',   border:'border-orange-500/30',  dot:'bg-orange-400'  },
+  critical:  { label:'Crítico',   color:'text-red-400',     bg:'bg-red-500/15',      border:'border-red-500/30',     dot:'bg-red-400'     },
 }
 
 export const attendanceColors = {
-  presente:    { label:'Presente',    bg:'bg-emerald-100', text:'text-emerald-700', dot:'bg-emerald-500' },
-  ausente:     { label:'Ausente',     bg:'bg-red-100',     text:'text-red-700',     dot:'bg-red-500'     },
-  tardanza:    { label:'Tardanza',    bg:'bg-amber-100',   text:'text-amber-700',   dot:'bg-amber-500'   },
-  justificado: { label:'Justificado', bg:'bg-blue-100',    text:'text-blue-700',    dot:'bg-blue-500'    },
+  presente:    { label:'Presente',    bg:'bg-emerald-500/15', text:'text-emerald-400', dot:'bg-emerald-400', border:'border-emerald-500/30' },
+  ausente:     { label:'Ausente',     bg:'bg-red-500/15',     text:'text-red-400',     dot:'bg-red-400',     border:'border-red-500/30'     },
+  tardanza:    { label:'Tardanza',    bg:'bg-amber-500/15',   text:'text-amber-400',   dot:'bg-amber-400',   border:'border-amber-500/30'   },
+  justificado: { label:'Justificado', bg:'bg-blue-500/15',    text:'text-blue-400',    dot:'bg-blue-400',    border:'border-blue-500/30'    },
 }

@@ -59,11 +59,10 @@ export default function SessionQR() {
       <div className="fixed inset-0 bg-navy-950 z-50 flex flex-col items-center justify-center gap-6 p-8">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gold-500 flex items-center justify-center">
-            <QrCode size={20} className="text-white"/>
-          </div>
+          <img src="/logo.jpeg" alt="SIGA CEFIMAT" className="w-10 h-10 rounded-full object-cover"
+            style={{ border:'1px solid rgba(255,255,255,.25)' }}/>
           <div className="text-center">
-            <p className="text-white font-bold text-xl">EduTrack — Pase de Lista</p>
+            <p className="text-white font-bold text-xl">SIGA CEFIMAT — Pase de Lista</p>
             <p className="text-navy-300 text-sm">{grp?.name} · {grp?.subject}</p>
           </div>
         </div>
@@ -74,7 +73,7 @@ export default function SessionQR() {
             value={qrValue}
             size={300}
             level="H"
-            fgColor="#0f2b5b"
+            fgColor="#1e3a6e"
             bgColor="#ffffff"
           />
         </div>
@@ -83,7 +82,7 @@ export default function SessionQR() {
         <div className="text-center max-w-xs">
           <p className="text-white text-lg font-bold">Escanea para registrar tu asistencia</p>
           <p className="text-navy-300 text-sm mt-1">
-            Abre EduTrack → Mi Código QR → Escanear QR del Salón
+            Abre SIGA → Mi Código QR → Escanear QR del Salón
           </p>
         </div>
 
@@ -205,7 +204,7 @@ export default function SessionQR() {
             <h3 className="text-sm font-bold text-slate-700 mb-3">Instrucciones para el alumno</h3>
             <ol className="space-y-2.5">
               {[
-                { step:'Abre EduTrack en tu teléfono.' },
+                { step:'Abre SIGA CEFIMAT en tu teléfono.' },
                 { step:'Ve a "Mi Código QR".' },
                 { step:'Toca el botón "Escanear QR del Salón".' },
                 { step:'Apunta la cámara al QR del docente.' },

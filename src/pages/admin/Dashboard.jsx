@@ -24,17 +24,16 @@ const attendancePie = [
 
 function StatCard({ icon: Icon, label, value, sub, color, onClick }) {
   return (
-    <button onClick={onClick}
-      className="stat-card text-left hover:shadow-card-md transition-all hover:-translate-y-0.5 w-full group">
+    <button onClick={onClick} className="stat-card text-left w-full group">
       <div className="flex items-start justify-between">
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${color}`}>
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${color} opacity-90`}>
           <Icon size={22} className="text-white" />
         </div>
-        <ArrowUpRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors mt-1" />
+        <ArrowUpRight size={16} className="transition-colors mt-1" style={{ color: 'rgba(255,255,255,.20)' }} />
       </div>
-      <p className="text-3xl font-bold text-slate-800 mt-3">{value}</p>
-      <p className="text-sm font-medium text-slate-600 mt-0.5">{label}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      <p className="text-3xl font-bold mt-3" style={{ color: 'rgba(255,255,255,.90)' }}>{value}</p>
+      <p className="text-sm font-medium mt-0.5" style={{ color: 'rgba(255,255,255,.55)' }}>{label}</p>
+      {sub && <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,.30)' }}>{sub}</p>}
     </button>
   )
 }
@@ -42,13 +41,17 @@ function StatCard({ icon: Icon, label, value, sub, color, onClick }) {
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white border border-slate-200 rounded-lg shadow-card-md p-3 text-xs">
-      <p className="font-semibold text-slate-700 mb-2">{label}</p>
+    <div className="rounded-xl p-3 text-xs" style={{
+      background: 'rgba(10,10,20,.92)',
+      border: '1px solid rgba(255,255,255,.12)',
+      backdropFilter: 'blur(12px)',
+    }}>
+      <p className="font-semibold mb-2" style={{ color: 'rgba(255,255,255,.75)' }}>{label}</p>
       {payload.map(p => (
         <div key={p.dataKey} className="flex items-center gap-2 mb-1">
           <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-          <span className="text-slate-600">{p.name}:</span>
-          <span className="font-bold text-slate-800">{p.value}</span>
+          <span style={{ color: 'rgba(255,255,255,.45)' }}>{p.name}:</span>
+          <span className="font-bold" style={{ color: 'rgba(255,255,255,.85)' }}>{p.value}</span>
         </div>
       ))}
     </div>
@@ -80,7 +83,7 @@ export default function Dashboard() {
               <h2 className="section-title">Evolución del Promedio</h2>
               <p className="text-xs text-slate-400 mt-0.5">Promedio mensual por grupo (Sep – Feb)</p>
             </div>
-            <button onClick={()=>navigate('/admin/grupos')} className="text-xs text-navy-700 font-medium hover:underline flex items-center gap-1">
+            <button onClick={()=>navigate('/admin/grupos')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color:'rgba(255,255,255,.40)' }}>
               Ver grupos <ArrowRight size={12}/>
             </button>
           </div>
@@ -94,14 +97,14 @@ export default function Dashboard() {
                   </linearGradient>
                 ))}
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="mes" tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis domain={[6,10]} tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8 }} />
-              <Area type="monotone" dataKey="grupoA" name="Grupo A" stroke={AREA_COLORS[0]} fill={`url(#gradblue)`}  strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[0] }} />
-              <Area type="monotone" dataKey="grupoB" name="Grupo B" stroke={AREA_COLORS[1]} fill={`url(#gradgreen)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[1] }} />
-              <Area type="monotone" dataKey="grupoC" name="Grupo C" stroke={AREA_COLORS[2]} fill={`url(#gradamber)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[2] }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" />
+              <XAxis dataKey="mes" tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
+              <YAxis domain={[6,10]} tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ stroke:'rgba(255,255,255,.10)', strokeWidth:1 }} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color:'rgba(255,255,255,.50)' }} />
+              <Area type="monotone" dataKey="grupoA" name="Grupo A" stroke={AREA_COLORS[0]} fill={`url(#gradblue)`}  strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[0] }} activeDot={{ r:4, fill:AREA_COLORS[0], stroke:'none' }} />
+              <Area type="monotone" dataKey="grupoB" name="Grupo B" stroke={AREA_COLORS[1]} fill={`url(#gradgreen)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[1] }} activeDot={{ r:4, fill:AREA_COLORS[1], stroke:'none' }} />
+              <Area type="monotone" dataKey="grupoC" name="Grupo C" stroke={AREA_COLORS[2]} fill={`url(#gradamber)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[2] }} activeDot={{ r:4, fill:AREA_COLORS[2], stroke:'none' }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -118,7 +121,7 @@ export default function Dashboard() {
                 dataKey="value" stroke="none">
                 {attendancePie.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
               </Pie>
-              <Tooltip formatter={(v) => [`${v}%`]} contentStyle={{ fontSize:11, borderRadius:8 }} />
+              <Tooltip formatter={(v) => [`${v}%`]} wrapperStyle={{ outline:'none' }} contentStyle={{ fontSize:11, borderRadius:10, background:'rgba(10,10,20,.92)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.80)' }} />
             </PieChart>
           </ResponsiveContainer>
           <div className="space-y-2 mt-2">
@@ -126,9 +129,9 @@ export default function Dashboard() {
               <div key={d.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background:COLORS[i] }} />
-                  <span className="text-xs text-slate-600">{d.name}</span>
+                  <span className="text-xs" style={{ color:'rgba(255,255,255,.50)' }}>{d.name}</span>
                 </div>
-                <span className="text-xs font-bold text-slate-800">{d.value}%</span>
+                <span className="text-xs font-bold" style={{ color:'rgba(255,255,255,.80)' }}>{d.value}%</span>
               </div>
             ))}
           </div>
@@ -147,13 +150,13 @@ export default function Dashboard() {
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={subjectPerformance} margin={{ top:5, right:10, bottom:20, left:-15 }} barSize={14} barGap={4}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="materia" tick={{ fontSize:10, fill:'#94a3b8' }} angle={-30} textAnchor="end" axisLine={false} tickLine={false} />
-              <YAxis domain={[0,10]} tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8 }} />
-              <Bar dataKey="promedio" name="Promedio" fill="#3b82f6" radius={[4,4,0,0]} />
-              <Bar dataKey="aprobados" name="Aprobados" fill="#10b981" radius={[4,4,0,0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" vertical={false} />
+              <XAxis dataKey="materia" tick={{ fontSize:10, fill:'rgba(255,255,255,.35)' }} angle={-30} textAnchor="end" axisLine={false} tickLine={false} />
+              <YAxis domain={[0,10]} tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ fill:'rgba(255,255,255,.04)' }} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color:'rgba(255,255,255,.50)' }} />
+              <Bar dataKey="promedio"   name="Promedio"   fill="#3b82f6" radius={[4,4,0,0]} />
+              <Bar dataKey="aprobados"  name="Aprobados"  fill="#10b981" radius={[4,4,0,0]} />
               <Bar dataKey="reprobados" name="Reprobados" fill="#f43f5e" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -166,15 +169,15 @@ export default function Dashboard() {
             {recentActivity.map(a => (
               <div key={a.id} className="flex gap-3">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                  a.tipo==='alerta' ? 'bg-red-100' : a.tipo==='importacion' ? 'bg-purple-100' : 'bg-blue-100'
+                  a.tipo==='alerta' ? 'bg-red-500/15' : a.tipo==='importacion' ? 'bg-purple-500/15' : 'bg-blue-500/15'
                 }`}>
                   {a.tipo==='alerta'
-                    ? <AlertTriangle size={13} className="text-red-600"/>
-                    : <CheckCircle size={13} className="text-blue-600"/>}
+                    ? <AlertTriangle size={13} className="text-red-400"/>
+                    : <CheckCircle size={13} className="text-blue-400"/>}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-700 font-medium leading-snug">{a.texto}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">{a.hora}</p>
+                  <p className="text-xs font-medium leading-snug" style={{ color:'rgba(255,255,255,.70)' }}>{a.texto}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color:'rgba(255,255,255,.30)' }}>{a.hora}</p>
                 </div>
               </div>
             ))}
@@ -188,27 +191,30 @@ export default function Dashboard() {
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title">Top 5 Alumnos</h2>
-            <button onClick={()=>navigate('/admin/rankings')} className="text-xs text-navy-700 font-medium hover:underline flex items-center gap-1">
+            <button onClick={()=>navigate('/admin/rankings')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color:'rgba(255,255,255,.40)' }}>
               Ver todos <ArrowRight size={12}/>
             </button>
           </div>
           <div className="space-y-2">
             {top5.map((s, i) => (
               <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
-                className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left">
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
+                onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.05)'}
+                onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                  i===0?'bg-gold-500 text-white':i===1?'bg-slate-300 text-slate-700':i===2?'bg-amber-700 text-white':'bg-slate-100 text-slate-600'
+                  i===0?'bg-gold-500 text-white':i===1?'bg-white/20 text-white/70':i===2?'bg-amber-700/70 text-white':'bg-white/8 text-white/45'
                 }`}>{i+1}</div>
-                <div className="w-8 h-8 rounded-full bg-navy-100 flex items-center justify-center text-navy-800 text-xs font-bold flex-shrink-0">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ background:'rgba(255,255,255,.10)', color:'rgba(255,255,255,.70)' }}>
                   {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{s.name}</p>
-                  <p className="text-[11px] text-slate-400">{s.groupId.toUpperCase()}</p>
+                  <p className="text-sm font-semibold truncate" style={{ color:'rgba(255,255,255,.82)' }}>{s.name}</p>
+                  <p className="text-[11px]" style={{ color:'rgba(255,255,255,.32)' }}>{s.groupId.toUpperCase()}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-slate-800">{s.avgGrade}</p>
-                  <p className="text-[10px] text-slate-400">{s.attendanceRate}% asist.</p>
+                  <p className="text-sm font-bold" style={{ color:'rgba(255,255,255,.82)' }}>{s.avgGrade}</p>
+                  <p className="text-[10px]" style={{ color:'rgba(255,255,255,.32)' }}>{s.attendanceRate}% asist.</p>
                 </div>
               </button>
             ))}
@@ -222,7 +228,7 @@ export default function Dashboard() {
               <AlertTriangle size={16} className="text-red-500" />
               Alumnos en Riesgo
             </h2>
-            <button onClick={()=>navigate('/admin/ia')} className="text-xs text-navy-700 font-medium hover:underline flex items-center gap-1">
+            <button onClick={()=>navigate('/admin/ia')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color:'rgba(255,255,255,.40)' }}>
               Ver análisis IA <ArrowRight size={12}/>
             </button>
           </div>
@@ -231,20 +237,23 @@ export default function Dashboard() {
               const cfg = statusConfig[s.status]
               return (
                 <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left border border-slate-100">
-                  <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 text-xs font-bold flex-shrink-0">
+                  className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
+                  style={{ border:'1px solid rgba(255,255,255,.06)' }}
+                  onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.05)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 text-xs font-bold flex-shrink-0">
                     {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{s.name}</p>
+                    <p className="text-sm font-semibold truncate" style={{ color:'rgba(255,255,255,.82)' }}>{s.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[10px] font-semibold ${cfg.color}`}>{cfg.label}</span>
-                      <span className="text-[10px] text-slate-400">·  Asist. {s.attendanceRate}%</span>
+                      <span className="text-[10px]" style={{ color:'rgba(255,255,255,.30)' }}>· Asist. {s.attendanceRate}%</span>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-red-600">{s.avgGrade}</p>
-                    <p className="text-[10px] text-slate-400">promedio</p>
+                    <p className="text-sm font-bold text-red-400">{s.avgGrade}</p>
+                    <p className="text-[10px]" style={{ color:'rgba(255,255,255,.30)' }}>promedio</p>
                   </div>
                 </button>
               )

@@ -1,90 +1,274 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { QRCodeSVG } from 'qrcode.react'
-import { groups, students } from '../../data/mockData'
-import { Users, Clock, MapPin, ArrowLeft, RefreshCw, Maximize2, Minimize2 } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Html5Qrcode } from 'html5-qrcode'
+import * as XLSX from 'xlsx'
+import { groups, students, getEvalsByStudent, getLastSimulacro } from '../../data/mockData'
+import { loadSettings } from '../../lib/settings'
+import GroupShaderCard from '../../components/ui/GroupShaderCard'
+import { useGroupColors } from '../../hooks/useGroupColors'
+import {
+  ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
+  FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
+  ChevronRight, UserCheck, CheckSquare, RotateCw,
+  Timer, Pause, Play,
+} from 'lucide-react'
 
-function genToken() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase()
-}
-const TOKEN_TTL = 300
-const CIRCUMFERENCE = 2 * Math.PI * 28
+const QR_PREFIX   = 'EDUTRACK:'
+const DEBOUNCE_MS = 3000
+
+/* ── localStorage helpers ── */
+const ATT_KEY      = id => `edutrack_att_${id}`
+const todayISO     = () => new Date().toISOString().split('T')[0]
+const loadSession  = id => { try { const d = JSON.parse(localStorage.getItem(ATT_KEY(id)) || 'null'); return d?.date === todayISO() ? d : null } catch { return null } }
+const persistSession = (id, data) => localStorage.setItem(ATT_KEY(id), JSON.stringify({ ...data, date: todayISO() }))
+const clearSession  = id => localStorage.removeItem(ATT_KEY(id))
+
+const fmtMMSS = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+const TOL_PRESETS = [5, 10, 15, 20]
 
 export default function Attendance() {
-  const navigate = useNavigate()
-  const [selectedGroup, setSelectedGroup] = useState(null)
-  const [token,       setToken]       = useState(genToken)
-  const [secondsLeft, setSecondsLeft] = useState(TOKEN_TTL)
-  const [fullscreen,  setFullscreen]  = useState(false)
+  const { getAccent } = useGroupColors()
+
+  const [view,           setView]          = useState('pick')  // 'pick' | 'scan'
+  const [selectedGrp,    setSelectedGrp]   = useState(null)
+  const [scanning,       setScanning]      = useState(false)
+  const [camError,       setCamError]      = useState('')
+  const [scannedLog,     setScannedLog]    = useState([])
+  const [lastScanned,    setLastScanned]   = useState(null)
+  const [flashGreen,     setFlashGreen]    = useState(false)
+  const [showLeaveModal, setShowLeaveModal]= useState(false)
+  const [resumeSession,  setResumeSession] = useState(null) // { log, date, ... } from storage
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  /* ── Cronómetro de tolerancia + retardos ── */
+  const [showTolModal,  setShowTolModal]  = useState(false)
+  const [tolInput,      setTolInput]      = useState('15')
+  const [tolMin,        setTolMin]        = useState(null)  // minutos elegidos (null = sin cronómetro)
+  const [remainingSec,  setRemainingSec]  = useState(null)  // cuenta regresiva
+  const [timerPaused,   setTimerPaused]   = useState(false)
+  const [retardos,      setRetardos]      = useState({})    // { studentId: bool }
+
+  const qrRef          = useRef(null)        // Html5Qrcode instance
+  const recentRef      = useRef(new Set())   // debounce set
+  const tableScrollRef = useRef(null)
+  const groupIdRef     = useRef(selectedGrp) // stable ref so handleDecode stays stable
+  const tolExpiredRef  = useRef(false)       // ref estable para handleDecode
+  const remainingRef   = useRef(null)        // valor actual para persistir sin re-crear efectos
+
+  useEffect(() => { groupIdRef.current = selectedGrp }, [selectedGrp])
+  useEffect(() => {
+    tolExpiredRef.current = remainingSec !== null && remainingSec <= 0
+    remainingRef.current  = remainingSec
+  }, [remainingSec])
+
+  const tolExpired   = remainingSec !== null && remainingSec <= 0
+  const retardoCount = Object.values(retardos).filter(Boolean).length
+
+  const grp           = groups.find(g => g.id === selectedGrp)
+  const groupStudents = students.filter(s => s.groupId === selectedGrp)
+  const accentColor   = selectedGrp ? getAccent(selectedGrp) : '#3b82f6'
+
+  const today     = new Date()
+  const dateLabel = today.toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' })
+  const dateFile  = today.toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' })
+    .replace(/\//g, '-')
+
+  /* ── Stable decode callback (empty deps → never recreated) ─── */
+  const handleDecode = useCallback((raw) => {
+    if (!raw.startsWith(QR_PREFIX)) return
+    const studentId = raw.slice(QR_PREFIX.length)
+
+    if (recentRef.current.has(studentId)) return
+    recentRef.current.add(studentId)
+    setTimeout(() => recentRef.current.delete(studentId), DEBOUNCE_MS)
+
+    const student = students.find(st => st.id === studentId)
+    if (!student) return
+    if (groupIdRef.current && student.groupId !== groupIdRef.current) return
+
+    const time = new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' })
+    setScannedLog(prev => {
+      if (prev.find(e => e.student.id === studentId)) return prev
+      return [...prev, { student, time }]
+    })
+    // Retardo automático: llegó después de vencida la tolerancia (override manual disponible)
+    setRetardos(prev => prev[studentId] === undefined
+      ? { ...prev, [studentId]: tolExpiredRef.current }
+      : prev)
+    setLastScanned({ student, time })
+    setFlashGreen(true)
+    setTimeout(() => setFlashGreen(false), 900)
+  }, [])
+
+  const toggleRetardo = id => setRetardos(prev => ({ ...prev, [id]: !prev[id] }))
+
+  /* ── Scanner controls ──────────────────────────────────────── */
+  const startScanner = useCallback(async () => {
+    if (qrRef.current) return
+    setCamError('')
+    try {
+      const qr = new Html5Qrcode('qr-reader')
+      qrRef.current = qr
+      await qr.start(
+        { facingMode: 'environment' },
+        { fps: 15, qrbox: { width: 210, height: 210 }, aspectRatio: 1.0 },
+        handleDecode,
+        () => {},
+      )
+      setScanning(true)
+    } catch {
+      setCamError('No se pudo acceder a la cámara. Verifica los permisos del navegador.')
+      qrRef.current = null
+    }
+  }, [handleDecode])
+
+  const stopScanner = useCallback(async () => {
+    if (!qrRef.current) return
+    await qrRef.current.stop().catch(() => {})
+    qrRef.current = null
+    setScanning(false)
+  }, [])
+
+  /* ── Effects ────────────────────────────────────────────────── */
+  useEffect(() => () => { qrRef.current?.stop().catch(() => {}); qrRef.current = null }, [])
 
   useEffect(() => {
-    if (!selectedGroup) return
-    setToken(genToken())
-    setSecondsLeft(TOKEN_TTL)
-    const id = setInterval(() => {
-      setSecondsLeft(s => {
-        if (s <= 1) { setToken(genToken()); return TOKEN_TTL }
-        return s - 1
-      })
-    }, 1000)
-    return () => clearInterval(id)
-  }, [selectedGroup])
+    if (view === 'scan' && !showTolModal) {
+      const t = setTimeout(startScanner, 350)
+      return () => clearTimeout(t)
+    } else if (view !== 'scan') {
+      stopScanner()
+    }
+  }, [view, showTolModal]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const grp    = groups.find(g => g.id === selectedGroup)
-  const today  = new Date().toISOString().split('T')[0]
-  const qrVal  = selectedGroup ? `EDUTRACK_SESSION:${selectedGroup}:${today}:${token}` : ''
-  const mins   = String(Math.floor(secondsLeft / 60)).padStart(2, '0')
-  const secs   = String(secondsLeft % 60).padStart(2, '0')
-  const offset = CIRCUMFERENCE * (1 - secondsLeft / TOKEN_TTL)
+  // Auto-scroll table to bottom on new entry
+  useEffect(() => {
+    if (tableScrollRef.current) {
+      tableScrollRef.current.scrollTop = tableScrollRef.current.scrollHeight
+    }
+  }, [scannedLog])
 
-  const renewToken = () => { setToken(genToken()); setSecondsLeft(TOKEN_TTL) }
+  // Tick del cronómetro de tolerancia (1s, pausable)
+  useEffect(() => {
+    if (view !== 'scan' || timerPaused || remainingSec === null || remainingSec <= 0) return
+    const t = setTimeout(() => setRemainingSec(s => Math.max(0, s - 1)), 1000)
+    return () => clearTimeout(t)
+  }, [view, timerPaused, remainingSec])
 
-  /* ── Fullscreen overlay ─────────────────────────────────── */
-  if (fullscreen && selectedGroup) {
-    return (
-      <div className="fixed inset-0 bg-navy-950 flex flex-col items-center justify-center z-[100] p-6 text-center">
-        <p className="text-navy-400 text-xs uppercase tracking-widest font-semibold mb-1">Pase de Lista</p>
-        <p className="text-white font-bold text-2xl">{grp?.name}</p>
-        <p className="text-navy-300 text-sm mt-0.5 mb-7">{grp?.subject}</p>
+  // Persist scanned log whenever it changes
+  useEffect(() => {
+    if (selectedGrp && scannedLog.length > 0) {
+      persistSession(selectedGrp, { log: scannedLog, retardos, tolMin, remainingSec: remainingRef.current })
+    }
+  }, [scannedLog, retardos, tolMin, selectedGrp])
 
-        <div className="p-6 bg-white rounded-3xl shadow-2xl">
-          <QRCodeSVG value={qrVal} size={270} level="H" fgColor="#0f2b5b" bgColor="#ffffff" />
-        </div>
+  // Warn on browser refresh/close when session is active
+  useEffect(() => {
+    if (!scanning && scannedLog.length === 0) return
+    const handler = e => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [scanning, scannedLog])
 
-        <div className="mt-7 flex items-center gap-5">
-          <svg width="56" height="56" viewBox="0 0 60 60">
-            <circle cx="30" cy="30" r="28" fill="none" stroke="#1e3a5f" strokeWidth="4"/>
-            <circle cx="30" cy="30" r="28" fill="none" stroke="#f59e0b" strokeWidth="4"
-              strokeDasharray={CIRCUMFERENCE} strokeDashoffset={offset}
-              strokeLinecap="round" transform="rotate(-90 30 30)"
-              style={{ transition:'stroke-dashoffset 1s linear' }}/>
-          </svg>
-          <div className="text-left">
-            <p className="font-mono font-bold text-3xl text-white">{mins}:{secs}</p>
-            <p className="text-navy-400 text-xs">Siguiente renovación</p>
-          </div>
-          <button onClick={renewToken}
-            className="w-9 h-9 rounded-lg bg-navy-800 hover:bg-navy-700 transition-colors flex items-center justify-center text-navy-300 hover:text-white">
-            <RefreshCw size={16}/>
-          </button>
-        </div>
-
-        <button onClick={() => setFullscreen(false)}
-          className="mt-10 flex items-center gap-2 text-navy-500 hover:text-white transition-colors text-sm">
-          <Minimize2 size={15}/> Salir de pantalla completa
-        </button>
-      </div>
-    )
+  /* ── Navigation ─────────────────────────────────────────────── */
+  const selectGroup = (groupId) => {
+    // Check for a saved session from today
+    const saved = loadSession(groupId)
+    if (saved && saved.log?.length > 0) {
+      setSelectedGrp(groupId)
+      setResumeSession(saved)
+      setView('scan')
+      setCamError('')
+      setLastScanned(null)
+      return
+    }
+    setSelectedGrp(groupId)
+    setScannedLog([])
+    setLastScanned(null)
+    setCamError('')
+    setTolInput(String(loadSettings().toleranciaMin))
+    setShowTolModal(true)   // pop-up de tolerancia antes de comenzar
+    setView('scan')
   }
 
-  /* ── Group selector ─────────────────────────────────────── */
-  if (!selectedGroup) {
+  const startTolerance = (minutes) => {
+    if (minutes === null) {                 // continuar sin cronómetro
+      setTolMin(null)
+      setRemainingSec(null)
+    } else {
+      setTolMin(minutes)
+      setRemainingSec(minutes * 60)
+      setTimerPaused(false)
+    }
+    setShowTolModal(false)
+  }
+
+  const resetTimerState = () => {
+    setTolMin(null)
+    setRemainingSec(null)
+    setTimerPaused(false)
+    setRetardos({})
+    setShowTolModal(false)
+  }
+
+  const goBack = (force = false) => {
+    if (!force && scannedLog.length > 0) { setShowLeaveModal(true); return }
+    stopScanner()
+    clearSession(selectedGrp)
+    setView('pick')
+    setSelectedGrp(null)
+    setScannedLog([])
+    setLastScanned(null)
+    setShowConfirm(false)
+    setShowLeaveModal(false)
+    setResumeSession(null)
+    resetTimerState()
+  }
+
+  const handleFinish = () => setShowConfirm(true)
+  const handleConfirmFinish = () => { exportExcel(); clearSession(selectedGrp); goBack(true) }
+
+  /* ── Excel export ───────────────────────────────────────────── */
+  const lastEvalOf = (sid) => {
+    const evs = getEvalsByStudent(sid).sort((a, b) => b.fecha.localeCompare(a.fecha))
+    return evs[0] ?? null
+  }
+
+  const exportExcel = () => {
+    const buildRow = (student, idx, time, estado) => {
+      const ev  = lastEvalOf(student.id)
+      const sim = getLastSimulacro(student.id)
+      return {
+        '#':                            idx,
+        'Nombre del Alumno':            student.name,
+        'Hora de Llegada':              time,
+        'Estado':                       estado,
+        'Evaluación':                   ev ? ev.calificacion : '',
+        'Examen General de Simulación': sim ? `${sim.folio ?? ''} ${sim.aciertos}/${sim.total}`.trim() : '',
+      }
+    }
+    const rows = scannedLog.map((e, i) =>
+      buildRow(e.student, i + 1, e.time, retardos[e.student.id] ? 'Retardo' : 'Presente'))
+    const presentIds = new Set(scannedLog.map(e => e.student.id))
+    groupStudents.forEach(s => {
+      if (!presentIds.has(s.id))
+        rows.push(buildRow(s, rows.length + 1, '—', 'Ausente'))
+    })
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Lista')
+    XLSX.writeFile(wb, `${grp?.name?.replace(/\s+/g, '') ?? 'Grupo'}_${dateFile}.xlsx`)
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     VIEW: GROUP PICKER
+  ══════════════════════════════════════════════════════════════ */
+  if (view === 'pick') {
     return (
-      <div className="max-w-2xl space-y-5">
+      <div className="w-full space-y-6">
         <div>
           <h1 className="page-title">Pasar Lista</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Selecciona el grupo para generar el código QR de sesión.
+          <p className="text-sm mt-1" style={{ color:'rgba(255,255,255,.38)' }}>
+            Selecciona el grupo para comenzar a registrar asistencia.
           </p>
         </div>
 
@@ -92,35 +276,16 @@ export default function Attendance() {
           {groups.map(g => {
             const count = students.filter(s => s.groupId === g.id).length
             return (
-              <button key={g.id} onClick={() => setSelectedGroup(g.id)}
-                className="bg-white rounded-xl border border-slate-100 shadow-card p-4 sm:p-5 text-left hover:shadow-md hover:-translate-y-0.5 transition-all group w-full overflow-hidden">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  {/* Color accent bar */}
-                  <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: g.color }} />
-
-                  {/* Avatar */}
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                    style={{ background: g.color }}>
-                    {g.name.split(' ')[1]}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 text-base">{g.name}</p>
-                    <p className="text-slate-500 text-sm">{g.subject}</p>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-xs text-slate-400">
-                      <span className="flex items-center gap-1"><Users size={11}/>{count} alumnos</span>
-                      <span className="hidden sm:flex items-center gap-1"><Clock size={11}/>{g.schedule}</span>
-                      <span className="flex items-center gap-1"><MapPin size={11}/>{g.room}</span>
-                    </div>
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center flex-shrink-0 transition-colors">
-                    <span className="text-slate-400 font-bold text-base">→</span>
+              <GroupShaderCard key={g.id} group={g} onClick={() => selectGroup(g.id)} showPicker>
+                <div>
+                  <p className="font-bold text-base" style={{ color:'rgba(255,255,255,.90)' }}>{g.name}</p>
+                  <p className="text-sm" style={{ color:'rgba(255,255,255,.45)' }}>{g.subject}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-xs" style={{ color:'rgba(255,255,255,.32)' }}>
+                    <span className="flex items-center gap-1"><Users size={11}/>{count} alumnos</span>
+                    <span className="hidden sm:flex items-center gap-1"><Clock size={11}/>{g.schedule}</span>
                   </div>
                 </div>
-              </button>
+              </GroupShaderCard>
             )
           })}
         </div>
@@ -128,71 +293,551 @@ export default function Attendance() {
     )
   }
 
-  /* ── QR display ─────────────────────────────────────────── */
+  /* ══════════════════════════════════════════════════════════════
+     VIEW: SCANNER
+  ══════════════════════════════════════════════════════════════ */
+  const presentCount = scannedLog.length
+  const totalCount   = groupStudents.length
+  const absentCount  = totalCount - presentCount
+  const pct          = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0
+
+  /* ── Resume session modal ────────────────────────────────── */
+  const ResumeModal = resumeSession && (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
+      <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
+        style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
+          style={{ background:'rgba(251,191,36,.12)', border:'1px solid rgba(251,191,36,.25)' }}>
+          <RotateCw size={20} style={{ color:'#fbbf24' }}/>
+        </div>
+        <div className="text-center">
+          <h2 className="text-base font-bold mb-1" style={{ color:'rgba(255,255,255,.92)' }}>
+            Lista guardada encontrada
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>
+            Tienes una lista del día de hoy con{' '}
+            <strong style={{ color:'#10b981' }}>{resumeSession.log.length} alumnos</strong>
+            {' '}escaneados. ¿Deseas continuar donde te quedaste?
+          </p>
+        </div>
+        <div className="space-y-2">
+          <button onClick={() => {
+            setScannedLog(resumeSession.log)
+            setLastScanned(resumeSession.log.at(-1) ?? null)
+            setRetardos(resumeSession.retardos ?? {})
+            if (resumeSession.tolMin != null && resumeSession.remainingSec != null) {
+              setTolMin(resumeSession.tolMin)
+              setRemainingSec(resumeSession.remainingSec)
+              setTimerPaused(false)
+            }
+            setResumeSession(null)
+          }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
+            style={{ background:'white', color:'black' }}>
+            <RotateCw size={13}/> Continuar lista
+          </button>
+          <button onClick={() => {
+            clearSession(selectedGrp)
+            setScannedLog([])
+            setRetardos({})
+            setResumeSession(null)
+            setTolInput(String(loadSettings().toleranciaMin))
+            setShowTolModal(true)
+          }} className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
+            style={{ background:'rgba(255,255,255,.07)', color:'rgba(255,255,255,.60)' }}>
+            Empezar de nuevo
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  /* ── Leave session modal ──────────────────────────────────── */
+  const LeaveModal = showLeaveModal && (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
+      <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
+        style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
+          style={{ background:'rgba(251,191,36,.12)', border:'1px solid rgba(251,191,36,.25)' }}>
+          <AlertTriangle size={20} style={{ color:'#fbbf24' }}/>
+        </div>
+        <div className="text-center">
+          <h2 className="text-base font-bold mb-1" style={{ color:'rgba(255,255,255,.92)' }}>
+            Pase de lista en progreso
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>
+            Tienes <strong style={{ color:'#10b981' }}>{scannedLog.length} alumnos</strong> registrados.
+            Si sales ahora, la lista se guardará como borrador y podrás continuar al regresar.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <button onClick={() => {
+            persistSession(selectedGrp, { log: scannedLog, retardos, tolMin, remainingSec: remainingRef.current })
+            goBack(true)
+          }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
+            style={{ background:'white', color:'black' }}>
+            Guardar borrador y salir
+          </button>
+          <button onClick={() => goBack(true)}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
+            style={{ background:'rgba(248,113,113,.12)', border:'1px solid rgba(248,113,113,.25)', color:'#f87171' }}>
+            Salir sin guardar
+          </button>
+          <button onClick={() => setShowLeaveModal(false)}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold"
+            style={{ background:'rgba(255,255,255,.07)', color:'rgba(255,255,255,.60)' }}>
+            Seguir pasando lista
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  /* ── Confirm finish modal ─────────────────────────────────── */
+  const ConfirmModal = showConfirm && (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)', WebkitBackdropFilter:'blur(6px)' }}
+      onClick={() => setShowConfirm(false)}>
+      <div
+        className="w-full max-w-sm rounded-2xl p-6 animate-scale-in"
+        style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* Icon */}
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
+          style={{ background:'rgba(251,191,36,.12)', border:'1px solid rgba(251,191,36,.25)' }}>
+          <AlertTriangle size={22} style={{ color:'#fbbf24' }}/>
+        </div>
+
+        {/* Copy */}
+        <h2 className="text-base font-bold text-center mb-2" style={{ color:'rgba(255,255,255,.92)' }}>
+          ¿Terminar pase de lista?
+        </h2>
+        <p className="text-sm text-center leading-relaxed mb-1" style={{ color:'rgba(255,255,255,.50)' }}>
+          Una vez cerrada esta sesión <span style={{ color:'rgba(255,255,255,.80)', fontWeight:600 }}>no podrás modificar la asistencia</span> registrada.
+        </p>
+
+        {/* Summary */}
+        <div className="mt-4 mb-5 rounded-xl p-3 flex items-center justify-around"
+          style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.07)' }}>
+          <div className="text-center">
+            <p className="text-lg font-bold" style={{ color:'#10b981' }}>{presentCount}</p>
+            <p className="text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>Presentes</p>
+          </div>
+          <div className="w-px h-8" style={{ background:'rgba(255,255,255,.08)' }}/>
+          <div className="text-center">
+            <p className="text-lg font-bold" style={{ color:'rgba(255,255,255,.40)' }}>{absentCount}</p>
+            <p className="text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>Ausentes</p>
+          </div>
+          <div className="w-px h-8" style={{ background:'rgba(255,255,255,.08)' }}/>
+          <div className="text-center">
+            <p className="text-lg font-bold" style={{ color: accentColor }}>{totalCount}</p>
+            <p className="text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>Total</p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowConfirm(false)}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
+            style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}
+            onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.12)'}
+            onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.07)'}>
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirmFinish}
+            className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2"
+            style={{ background:'white', color:'black' }}
+            onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.88)'}
+            onMouseLeave={e => e.currentTarget.style.background='white'}>
+            <CheckSquare size={14}/> Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  /* ── Tolerance modal (pop-up antes de comenzar) ─────────── */
+  const ToleranceModal = showTolModal && !resumeSession && (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
+      <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
+        style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
+          style={{ background:`${accentColor}1f`, border:`1px solid ${accentColor}44` }}>
+          <Timer size={20} style={{ color: accentColor }}/>
+        </div>
+        <div className="text-center">
+          <h2 className="text-base font-bold mb-1" style={{ color:'rgba(255,255,255,.92)' }}>
+            Tolerancia de llegada
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>
+            Define los minutos de tolerancia para <strong style={{ color:'rgba(255,255,255,.80)' }}>{grp?.name}</strong>.
+            Al vencer, los alumnos que se registren quedarán marcados con{' '}
+            <strong style={{ color:'#fbbf24' }}>retardo</strong> automáticamente.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2">
+          {TOL_PRESETS.map(m => (
+            <button key={m} onClick={() => setTolInput(String(m))}
+              className="py-2 rounded-xl text-sm font-bold transition-all"
+              style={String(m) === tolInput
+                ? { background:'white', color:'black' }
+                : { background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.10)', color:'rgba(255,255,255,.60)' }}>
+              {m} min
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 rounded-xl px-3"
+          style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.10)' }}>
+          <Clock size={14} style={{ color:'rgba(255,255,255,.35)' }}/>
+          <input type="number" min="1" max="120" value={tolInput}
+            onChange={e => setTolInput(e.target.value)}
+            className="flex-1 bg-transparent py-2.5 text-sm font-semibold outline-none"
+            style={{ color:'rgba(255,255,255,.85)' }}/>
+          <span className="text-xs" style={{ color:'rgba(255,255,255,.35)' }}>minutos</span>
+        </div>
+
+        <div className="space-y-2">
+          <button onClick={() => {
+            const m = parseInt(tolInput, 10)
+            if (!isNaN(m) && m > 0) startTolerance(Math.min(m, 120))
+          }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
+            style={{ background:'white', color:'black' }}>
+            <Play size={13}/> Comenzar pase de lista
+          </button>
+          <button onClick={() => startTolerance(null)}
+            className="w-full py-2 text-xs font-semibold transition-colors"
+            style={{ color:'rgba(255,255,255,.35)' }}
+            onMouseEnter={e => e.currentTarget.style.color='rgba(255,255,255,.60)'}
+            onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,.35)'}>
+            Continuar sin cronómetro
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
-    <div className="max-w-md mx-auto space-y-5">
-      <button onClick={() => setSelectedGroup(null)}
-        className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium">
-        <ArrowLeft size={16}/> Cambiar grupo
-      </button>
+    <div className="w-full space-y-4">
 
-      <div className="card overflow-hidden">
-        {/* Group header */}
-        <div className="px-5 py-4 flex items-center gap-3 border-b border-slate-100">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-            style={{ background: grp?.color }}>
-            {grp?.name.split(' ')[1]}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-slate-900">{grp?.name}</p>
-            <p className="text-slate-500 text-sm">{grp?.subject}</p>
-          </div>
-          <span className="badge bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>Activo
-          </span>
-        </div>
+      {/* ── Breadcrumb ─────────────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <button onClick={goBack}
+          className="flex items-center gap-1.5 text-sm font-medium transition-colors"
+          style={{ color:'rgba(255,255,255,.40)' }}
+          onMouseEnter={e => e.currentTarget.style.color='rgba(255,255,255,.85)'}
+          onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,.40)'}>
+          <ArrowLeft size={15}/> Pasar Lista
+        </button>
+        <ChevronRight size={12} style={{ color:'rgba(255,255,255,.20)' }}/>
+        <span className="text-sm font-semibold" style={{ color: accentColor }}>{grp?.name}</span>
+        <span className="text-xs hidden sm:inline" style={{ color:'rgba(255,255,255,.28)' }}>· {grp?.subject}</span>
+      </div>
 
-        {/* QR code */}
-        <div className="py-7 flex justify-center bg-slate-50">
-          <div className="p-5 bg-white rounded-2xl shadow-inner border-2 border-slate-100">
-            <QRCodeSVG value={qrVal} size={220} level="H" fgColor="#0f2b5b" bgColor="#ffffff" />
+      {/* ── Progress KPI bar ───────────────────────────────── */}
+      <div className="card px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-5">
+            {[
+              { label:'Presentes',      value: presentCount, color:'#10b981' },
+              { label:'Retardos',       value: retardoCount, color:'#fbbf24' },
+              { label:'Sin escanear',   value: absentCount,  color:'rgba(255,255,255,.38)' },
+              { label:'Total',          value: totalCount,   color: accentColor },
+            ].map((k, i) => (
+              <div key={k.label} className="flex items-center gap-5">
+                {i > 0 && <div className="w-px h-7" style={{ background:'rgba(255,255,255,.08)' }}/>}
+                <div className="text-center">
+                  <p className="text-2xl font-bold leading-none tabular-nums" style={{ color: k.color }}>{k.value}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color:'rgba(255,255,255,.33)' }}>{k.label}</p>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-
-        {/* Timer + actions */}
-        <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <svg width="44" height="44" viewBox="0 0 60 60" className="flex-shrink-0">
-              <circle cx="30" cy="30" r="28" fill="none" stroke="#e2e8f0" strokeWidth="5"/>
-              <circle cx="30" cy="30" r="28" fill="none" stroke="#f59e0b" strokeWidth="5"
-                strokeDasharray={CIRCUMFERENCE} strokeDashoffset={offset}
-                strokeLinecap="round" transform="rotate(-90 30 30)"
-                style={{ transition:'stroke-dashoffset 1s linear' }}/>
-            </svg>
-            <div>
-              <p className="font-mono font-bold text-xl text-slate-800 leading-none">{mins}:{secs}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Se renueva solo</p>
+            {tolMin !== null && remainingSec !== null && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-sm font-bold tabular-nums"
+                  style={tolExpired
+                    ? { background:'rgba(239,68,68,.14)',  border:'1px solid rgba(239,68,68,.30)',  color:'#f87171' }
+                    : timerPaused
+                      ? { background:'rgba(251,191,36,.12)', border:'1px solid rgba(251,191,36,.28)', color:'#fbbf24' }
+                      : { background:'rgba(16,185,129,.10)', border:'1px solid rgba(16,185,129,.25)', color:'#10b981' }}>
+                  <Timer size={13}/>
+                  {tolExpired ? 'Tolerancia vencida' : fmtMMSS(remainingSec)}
+                </div>
+                {!tolExpired && (
+                  <button onClick={() => setTimerPaused(p => !p)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
+                    style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}
+                    onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.12)'}
+                    onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.07)'}>
+                    {timerPaused ? <><Play size={12}/> Reanudar</> : <><Pause size={12}/> Pausar</>}
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="text-right hidden sm:block">
+              <p className="text-2xl font-bold tabular-nums" style={{ color: accentColor }}>{pct}%</p>
+              <p className="text-[11px]" style={{ color:'rgba(255,255,255,.33)' }}>completado</p>
             </div>
           </div>
+        </div>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background:'rgba(255,255,255,.07)' }}>
+          <div className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{ width:`${pct}%`, background:`linear-gradient(90deg, #10b981, ${accentColor})` }}/>
+        </div>
+      </div>
 
-          <div className="flex gap-2 flex-shrink-0">
-            <button onClick={renewToken} className="btn-secondary py-2 text-xs px-3">
-              <RefreshCw size={13}/>
-              <span className="hidden sm:inline">Renovar</span>
+      {/* ── Main layout ────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+
+        {/* ── Camera column (lg: 2/5) ─────────────────────── */}
+        <div className="lg:col-span-2 space-y-3">
+
+          {/* Camera card */}
+          <div className="card overflow-hidden relative" style={{
+            outline: flashGreen ? '2px solid #10b981' : '2px solid transparent',
+            transition: 'outline-color .25s ease',
+          }}>
+            {/* Success flash */}
+            <div className="absolute inset-0 z-20 pointer-events-none transition-opacity duration-300"
+              style={{ background:'#10b981', opacity: flashGreen ? 0.13 : 0 }}/>
+
+            {/* Html5Qrcode mount point */}
+            <div id="qr-reader" className="w-full" style={{ minHeight: 280 }}/>
+
+            {/* Idle overlay */}
+            {!scanning && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center"
+                style={{ background:'#0a0a14', minHeight: 280 }}>
+                {camError ? (
+                  <div className="text-center px-8 space-y-3">
+                    <AlertTriangle size={32} className="mx-auto" style={{ color:'#f87171' }}/>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.80)' }}>
+                        Error de cámara
+                      </p>
+                      <p className="text-xs mt-1" style={{ color:'rgba(255,255,255,.42)' }}>{camError}</p>
+                    </div>
+                    <button onClick={startScanner} className="btn-primary text-xs py-2 px-4">
+                      Reintentar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center px-8">
+                    {/* Animated scan frame */}
+                    <div className="relative w-28 h-28 mx-auto mb-4">
+                      <div className="absolute inset-0 rounded-2xl"
+                        style={{ border:'1.5px dashed rgba(255,255,255,.10)' }}/>
+                      <span className="absolute top-0 left-0 w-7 h-7 rounded-tl-2xl"
+                        style={{ borderTop:`2px solid ${accentColor}`, borderLeft:`2px solid ${accentColor}` }}/>
+                      <span className="absolute top-0 right-0 w-7 h-7 rounded-tr-2xl"
+                        style={{ borderTop:`2px solid ${accentColor}`, borderRight:`2px solid ${accentColor}` }}/>
+                      <span className="absolute bottom-0 left-0 w-7 h-7 rounded-bl-2xl"
+                        style={{ borderBottom:`2px solid ${accentColor}`, borderLeft:`2px solid ${accentColor}` }}/>
+                      <span className="absolute bottom-0 right-0 w-7 h-7 rounded-br-2xl"
+                        style={{ borderBottom:`2px solid ${accentColor}`, borderRight:`2px solid ${accentColor}` }}/>
+                      <QrCode size={28} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                        style={{ color:'rgba(255,255,255,.16)' }}/>
+                    </div>
+                    <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.55)' }}>
+                      Cámara inactiva
+                    </p>
+                    <p className="text-xs mt-1" style={{ color:'rgba(255,255,255,.28)' }}>
+                      Presiona "Activar cámara" para escanear
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Live scanning chip */}
+            {scanning && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
+                  style={{ background:'rgba(0,0,0,.68)', backdropFilter:'blur(8px)', color:'rgba(255,255,255,.85)' }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+                  Escaneando…
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Toggle button */}
+          {!scanning ? (
+            <button onClick={startScanner} className="btn-primary w-full justify-center">
+              <Camera size={15}/> Activar cámara
             </button>
-            <button onClick={() => setFullscreen(true)} className="btn-primary py-2 text-xs px-3">
-              <Maximize2 size={13}/>
-              <span className="hidden sm:inline">Pantalla completa</span>
+          ) : (
+            <button onClick={stopScanner}
+              className="w-full flex items-center justify-center gap-2 rounded-xl font-semibold text-sm py-2.5 transition-all"
+              style={{ background:'rgba(239,68,68,.12)', border:'1px solid rgba(239,68,68,.22)', color:'#f87171' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(239,68,68,.20)'}
+              onMouseLeave={e => e.currentTarget.style.background='rgba(239,68,68,.12)'}>
+              <CameraOff size={15}/> Pausar escaneo
             </button>
+          )}
+
+          {/* Last scanned banner */}
+          {lastScanned && (
+            <div className="card p-3 animate-fade-in" style={{ borderLeft:`3px solid #10b981` }}>
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 size={16} className="flex-shrink-0" style={{ color:'#10b981' }}/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color:'#10b981' }}>
+                    Último escaneado
+                  </p>
+                  <p className="text-sm font-bold truncate" style={{ color:'rgba(255,255,255,.88)' }}>
+                    {lastScanned.student.name}
+                  </p>
+                </div>
+                <span className="font-mono text-xs flex-shrink-0" style={{ color:'rgba(255,255,255,.42)' }}>
+                  {lastScanned.time}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Attendance table (lg: 3/5) ─────────────────── */}
+        <div className="lg:col-span-3 flex flex-col card overflow-hidden" style={{ minHeight: 380 }}>
+
+          {/* Table top bar */}
+          <div className="px-4 py-3 flex items-center justify-between flex-shrink-0"
+            style={{ borderBottom:'1px solid rgba(255,255,255,.07)' }}>
+            <div className="flex items-center gap-2.5">
+              <UserCheck size={14} style={{ color: accentColor }}/>
+              <span className="text-sm font-bold" style={{ color:'rgba(255,255,255,.85)' }}>
+                Lista de asistencia
+              </span>
+              {presentCount > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-bold"
+                  style={{ background:'rgba(16,185,129,.15)', color:'#10b981' }}>
+                  {presentCount}
+                </span>
+              )}
+            </div>
+            <span className="text-xs" style={{ color:'rgba(255,255,255,.26)' }}>{dateLabel}</span>
+          </div>
+
+          {/* Table body */}
+          <div ref={tableScrollRef} className="flex-1 overflow-y-auto">
+            {scannedLog.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full py-16 px-6 text-center">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+                  style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)' }}>
+                  <Scan size={22} style={{ color:'rgba(255,255,255,.16)' }}/>
+                </div>
+                <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.36)' }}>
+                  Sin registros aún
+                </p>
+                <p className="text-xs mt-1.5 leading-relaxed" style={{ color:'rgba(255,255,255,.20)' }}>
+                  Activa la cámara y escanea el QR de<br/>cada alumno para registrarlo aquí
+                </p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest w-10"
+                      style={{ color:'rgba(255,255,255,.24)' }}>#</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest"
+                      style={{ color:'rgba(255,255,255,.24)' }}>Nombre del Alumno</th>
+                    <th className="pr-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest"
+                      style={{ color:'rgba(255,255,255,.24)' }}>Hora de llegada</th>
+                    <th className="pr-4 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest w-20"
+                      style={{ color:'rgba(255,255,255,.24)' }}>Retardo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scannedLog.map((entry, i) => (
+                    <tr key={entry.student.id}
+                      className="transition-colors animate-fade-in"
+                      style={{ borderBottom:'1px solid rgba(255,255,255,.04)' }}
+                      onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.03)'}
+                      onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-[11px] tabular-nums" style={{ color:'rgba(255,255,255,.28)' }}>
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                            style={{ background:'rgba(16,185,129,.15)', color:'#10b981' }}>
+                            {entry.student.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+                          </div>
+                          <span className="text-sm font-medium truncate" style={{ color:'rgba(255,255,255,.85)' }}>
+                            {entry.student.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="pr-4 py-3 text-right">
+                        <span className="font-mono text-xs font-semibold tabular-nums"
+                          style={{ color: retardos[entry.student.id] ? '#fbbf24' : 'rgba(255,255,255,.48)' }}>
+                          {entry.time}
+                        </span>
+                      </td>
+                      <td className="pr-4 py-3 text-center">
+                        <button onClick={() => toggleRetardo(entry.student.id)}
+                          role="switch" aria-checked={!!retardos[entry.student.id]}
+                          title={retardos[entry.student.id] ? 'Con retardo — clic para quitar' : 'Marcar retardo'}
+                          className="relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 align-middle"
+                          style={{ background: retardos[entry.student.id] ? '#f59e0b' : 'rgba(255,255,255,.13)' }}>
+                          <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                            style={{ transform: retardos[entry.student.id] ? 'translateX(16px)' : 'translateX(0)' }}/>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Footer: export + finish */}
+          <div className="px-4 py-3 flex items-center justify-between gap-3 flex-shrink-0"
+            style={{ borderTop:'1px solid rgba(255,255,255,.07)', background:'rgba(255,255,255,.02)' }}>
+            <p className="text-xs" style={{ color:'rgba(255,255,255,.36)' }}>
+              {scannedLog.length > 0
+                ? `${presentCount} de ${totalCount} alumnos registrados`
+                : 'Esperando escaneos…'}
+            </p>
+            <div className="flex items-center gap-2">
+              {scannedLog.length > 0 && (
+                <button onClick={exportExcel}
+                  className="flex items-center gap-2 text-sm font-semibold px-3 py-2 rounded-xl transition-all active:scale-95"
+                  style={{ background:'rgba(16,185,129,.12)', border:'1px solid rgba(16,185,129,.25)', color:'#10b981' }}
+                  onMouseEnter={e => e.currentTarget.style.background='rgba(16,185,129,.22)'}
+                  onMouseLeave={e => e.currentTarget.style.background='rgba(16,185,129,.12)'}>
+                  <FileSpreadsheet size={13}/>
+                  <span className="hidden sm:inline">Excel</span>
+                </button>
+              )}
+              <button onClick={handleFinish}
+                className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all active:scale-95"
+                style={{ background:'rgba(255,255,255,.09)', border:'1px solid rgba(255,255,255,.16)', color:'rgba(255,255,255,.80)' }}
+                onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.13)'; e.currentTarget.style.color='white' }}
+                onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.09)'; e.currentTarget.style.color='rgba(255,255,255,.80)' }}>
+                <CheckSquare size={14}/> Terminar pase de lista
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <p className="text-center text-xs text-slate-400 leading-relaxed px-2">
-        Solo los alumnos de{' '}
-        <span className="font-semibold text-slate-600">{grp?.name}</span>{' '}
-        podrán registrar su asistencia con este código.
-      </p>
+      {/* ── Modales ── */}
+      {ConfirmModal}
+      {ResumeModal}
+      {LeaveModal}
+      {ToleranceModal}
     </div>
   )
 }

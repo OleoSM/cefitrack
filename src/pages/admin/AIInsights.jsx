@@ -1,103 +1,161 @@
 import { useNavigate } from 'react-router-dom'
 import { BrainCircuit, AlertTriangle, CheckCircle, ArrowRight, Zap } from 'lucide-react'
 import { aiInsights, getStudentById, students, statusConfig } from '../../data/mockData'
-import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts'
+import { GlowCard } from '../../components/ui/GlowCard'
 
-const riskColor = {
-  crítico: { bg:'bg-red-50 border-red-200',    icon:'text-red-500',   badge:'bg-red-100 text-red-700',   bar:'bg-red-500'    },
-  alto:    { bg:'bg-amber-50 border-amber-200', icon:'text-amber-500', badge:'bg-amber-100 text-amber-700', bar:'bg-amber-500' },
-  medio:   { bg:'bg-blue-50 border-blue-200',   icon:'text-blue-500',  badge:'bg-blue-100 text-blue-700',  bar:'bg-blue-500'  },
+/* Mapa de riesgo → colores semánticos (texto siempre legible) */
+const RISK = {
+  crítico: {
+    glowColor: 'red',
+    accent:    '#f87171',
+    badgeBg:   'rgba(239,68,68,.15)',
+    badgeBdr:  'rgba(239,68,68,.30)',
+    badgeTxt:  '#f87171',
+    barColor:  '#f87171',
+    icon:      <AlertTriangle size={14} className="text-red-400" />,
+  },
+  alto: {
+    glowColor: 'amber',
+    accent:    '#fbbf24',
+    badgeBg:   'rgba(245,158,11,.15)',
+    badgeBdr:  'rgba(245,158,11,.30)',
+    badgeTxt:  '#fbbf24',
+    barColor:  '#fbbf24',
+    icon:      <AlertTriangle size={14} className="text-amber-400" />,
+  },
+  medio: {
+    glowColor: 'blue',
+    accent:    '#60a5fa',
+    badgeBg:   'rgba(59,130,246,.15)',
+    badgeBdr:  'rgba(59,130,246,.30)',
+    badgeTxt:  '#60a5fa',
+    barColor:  '#60a5fa',
+    icon:      <AlertTriangle size={14} className="text-blue-400" />,
+  },
 }
 
-const excellent = students.filter(s => s.status === 'excellent')
-const goodStudents = students.filter(s => s.status === 'good')
+const RECS = [
+  { title:'Refuerzo de Geometría',   desc:'3 alumnos muestran deficiencias persistentes. Considerar taller adicional los viernes.',   color:'amber'   },
+  { title:'Mejorar Asistencia',       desc:'La asistencia baja los lunes correlaciona con calificaciones más bajas en exámenes.',        color:'red'     },
+  { title:'Tutoría entre Pares',      desc:'Emparejar alumnos de excelente desempeño con alumnos en riesgo puede elevar al grupo.',      color:'emerald' },
+  { title:'Revisión de Evaluaciones', desc:'El "Examen Final" tiene el mayor índice de reprobación. Revisar método de preparación.',    color:'blue'    },
+]
+
+const excellent   = students.filter(s => s.status === 'excellent')
 
 export default function AIInsights() {
   const navigate = useNavigate()
-  const atRisk = aiInsights
+  const atRisk   = aiInsights
 
   return (
-    <div className="max-w-5xl space-y-6">
-      {/* Summary banner */}
-      <div className="rounded-2xl bg-gradient-to-r from-navy-900 to-navy-700 p-6 text-white flex items-center gap-5">
-        <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center flex-shrink-0">
-          <BrainCircuit size={28} className="text-gold-300"/>
+    <div className="max-w-5xl space-y-8">
+
+      {/* ── Banner resumen ──────────────────────────────────── */}
+      <GlowCard color="blue" className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.12)' }}>
+          <BrainCircuit size={24} className="text-blue-300"/>
         </div>
-        <div className="flex-1">
-          <h2 className="text-lg font-bold">Análisis Inteligente de Rendimiento</h2>
-          <p className="text-navy-300 text-sm mt-0.5">
-            El sistema IA analizó el rendimiento de <strong className="text-white">{students.length} alumnos</strong> y detectó patrones de riesgo académico.
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base font-bold" style={{ color:'rgba(255,255,255,.90)' }}>
+            Análisis Inteligente de Rendimiento
+          </h2>
+          <p className="text-sm mt-0.5" style={{ color:'rgba(255,255,255,.50)' }}>
+            Se analizaron <span style={{ color:'rgba(255,255,255,.85)', fontWeight:600 }}>{students.length} alumnos</span> y se detectaron patrones de riesgo académico.
           </p>
         </div>
-        <div className="flex gap-4 flex-shrink-0">
-          <div className="text-center px-4 py-2 rounded-xl bg-white/10">
-            <p className="text-2xl font-bold text-red-300">{atRisk.filter(a=>a.riesgo==='crítico').length}</p>
-            <p className="text-[11px] text-navy-300">Críticos</p>
-          </div>
-          <div className="text-center px-4 py-2 rounded-xl bg-white/10">
-            <p className="text-2xl font-bold text-amber-300">{atRisk.filter(a=>a.riesgo==='alto').length}</p>
-            <p className="text-[11px] text-navy-300">En riesgo alto</p>
-          </div>
-          <div className="text-center px-4 py-2 rounded-xl bg-white/10">
-            <p className="text-2xl font-bold text-emerald-300">{excellent.length}</p>
-            <p className="text-[11px] text-navy-300">Excelentes</p>
-          </div>
+        <div className="grid grid-cols-3 sm:flex gap-2 sm:gap-3 w-full sm:w-auto">
+          {[
+            { val: atRisk.filter(a=>a.riesgo==='crítico').length, label:'Críticos',   color:'#f87171' },
+            { val: atRisk.filter(a=>a.riesgo==='alto').length,    label:'Riesgo alto', color:'#fbbf24' },
+            { val: excellent.length,                               label:'Excelentes', color:'#34d399' },
+          ].map(({ val, label, color }) => (
+            <div key={label} className="text-center px-3 py-2 rounded-xl"
+              style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.08)' }}>
+              <p className="text-xl font-bold" style={{ color }}>{val}</p>
+              <p className="text-[10px] font-medium mt-0.5" style={{ color:'rgba(255,255,255,.40)' }}>{label}</p>
+            </div>
+          ))}
         </div>
-      </div>
+      </GlowCard>
 
-      {/* At-risk students */}
-      <div>
+      {/* ── Alumnos con alertas ─────────────────────────────── */}
+      <section>
         <h2 className="section-title flex items-center gap-2 mb-4">
-          <AlertTriangle size={17} className="text-red-500"/> Alumnos con Alertas
+          <AlertTriangle size={15} className="text-red-400"/> Alumnos con Alertas
         </h2>
         <div className="space-y-4">
           {atRisk.map(insight => {
-            const s   = getStudentById(insight.studentId)
-            const rc  = riskColor[insight.riesgo]
+            const s  = getStudentById(insight.studentId)
+            const rc = RISK[insight.riesgo] ?? RISK.medio
+
             return (
-              <div key={insight.studentId} className={`card p-5 border ${rc.bg}`}>
+              <GlowCard key={insight.studentId} color={rc.glowColor}>
                 <div className="flex items-start gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-navy-100 flex items-center justify-center text-navy-800 font-bold text-sm flex-shrink-0">
+
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
+                    style={{ background:`${rc.accent}20`, color: rc.accent, border:`1px solid ${rc.accent}40` }}>
                     {s?.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                   </div>
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-slate-900">{s?.name}</h3>
-                      <span className={`badge ${rc.badge} uppercase text-[10px] font-bold`}>
-                        {insight.riesgo}
+                    {/* Nombre + badge */}
+                    <div className="flex items-center gap-2 flex-wrap mb-3">
+                      <h3 className="font-bold text-sm" style={{ color:'rgba(255,255,255,.90)' }}>
+                        {s?.name}
+                      </h3>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase"
+                        style={{ background: rc.badgeBg, color: rc.badgeTxt, border:`1px solid ${rc.badgeBdr}` }}>
+                        {rc.icon} {insight.riesgo}
                       </span>
                     </div>
 
-                    {/* Deficiencies */}
-                    <div className="mt-3 space-y-2">
+                    {/* Deficiencias */}
+                    <div className="space-y-2.5">
                       {insight.deficiencias.map(d => (
                         <div key={d.materia}>
-                          <div className="flex items-center justify-between text-xs mb-0.5">
-                            <span className="font-medium text-slate-700">{d.materia}</span>
-                            <span className="font-bold text-slate-600">{d.nivel}%</span>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold" style={{ color:'rgba(255,255,255,.75)' }}>
+                              {d.materia}
+                            </span>
+                            <span className="text-xs font-bold" style={{ color: rc.accent }}>
+                              {d.nivel}%
+                            </span>
                           </div>
-                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${rc.bar}`} style={{ width:`${d.nivel}%` }}/>
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background:'rgba(255,255,255,.10)' }}>
+                            <div className="h-full rounded-full transition-all"
+                              style={{ width:`${d.nivel}%`, background: rc.barColor }} />
                           </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">{d.problema}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color:'rgba(255,255,255,.40)' }}>
+                            {d.problema}
+                          </p>
                         </div>
                       ))}
                     </div>
 
-                    {/* Pattern */}
-                    <div className="mt-3 bg-white/70 rounded-lg px-3 py-2 border border-white">
-                      <p className="text-xs font-semibold text-slate-500 mb-0.5 flex items-center gap-1">
-                        <Zap size={11}/> Patrón detectado
+                    {/* Patrón */}
+                    <div className="mt-3 rounded-xl px-3 py-2.5"
+                      style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)' }}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5"
+                        style={{ color:'rgba(255,255,255,.35)' }}>
+                        <Zap size={10}/> Patrón detectado
                       </p>
-                      <p className="text-xs text-slate-700">{insight.patron}</p>
+                      <p className="text-xs leading-relaxed" style={{ color:'rgba(255,255,255,.65)' }}>
+                        {insight.patron}
+                      </p>
                     </div>
 
-                    {/* Recommendations */}
+                    {/* Recomendaciones */}
                     <div className="mt-3">
-                      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Recomendaciones:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {insight.recomendaciones.map((r,i) => (
-                          <span key={i} className="badge bg-white border border-slate-200 text-slate-700 text-[11px]">
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-2"
+                        style={{ color:'rgba(255,255,255,.30)' }}>
+                        Recomendaciones
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {insight.recomendaciones.map((r, i) => (
+                          <span key={i} className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                            style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.10)', color:'rgba(255,255,255,.65)' }}>
                             {r}
                           </span>
                         ))}
@@ -105,69 +163,62 @@ export default function AIInsights() {
                     </div>
                   </div>
 
+                  {/* Acción */}
                   <button onClick={() => navigate(`/admin/alumnos/${s.id}`)}
                     className="btn-secondary text-xs py-1.5 flex-shrink-0">
-                    Ver perfil <ArrowRight size={13}/>
+                    Ver perfil <ArrowRight size={12}/>
                   </button>
                 </div>
-              </div>
+              </GlowCard>
             )
           })}
         </div>
-      </div>
+      </section>
 
-      {/* Excellent students */}
-      <div>
+      {/* ── Alumnos destacados ──────────────────────────────── */}
+      <section>
         <h2 className="section-title flex items-center gap-2 mb-4">
-          <CheckCircle size={17} className="text-emerald-500"/> Alumnos Destacados
+          <CheckCircle size={15} className="text-emerald-400"/> Alumnos Destacados
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {excellent.map(s => (
-            <button key={s.id} onClick={() => navigate(`/admin/alumnos/${s.id}`)}
-              className="card p-4 text-left hover:shadow-card-md transition-all hover:-translate-y-0.5 group">
+            <GlowCard key={s.id} color="emerald"
+              className="cursor-pointer hover:-translate-y-0.5 transition-transform duration-200 group"
+              onClick={() => navigate(`/admin/alumnos/${s.id}`)}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-800 text-sm font-bold">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
+                  style={{ background:'rgba(52,211,153,.15)', color:'#34d399', border:'1px solid rgba(52,211,153,.25)' }}>
                   {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-800 truncate">{s.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-lg font-bold text-emerald-600">{s.avgGrade}</span>
-                    <span className="text-xs text-slate-400">· {s.attendanceRate}% asist.</span>
+                  <p className="text-sm font-bold truncate" style={{ color:'rgba(255,255,255,.88)' }}>{s.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-base font-bold text-emerald-400">{s.avgGrade}</span>
+                    <span className="text-[11px]" style={{ color:'rgba(255,255,255,.32)' }}>· {s.attendanceRate}% asist.</span>
                   </div>
                 </div>
-                <ArrowRight size={15} className="text-slate-300 group-hover:text-slate-500 transition-colors"/>
+                <ArrowRight size={14} style={{ color:'rgba(255,255,255,.20)' }}/>
               </div>
-            </button>
+            </GlowCard>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* General recommendations */}
-      <div className="card p-5">
-        <h2 className="section-title mb-4 flex items-center gap-2"><BrainCircuit size={17} className="text-navy-700"/> Recomendaciones Generales del Ciclo</h2>
+      {/* ── Recomendaciones generales ───────────────────────── */}
+      <section>
+        <h2 className="section-title flex items-center gap-2 mb-4">
+          <BrainCircuit size={15} style={{ color:'rgba(255,255,255,.50)' }}/> Recomendaciones del Ciclo
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[
-            { title:'Refuerzo de Geometría', desc:'3 alumnos muestran deficiencias persistentes. Considerar taller adicional los viernes.', color:'amber' },
-            { title:'Mejorar Asistencia',    desc:'La asistencia baja los lunes correlaciona con calificaciones más bajas en exámenes semanales.', color:'red' },
-            { title:'Tutoría entre Pares',   desc:'Emparejar alumnos de excelente desempeño con alumnos en riesgo puede elevar el grupo.', color:'emerald' },
-            { title:'Revisión de Evaluaciones', desc:'El tipo "Examen Final" tiene el mayor índice de reprobación. Revisar método de preparación.', color:'blue' },
-          ].map(r => {
-            const colors = {
-              amber:   'bg-amber-50 border-amber-200 text-amber-800',
-              red:     'bg-red-50 border-red-200 text-red-800',
-              emerald: 'bg-emerald-50 border-emerald-200 text-emerald-800',
-              blue:    'bg-blue-50 border-blue-200 text-blue-800',
-            }
-            return (
-              <div key={r.title} className={`rounded-xl border p-4 ${colors[r.color]}`}>
-                <p className="font-semibold text-sm mb-1">{r.title}</p>
-                <p className="text-xs opacity-80 leading-relaxed">{r.desc}</p>
-              </div>
-            )
-          })}
+          {RECS.map(r => (
+            <GlowCard key={r.title} color={r.color}>
+              <p className="text-sm font-bold mb-1.5" style={{ color:'rgba(255,255,255,.88)' }}>{r.title}</p>
+              <p className="text-xs leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>{r.desc}</p>
+            </GlowCard>
+          ))}
         </div>
-      </div>
+      </section>
+
     </div>
   )
 }

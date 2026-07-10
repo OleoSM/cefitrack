@@ -67,16 +67,16 @@ export default function AdminLayout() {
     <div className="flex h-screen overflow-hidden transition-[background] duration-500"
       style={{ background: sigaTheme ? SIGA_BG : ORIGINAL_BG }}>
 
-      {/* ── Mobile overlay ───────────────────────────────────── */}
+      {/* ── Mobile overlay (fondo difuminado, se ve tras el sidebar) ── */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-md lg:hidden"
           onClick={closeSidebar} />
       )}
 
       {/* ── Sidebar ──────────────────────────────────────────── */}
       <aside className={clsx(
-        'fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform duration-300 ease-in-out',
-        'lg:static lg:translate-x-0 lg:z-auto lg:flex-shrink-0',
+        'fixed inset-y-0 left-0 z-50 w-[86vw] max-w-[320px] flex flex-col transition-transform duration-300 ease-in-out',
+        'lg:static lg:w-64 lg:max-w-none lg:translate-x-0 lg:z-auto lg:flex-shrink-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}
         style={{

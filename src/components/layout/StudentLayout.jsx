@@ -49,15 +49,15 @@ function LayoutInner() {
       {...(t.light ? { 'data-stheme-light': '' } : {})}
       style={{ background: t.mainBg, backgroundImage: t.mainBgImage }}>
 
-      {/* Mobile overlay */}
+      {/* Mobile overlay (fondo difuminado, se ve tras el sidebar) */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={closeSidebar} />
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-md lg:hidden" onClick={closeSidebar} />
       )}
 
       {/* Sidebar */}
       <aside className={clsx(
-        'fixed inset-y-0 left-0 z-50 w-60 flex flex-col transition-transform duration-300 ease-in-out relative',
-        'lg:static lg:translate-x-0 lg:z-auto lg:flex-shrink-0',
+        'fixed inset-y-0 left-0 z-50 w-[86vw] max-w-[300px] flex flex-col transition-transform duration-300 ease-in-out',
+        'lg:static lg:w-60 lg:max-w-none lg:translate-x-0 lg:z-auto lg:flex-shrink-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )} style={sideStyle}>
 

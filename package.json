@@ -11,6 +11,7 @@
     "@paper-design/shaders-react": "^0.0.76",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@supabase/supabase-js": "^2.110.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",
     "html5-qrcode": "^2.3.8",

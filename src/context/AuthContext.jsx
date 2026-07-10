@@ -1,16 +1,16 @@
 import { createContext, useContext, useState } from 'react'
-import { users } from '../data/mockData'
+import { loginWithDb } from '../lib/supabaseData'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
 
-  const login = (email, password) => {
-    const user = users.find(u => u.email === email && u.password === password)
-    if (!user) return { ok: false, message: 'Correo o contraseña incorrectos.' }
-    setCurrentUser(user)
-    return { ok: true, role: user.role }
+  const login = async (email, password) => {
+    const res = await loginWithDb(email, password)
+    if (!res.ok) return { ok: false, message: res.message }
+    setCurrentUser(res.user)
+    return { ok: true, role: res.user.role }
   }
 
   const logout = () => setCurrentUser(null)

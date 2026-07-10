@@ -196,8 +196,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setIsLoading(true)
-    await new Promise(r => setTimeout(r, 500))
-    const res = login(email, password)
+    const res = await login(email, password)
     setIsLoading(false)
     if (!res.ok) { setError(res.message); return }
     navigate(res.role === 'admin' ? '/admin' : '/student')
@@ -206,9 +205,9 @@ export default function Login() {
   const fillDemo = d => { setEmail(d.email); setPassword(d.pass); setError('') }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="min-h-screen grid xl:grid-cols-2">
       {/* ══ IZQUIERDA — panel de marca + personajes ══════════════ */}
-      <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-12 text-white"
+      <div className="relative hidden xl:flex flex-col justify-between overflow-hidden p-12 text-white"
         style={{ background: 'linear-gradient(135deg, #0a1428 0%, #122343 55%, #1e3a6e 100%)' }}>
 
         <div className="relative z-20">

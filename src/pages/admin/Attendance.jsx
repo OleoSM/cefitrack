@@ -3,26 +3,23 @@ import { Html5Qrcode } from 'html5-qrcode'
 import * as XLSX from 'xlsx'
 import { groups, students, getEvalsByStudent, getLastSimulacro } from '../../data/mockData'
 import { loadSettings } from '../../lib/settings'
+import {
+  todayISO, loadSession, saveSession, deleteSession, listSessions, remainingSeconds,
+} from '../../lib/attendanceHistory'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import {
   ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
   FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
   ChevronRight, UserCheck, CheckSquare, RotateCw,
-  Timer, Pause, Play,
+  Timer, Pause, Play, History, FolderClock,
 } from 'lucide-react'
 
 const QR_PREFIX   = 'EDUTRACK:'
 const DEBOUNCE_MS = 3000
 
-/* ── localStorage helpers ── */
-const ATT_KEY      = id => `edutrack_att_${id}`
-const todayISO     = () => new Date().toISOString().split('T')[0]
-const loadSession  = id => { try { const d = JSON.parse(localStorage.getItem(ATT_KEY(id)) || 'null'); return d?.date === todayISO() ? d : null } catch { return null } }
-const persistSession = (id, data) => localStorage.setItem(ATT_KEY(id), JSON.stringify({ ...data, date: todayISO() }))
-const clearSession  = id => localStorage.removeItem(ATT_KEY(id))
-
 const fmtMMSS = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+const fmtDate = iso => new Date(`${iso}T00:00:00`).toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' })
 const TOL_PRESETS = [5, 10, 15, 20]
 
 export default function Attendance() {
@@ -30,47 +27,54 @@ export default function Attendance() {
 
   const [view,           setView]          = useState('pick')  // 'pick' | 'scan'
   const [selectedGrp,    setSelectedGrp]   = useState(null)
+  const [selectedDate,   setSelectedDate]  = useState(todayISO())
   const [scanning,       setScanning]      = useState(false)
   const [camError,       setCamError]      = useState('')
   const [scannedLog,     setScannedLog]    = useState([])
   const [lastScanned,    setLastScanned]   = useState(null)
   const [flashGreen,     setFlashGreen]    = useState(false)
   const [showLeaveModal, setShowLeaveModal]= useState(false)
-  const [resumeSession,  setResumeSession] = useState(null) // { log, date, ... } from storage
-  const [showConfirm, setShowConfirm] = useState(false)
+  const [resumeSession,  setResumeSession] = useState(null) // sesión guardada de HOY, detectada al elegir grupo
+  const [showConfirm,    setShowConfirm]   = useState(false)
+  const [finished,       setFinished]      = useState(false)
 
-  /* ── Cronómetro de tolerancia + retardos ── */
-  const [showTolModal,  setShowTolModal]  = useState(false)
-  const [tolInput,      setTolInput]      = useState('15')
-  const [tolMin,        setTolMin]        = useState(null)  // minutos elegidos (null = sin cronómetro)
-  const [remainingSec,  setRemainingSec]  = useState(null)  // cuenta regresiva
-  const [timerPaused,   setTimerPaused]   = useState(false)
-  const [retardos,      setRetardos]      = useState({})    // { studentId: bool }
+  /* ── Historial ── */
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [historyGroupId,   setHistoryGroupId]   = useState(null)
+
+  /* ── Cronómetro de tolerancia (basado en tiempo real, no en un contador local) ── */
+  const [showTolModal,   setShowTolModal]  = useState(false)
+  const [tolInput,       setTolInput]      = useState('15')
+  const [tolMin,         setTolMin]        = useState(null)   // minutos elegidos (null = sin cronómetro)
+  const [startedAt,      setStartedAt]     = useState(null)   // epoch ms — inicio real del cronómetro
+  const [pausedAt,       setPausedAt]      = useState(null)   // epoch ms mientras está pausado
+  const [pausedAccumMs,  setPausedAccumMs] = useState(0)      // tiempo total pausado, se excluye del conteo
+  const [retardos,       setRetardos]      = useState({})     // { studentId: bool }
+  const [, forceTick] = useState(0)
 
   const qrRef          = useRef(null)        // Html5Qrcode instance
   const recentRef      = useRef(new Set())   // debounce set
   const tableScrollRef = useRef(null)
   const groupIdRef     = useRef(selectedGrp) // stable ref so handleDecode stays stable
   const tolExpiredRef  = useRef(false)       // ref estable para handleDecode
-  const remainingRef   = useRef(null)        // valor actual para persistir sin re-crear efectos
 
   useEffect(() => { groupIdRef.current = selectedGrp }, [selectedGrp])
-  useEffect(() => {
-    tolExpiredRef.current = remainingSec !== null && remainingSec <= 0
-    remainingRef.current  = remainingSec
-  }, [remainingSec])
 
+  // Segundos restantes calculados sobre tiempo real transcurrido: si sales y
+  // regresas (incluso otro día), el tiempo que pasó afecta la cuenta regresiva.
+  const remainingSec = remainingSeconds({ tolMin, startedAt, pausedAt, pausedAccumMs })
   const tolExpired   = remainingSec !== null && remainingSec <= 0
+  const timerPaused  = pausedAt !== null
   const retardoCount = Object.values(retardos).filter(Boolean).length
+
+  useEffect(() => { tolExpiredRef.current = tolExpired }, [tolExpired])
 
   const grp           = groups.find(g => g.id === selectedGrp)
   const groupStudents = students.filter(s => s.groupId === selectedGrp)
   const accentColor   = selectedGrp ? getAccent(selectedGrp) : '#3b82f6'
 
-  const today     = new Date()
-  const dateLabel = today.toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' })
-  const dateFile  = today.toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' })
-    .replace(/\//g, '-')
+  const dateLabel = selectedDate ? fmtDate(selectedDate) : ''
+  const dateFile  = (selectedDate || todayISO()).replace(/-/g, '')
 
   /* ── Stable decode callback (empty deps → never recreated) ─── */
   const handleDecode = useCallback((raw) => {
@@ -147,19 +151,22 @@ export default function Attendance() {
     }
   }, [scannedLog])
 
-  // Tick del cronómetro de tolerancia (1s, pausable)
+  // Tick de UI cada segundo mientras hay un cronómetro activo, para refrescar
+  // la cuenta regresiva (el valor real se calcula siempre contra tiempo real).
   useEffect(() => {
-    if (view !== 'scan' || timerPaused || remainingSec === null || remainingSec <= 0) return
-    const t = setTimeout(() => setRemainingSec(s => Math.max(0, s - 1)), 1000)
-    return () => clearTimeout(t)
-  }, [view, timerPaused, remainingSec])
+    if (view !== 'scan' || tolMin == null) return
+    const t = setInterval(() => forceTick(t => t + 1), 1000)
+    return () => clearInterval(t)
+  }, [view, tolMin])
 
-  // Persist scanned log whenever it changes
+  // Guarda la sesión (borrador) cada vez que cambia algo relevante.
   useEffect(() => {
-    if (selectedGrp && scannedLog.length > 0) {
-      persistSession(selectedGrp, { log: scannedLog, retardos, tolMin, remainingSec: remainingRef.current })
+    if (selectedGrp && selectedDate && scannedLog.length > 0) {
+      saveSession(selectedGrp, selectedDate, {
+        log: scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished,
+      })
     }
-  }, [scannedLog, retardos, tolMin, selectedGrp])
+  }, [scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished, selectedGrp, selectedDate])
 
   // Warn on browser refresh/close when session is active
   useEffect(() => {
@@ -172,9 +179,11 @@ export default function Attendance() {
   /* ── Navigation ─────────────────────────────────────────────── */
   const selectGroup = (groupId) => {
     // Check for a saved session from today
-    const saved = loadSession(groupId)
+    const today = todayISO()
+    const saved = loadSession(groupId, today)
     if (saved && saved.log?.length > 0) {
       setSelectedGrp(groupId)
+      setSelectedDate(today)
       setResumeSession(saved)
       setView('scan')
       setCamError('')
@@ -182,30 +191,63 @@ export default function Attendance() {
       return
     }
     setSelectedGrp(groupId)
+    setSelectedDate(today)
     setScannedLog([])
     setLastScanned(null)
     setCamError('')
+    setFinished(false)
     setTolInput(String(loadSettings().toleranciaMin))
     setShowTolModal(true)   // pop-up de tolerancia antes de comenzar
+    setView('scan')
+  }
+
+  const openHistory = (groupId) => { setHistoryGroupId(groupId); setShowHistoryModal(true) }
+
+  const applySession = (session) => {
+    setSelectedGrp(session.groupId)
+    setSelectedDate(session.date)
+    setScannedLog(session.log ?? [])
+    setLastScanned(session.log?.at(-1) ?? null)
+    setRetardos(session.retardos ?? {})
+    setTolMin(session.tolMin ?? null)
+    setStartedAt(session.startedAt ?? null)
+    setPausedAt(session.pausedAt ?? null)
+    setPausedAccumMs(session.pausedAccumMs ?? 0)
+    setFinished(!!session.finished)
+    setCamError('')
+    setShowTolModal(false)
+    setResumeSession(null)
+    setShowHistoryModal(false)
     setView('scan')
   }
 
   const startTolerance = (minutes) => {
     if (minutes === null) {                 // continuar sin cronómetro
       setTolMin(null)
-      setRemainingSec(null)
+      setStartedAt(null)
     } else {
       setTolMin(minutes)
-      setRemainingSec(minutes * 60)
-      setTimerPaused(false)
+      setStartedAt(Date.now())
     }
+    setPausedAt(null)
+    setPausedAccumMs(0)
     setShowTolModal(false)
+  }
+
+  const togglePause = () => {
+    if (pausedAt) {
+      setPausedAccumMs(a => a + (Date.now() - pausedAt))
+      setPausedAt(null)
+    } else {
+      setPausedAt(Date.now())
+    }
   }
 
   const resetTimerState = () => {
     setTolMin(null)
-    setRemainingSec(null)
-    setTimerPaused(false)
+    setStartedAt(null)
+    setPausedAt(null)
+    setPausedAccumMs(0)
     setRetardos({})
     setShowTolModal(false)
   }
@@ -213,19 +255,27 @@ export default function Attendance() {
   const goBack = (force = false) => {
     if (!force && scannedLog.length > 0) { setShowLeaveModal(true); return }
     stopScanner()
-    clearSession(selectedGrp)
     setView('pick')
     setSelectedGrp(null)
+    setSelectedDate(todayISO())
     setScannedLog([])
     setLastScanned(null)
     setShowConfirm(false)
     setShowLeaveModal(false)
     setResumeSession(null)
+    setFinished(false)
     resetTimerState()
   }
 
   const handleFinish = () => setShowConfirm(true)
-  const handleConfirmFinish = () => { exportExcel(); clearSession(selectedGrp); goBack(true) }
+  const handleConfirmFinish = () => {
+    exportExcel()
+    // Se guarda explícitamente como finalizada (queda en el historial, no se borra)
+    saveSession(selectedGrp, selectedDate, {
+      log: scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished: true,
+    })
+    goBack(true)
+  }
 
   /* ── Excel export ───────────────────────────────────────────── */
   const lastEvalOf = (sid) => {
@@ -275,8 +325,20 @@ export default function Attendance() {
         <div className="grid gap-3 sm:gap-4">
           {groups.map(g => {
             const count = students.filter(s => s.groupId === g.id).length
+            const hasHistory = listSessions(g.id).length > 0
             return (
-              <GroupShaderCard key={g.id} group={g} onClick={() => selectGroup(g.id)} showPicker>
+              <GroupShaderCard
+                key={g.id} group={g} onClick={() => selectGroup(g.id)} showPicker
+                footer={hasHistory && (
+                  <button
+                    onClick={() => openHistory(g.id)}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
+                    style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.10)', color:'rgba(255,255,255,.55)' }}
+                    onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.12)'; e.currentTarget.style.color='white' }}
+                    onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.06)'; e.currentTarget.style.color='rgba(255,255,255,.55)' }}>
+                    <FolderClock size={13}/> Ver historial de listas
+                  </button>
+                )}>
                 <div>
                   <p className="font-bold text-base" style={{ color:'rgba(255,255,255,.90)' }}>{g.name}</p>
                   <p className="text-sm" style={{ color:'rgba(255,255,255,.45)' }}>{g.subject}</p>
@@ -289,6 +351,63 @@ export default function Attendance() {
             )
           })}
         </div>
+
+        {/* ── Modal: historial de listas ── */}
+        {showHistoryModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+            style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
+            onClick={() => setShowHistoryModal(false)}>
+            <div className="w-full max-w-md rounded-2xl p-6 space-y-4 animate-scale-in max-h-[80vh] overflow-y-auto"
+              style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
+              onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.14)' }}>
+                  <History size={18} style={{ color:'rgba(255,255,255,.70)' }}/>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold" style={{ color:'rgba(255,255,255,.92)' }}>
+                    Historial — {groups.find(g => g.id === historyGroupId)?.name}
+                  </h2>
+                  <p className="text-xs" style={{ color:'rgba(255,255,255,.40)' }}>
+                    Retoma cualquier lista para editarla o agregar alumnos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {listSessions(historyGroupId).map(s => (
+                  <button key={s.date} onClick={() => applySession(s)}
+                    className="w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left transition-all active:scale-[.98]"
+                    style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.08)' }}
+                    onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.09)'}
+                    onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.05)'}>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.85)' }}>{fmtDate(s.date)}</p>
+                      <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,.40)' }}>
+                        {s.log?.length ?? 0} presentes
+                        {Object.values(s.retardos ?? {}).filter(Boolean).length > 0 &&
+                          ` · ${Object.values(s.retardos).filter(Boolean).length} retardos`}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full flex-shrink-0"
+                      style={s.finished
+                        ? { background:'rgba(16,185,129,.14)', color:'#10b981', border:'1px solid rgba(16,185,129,.28)' }
+                        : { background:'rgba(251,191,36,.14)', color:'#fbbf24', border:'1px solid rgba(251,191,36,.28)' }}>
+                      {s.finished ? 'Finalizada' : 'Borrador'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={() => setShowHistoryModal(false)}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold"
+                style={{ background:'rgba(255,255,255,.07)', color:'rgba(255,255,255,.60)' }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -318,28 +437,20 @@ export default function Attendance() {
           <p className="text-sm leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>
             Tienes una lista del día de hoy con{' '}
             <strong style={{ color:'#10b981' }}>{resumeSession.log.length} alumnos</strong>
-            {' '}escaneados. ¿Deseas continuar donde te quedaste?
+            {' '}escaneados{resumeSession.finished ? ' (finalizada)' : ''}. ¿Deseas continuar donde te quedaste?
           </p>
         </div>
         <div className="space-y-2">
-          <button onClick={() => {
-            setScannedLog(resumeSession.log)
-            setLastScanned(resumeSession.log.at(-1) ?? null)
-            setRetardos(resumeSession.retardos ?? {})
-            if (resumeSession.tolMin != null && resumeSession.remainingSec != null) {
-              setTolMin(resumeSession.tolMin)
-              setRemainingSec(resumeSession.remainingSec)
-              setTimerPaused(false)
-            }
-            setResumeSession(null)
-          }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
+          <button onClick={() => applySession(resumeSession)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
             style={{ background:'white', color:'black' }}>
             <RotateCw size={13}/> Continuar lista
           </button>
           <button onClick={() => {
-            clearSession(selectedGrp)
+            deleteSession(selectedGrp, selectedDate)
             setScannedLog([])
             setRetardos({})
+            setFinished(false)
             setResumeSession(null)
             setTolInput(String(loadSettings().toleranciaMin))
             setShowTolModal(true)
@@ -368,18 +479,20 @@ export default function Attendance() {
           </h2>
           <p className="text-sm leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>
             Tienes <strong style={{ color:'#10b981' }}>{scannedLog.length} alumnos</strong> registrados.
-            Si sales ahora, la lista se guardará como borrador y podrás continuar al regresar.
+            Si sales ahora, la lista se guardará en el historial y podrás continuar al regresar.
           </p>
         </div>
         <div className="space-y-2">
           <button onClick={() => {
-            persistSession(selectedGrp, { log: scannedLog, retardos, tolMin, remainingSec: remainingRef.current })
+            saveSession(selectedGrp, selectedDate, {
+              log: scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished,
+            })
             goBack(true)
           }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
             style={{ background:'white', color:'black' }}>
             Guardar borrador y salir
           </button>
-          <button onClick={() => goBack(true)}
+          <button onClick={() => { deleteSession(selectedGrp, selectedDate); goBack(true) }}
             className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
             style={{ background:'rgba(248,113,113,.12)', border:'1px solid rgba(248,113,113,.25)', color:'#f87171' }}>
             Salir sin guardar
@@ -416,7 +529,8 @@ export default function Attendance() {
           ¿Terminar pase de lista?
         </h2>
         <p className="text-sm text-center leading-relaxed mb-1" style={{ color:'rgba(255,255,255,.50)' }}>
-          Una vez cerrada esta sesión <span style={{ color:'rgba(255,255,255,.80)', fontWeight:600 }}>no podrás modificar la asistencia</span> registrada.
+          La lista quedará en el <span style={{ color:'rgba(255,255,255,.80)', fontWeight:600 }}>historial</span>{' '}
+          — podrás reabrirla después desde "Ver historial de listas" para ajustar retardos o agregar alumnos.
         </p>
 
         {/* Summary */}
@@ -528,8 +642,8 @@ export default function Attendance() {
     <div className="w-full space-y-4">
 
       {/* ── Breadcrumb ─────────────────────────────────────── */}
-      <div className="flex items-center gap-2">
-        <button onClick={goBack}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button onClick={() => goBack()}
           className="flex items-center gap-1.5 text-sm font-medium transition-colors"
           style={{ color:'rgba(255,255,255,.40)' }}
           onMouseEnter={e => e.currentTarget.style.color='rgba(255,255,255,.85)'}
@@ -539,20 +653,33 @@ export default function Attendance() {
         <ChevronRight size={12} style={{ color:'rgba(255,255,255,.20)' }}/>
         <span className="text-sm font-semibold" style={{ color: accentColor }}>{grp?.name}</span>
         <span className="text-xs hidden sm:inline" style={{ color:'rgba(255,255,255,.28)' }}>· {grp?.subject}</span>
+        {finished && (
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+            style={{ background:'rgba(16,185,129,.14)', color:'#10b981', border:'1px solid rgba(16,185,129,.28)' }}>
+            Reabierta desde historial
+          </span>
+        )}
+        <button onClick={() => openHistory(selectedGrp)}
+          className="ml-auto flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
+          style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.10)', color:'rgba(255,255,255,.55)' }}
+          onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.12)'; e.currentTarget.style.color='white' }}
+          onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.06)'; e.currentTarget.style.color='rgba(255,255,255,.55)' }}>
+          <History size={13}/> Ver historial
+        </button>
       </div>
 
       {/* ── Progress KPI bar ───────────────────────────────── */}
       <div className="card px-5 py-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-5">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <div className="flex items-center flex-wrap gap-3 sm:gap-5">
             {[
               { label:'Presentes',      value: presentCount, color:'#10b981' },
               { label:'Retardos',       value: retardoCount, color:'#fbbf24' },
               { label:'Sin escanear',   value: absentCount,  color:'rgba(255,255,255,.38)' },
               { label:'Total',          value: totalCount,   color: accentColor },
             ].map((k, i) => (
-              <div key={k.label} className="flex items-center gap-5">
-                {i > 0 && <div className="w-px h-7" style={{ background:'rgba(255,255,255,.08)' }}/>}
+              <div key={k.label} className="flex items-center gap-3 sm:gap-5">
+                {i > 0 && <div className="hidden sm:block w-px h-7" style={{ background:'rgba(255,255,255,.08)' }}/>}
                 <div className="text-center">
                   <p className="text-2xl font-bold leading-none tabular-nums" style={{ color: k.color }}>{k.value}</p>
                   <p className="text-[11px] mt-0.5" style={{ color:'rgba(255,255,255,.33)' }}>{k.label}</p>
@@ -573,7 +700,7 @@ export default function Attendance() {
                   {tolExpired ? 'Tolerancia vencida' : fmtMMSS(remainingSec)}
                 </div>
                 {!tolExpired && (
-                  <button onClick={() => setTimerPaused(p => !p)}
+                  <button onClick={togglePause}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
                     style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}
                     onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.12)'}
@@ -743,7 +870,8 @@ export default function Attendance() {
                 </p>
               </div>
             ) : (
-              <table className="w-full">
+              <div className="w-full overflow-x-auto">
+              <table className="w-full min-w-[420px]">
                 <thead>
                   <tr style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
                     <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest w-10"
@@ -799,6 +927,7 @@ export default function Attendance() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
 
@@ -838,6 +967,64 @@ export default function Attendance() {
       {ResumeModal}
       {LeaveModal}
       {ToleranceModal}
+
+      {/* ── Modal: historial de listas (accesible también desde la vista de escaneo) ── */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
+          onClick={() => setShowHistoryModal(false)}>
+          <div className="w-full max-w-md rounded-2xl p-6 space-y-4 animate-scale-in max-h-[80vh] overflow-y-auto"
+            style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.14)' }}>
+                <History size={18} style={{ color:'rgba(255,255,255,.70)' }}/>
+              </div>
+              <div>
+                <h2 className="text-base font-bold" style={{ color:'rgba(255,255,255,.92)' }}>
+                  Historial — {groups.find(g => g.id === historyGroupId)?.name}
+                </h2>
+                <p className="text-xs" style={{ color:'rgba(255,255,255,.40)' }}>
+                  Retoma cualquier lista para editarla o agregar alumnos.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {listSessions(historyGroupId).map(s => (
+                <button key={s.date} onClick={() => applySession(s)}
+                  className="w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left transition-all active:scale-[.98]"
+                  style={{
+                    background: s.date === selectedDate ? `${accentColor}1a` : 'rgba(255,255,255,.05)',
+                    border: s.date === selectedDate ? `1px solid ${accentColor}55` : '1px solid rgba(255,255,255,.08)',
+                  }}>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.85)' }}>{fmtDate(s.date)}</p>
+                    <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,.40)' }}>
+                      {s.log?.length ?? 0} presentes
+                      {Object.values(s.retardos ?? {}).filter(Boolean).length > 0 &&
+                        ` · ${Object.values(s.retardos).filter(Boolean).length} retardos`}
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full flex-shrink-0"
+                    style={s.finished
+                      ? { background:'rgba(16,185,129,.14)', color:'#10b981', border:'1px solid rgba(16,185,129,.28)' }
+                      : { background:'rgba(251,191,36,.14)', color:'#fbbf24', border:'1px solid rgba(251,191,36,.28)' }}>
+                    {s.finished ? 'Finalizada' : 'Borrador'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button onClick={() => setShowHistoryModal(false)}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold"
+              style={{ background:'rgba(255,255,255,.07)', color:'rgba(255,255,255,.60)' }}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Users, ArrowRight } from 'lucide-react'
-import { students, groups, statusConfig } from '../../data/mockData'
+import { statusConfig } from '../../data/mockData'
+import { fetchStudents, fetchGroups } from '../../lib/supabaseData'
 import {
   DataTable, DataTableRow,
   DataTableAvatar, DataTableBadge, DataTableBar,
@@ -27,11 +28,26 @@ export default function Students() {
   const navigate = useNavigate()
   const { getAccent } = useGroupColors()
 
+  const [students, setStudents]   = useState([])
+  const [groups, setGroups]       = useState([])
+  const [loading, setLoading]     = useState(true)
+
   const [query, setQuery]         = useState('')
   const [groupFilter, setGroup]   = useState('all')
   const [statusFilter, setStatus] = useState('all')
   const [sort, setSort]           = useState('name')
   const [visual, setVisual]       = useState(false)   // ← modo visual
+
+  useEffect(() => {
+    let alive = true
+    Promise.all([fetchStudents(), fetchGroups()]).then(([s, g]) => {
+      if (!alive) return
+      setStudents(s)
+      setGroups(g)
+      setLoading(false)
+    })
+    return () => { alive = false }
+  }, [])
 
   const filtered = students
     .filter(s => {
@@ -112,11 +128,11 @@ export default function Students() {
       {/* ── Tabla ───────────────────────────────────────────── */}
       <DataTable
         columns={COLUMNS}
-        isEmpty={filtered.length === 0}
+        isEmpty={!loading && filtered.length === 0}
         emptyIcon={<Users size={36} />}
         emptyText="No se encontraron alumnos con ese criterio.">
 
-        {filtered.map(s => {
+        {loading ? null : filtered.map(s => {
           const cfg         = statusConfig[s.status]
           const grp         = groups.find(g => g.id === s.groupId)
           const ac          = attColor(s.attendanceRate)

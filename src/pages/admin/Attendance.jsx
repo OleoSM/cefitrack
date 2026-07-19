@@ -1,18 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import * as XLSX from 'xlsx'
-import { groups, students, getEvalsByStudent, getLastSimulacro } from '../../data/mockData'
+import { getEvalsByStudent, getLastSimulacro } from '../../data/mockData'
+import { fetchGroups, fetchStudents } from '../../lib/supabaseData'
 import { loadSettings } from '../../lib/settings'
 import {
-  todayISO, loadSession, saveSession, deleteSession, listSessions, remainingSeconds,
-} from '../../lib/attendanceHistory'
+  todayISO, remainingSeconds, loadSessionDb, saveSessionDb, deleteSessionDb, fetchSessionIndex,
+} from '../../lib/attendanceDb'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import {
   ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
   FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
   ChevronRight, UserCheck, CheckSquare, RotateCw,
-  Timer, Pause, Play, History, FolderClock,
+  Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown,
 } from 'lucide-react'
 
 const QR_PREFIX   = 'EDUTRACK:'
@@ -25,6 +26,9 @@ const TOL_PRESETS = [5, 10, 15, 20]
 export default function Attendance() {
   const { getAccent } = useGroupColors()
 
+  const [groups,         setGroups]        = useState([])
+  const [students,       setStudents]      = useState([])
+  const [sessionIndex,   setSessionIndex]  = useState([])  // sesiones guardadas en BD (todas, con registros)
   const [view,           setView]          = useState('pick')  // 'pick' | 'scan'
   const [selectedGrp,    setSelectedGrp]   = useState(null)
   const [selectedDate,   setSelectedDate]  = useState(todayISO())
@@ -57,8 +61,37 @@ export default function Attendance() {
   const tableScrollRef = useRef(null)
   const groupIdRef     = useRef(selectedGrp) // stable ref so handleDecode stays stable
   const tolExpiredRef  = useRef(false)       // ref estable para handleDecode
+  const studentsRef    = useRef([])          // ref estable para handleDecode
 
   useEffect(() => { groupIdRef.current = selectedGrp }, [selectedGrp])
+  useEffect(() => { studentsRef.current = students }, [students])
+
+  // Carga inicial desde Supabase: grupos, alumnos e historial de listas.
+  useEffect(() => {
+    Promise.all([fetchGroups(), fetchStudents(), fetchSessionIndex()])
+      .then(([gs, ss, idx]) => { setGroups(gs); setStudents(ss); setSessionIndex(idx) })
+      .catch(() => {})
+  }, [])
+
+  const refreshIndex = () => fetchSessionIndex().then(setSessionIndex).catch(() => {})
+
+  // Sesión de BD → forma que usa la UI (log con objetos student, mapa de retardos).
+  const toUiSession = (dbs) => ({
+    groupId: dbs.groupId,
+    date: dbs.date,
+    log: dbs.records
+      .map(r => ({ student: studentsRef.current.find(s => s.id === r.studentId), time: r.time }))
+      .filter(e => e.student),
+    retardos: Object.fromEntries(dbs.records.filter(r => r.retardo).map(r => [r.studentId, true])),
+    tolMin: dbs.tolMin,
+    startedAt: dbs.startedAt,
+    pausedAt: dbs.pausedAt,
+    pausedAccumMs: dbs.pausedAccumMs,
+    finished: dbs.finished,
+  })
+
+  const buildRecords = () =>
+    scannedLog.map(e => ({ studentId: e.student.id, time: e.time, retardo: !!retardos[e.student.id] }))
 
   // Segundos restantes calculados sobre tiempo real transcurrido: si sales y
   // regresas (incluso otro día), el tiempo que pasó afecta la cuenta regresiva.
@@ -85,7 +118,7 @@ export default function Attendance() {
     recentRef.current.add(studentId)
     setTimeout(() => recentRef.current.delete(studentId), DEBOUNCE_MS)
 
-    const student = students.find(st => st.id === studentId)
+    const student = studentsRef.current.find(st => st.id === studentId)
     if (!student) return
     if (groupIdRef.current && student.groupId !== groupIdRef.current) return
 
@@ -159,13 +192,18 @@ export default function Attendance() {
     return () => clearInterval(t)
   }, [view, tolMin])
 
-  // Guarda la sesión (borrador) cada vez que cambia algo relevante.
+  // Guarda la sesión (borrador) en la BD cada vez que cambia algo relevante,
+  // con un pequeño debounce para no disparar una escritura por cada escaneo.
   useEffect(() => {
-    if (selectedGrp && selectedDate && scannedLog.length > 0) {
-      saveSession(selectedGrp, selectedDate, {
-        log: scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished,
-      })
-    }
+    if (!(selectedGrp && selectedDate && scannedLog.length > 0)) return
+    const t = setTimeout(() => {
+      saveSessionDb(
+        selectedGrp, selectedDate,
+        { tolMin, startedAt, pausedAt, pausedAccumMs, finished },
+        scannedLog.map(e => ({ studentId: e.student.id, time: e.time, retardo: !!retardos[e.student.id] })),
+      ).catch(() => {})
+    }, 800)
+    return () => clearTimeout(t)
   }, [scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished, selectedGrp, selectedDate])
 
   // Warn on browser refresh/close when session is active
@@ -177,14 +215,14 @@ export default function Attendance() {
   }, [scanning, scannedLog])
 
   /* ── Navigation ─────────────────────────────────────────────── */
-  const selectGroup = (groupId) => {
-    // Check for a saved session from today
+  const selectGroup = async (groupId) => {
+    // Busca en la BD una lista guardada del día de hoy
     const today = todayISO()
-    const saved = loadSession(groupId, today)
-    if (saved && saved.log?.length > 0) {
+    const saved = await loadSessionDb(groupId, today).catch(() => null)
+    if (saved && saved.records?.length > 0) {
       setSelectedGrp(groupId)
       setSelectedDate(today)
-      setResumeSession(saved)
+      setResumeSession(toUiSession(saved))
       setView('scan')
       setCamError('')
       setLastScanned(null)
@@ -271,9 +309,11 @@ export default function Attendance() {
   const handleConfirmFinish = () => {
     exportExcel()
     // Se guarda explícitamente como finalizada (queda en el historial, no se borra)
-    saveSession(selectedGrp, selectedDate, {
-      log: scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished: true,
-    })
+    saveSessionDb(
+      selectedGrp, selectedDate,
+      { tolMin, startedAt, pausedAt, pausedAccumMs, finished: true },
+      buildRecords(),
+    ).then(refreshIndex).catch(() => {})
     goBack(true)
   }
 
@@ -325,7 +365,7 @@ export default function Attendance() {
         <div className="grid gap-3 sm:gap-4">
           {groups.map(g => {
             const count = students.filter(s => s.groupId === g.id).length
-            const hasHistory = listSessions(g.id).length > 0
+            const hasHistory = sessionIndex.some(s => s.groupId === g.id)
             return (
               <GroupShaderCard
                 key={g.id} group={g} onClick={() => selectGroup(g.id)} showPicker
@@ -376,8 +416,8 @@ export default function Attendance() {
               </div>
 
               <div className="space-y-2">
-                {listSessions(historyGroupId).map(s => (
-                  <button key={s.date} onClick={() => applySession(s)}
+                {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => (
+                  <button key={s.date} onClick={() => applySession(toUiSession(s))}
                     className="w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left transition-all active:scale-[.98]"
                     style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.08)' }}
                     onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.09)'}
@@ -385,9 +425,9 @@ export default function Attendance() {
                     <div>
                       <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.85)' }}>{fmtDate(s.date)}</p>
                       <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,.40)' }}>
-                        {s.log?.length ?? 0} presentes
-                        {Object.values(s.retardos ?? {}).filter(Boolean).length > 0 &&
-                          ` · ${Object.values(s.retardos).filter(Boolean).length} retardos`}
+                        {s.records.length} presentes
+                        {s.records.filter(r => r.retardo).length > 0 &&
+                          ` · ${s.records.filter(r => r.retardo).length} retardos`}
                       </p>
                     </div>
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full flex-shrink-0"
@@ -447,7 +487,7 @@ export default function Attendance() {
             <RotateCw size={13}/> Continuar lista
           </button>
           <button onClick={() => {
-            deleteSession(selectedGrp, selectedDate)
+            deleteSessionDb(selectedGrp, selectedDate).then(refreshIndex).catch(() => {})
             setScannedLog([])
             setRetardos({})
             setFinished(false)
@@ -484,15 +524,17 @@ export default function Attendance() {
         </div>
         <div className="space-y-2">
           <button onClick={() => {
-            saveSession(selectedGrp, selectedDate, {
-              log: scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished,
-            })
+            saveSessionDb(
+              selectedGrp, selectedDate,
+              { tolMin, startedAt, pausedAt, pausedAccumMs, finished },
+              buildRecords(),
+            ).then(refreshIndex).catch(() => {})
             goBack(true)
           }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
             style={{ background:'white', color:'black' }}>
             Guardar borrador y salir
           </button>
-          <button onClick={() => { deleteSession(selectedGrp, selectedDate); goBack(true) }}
+          <button onClick={() => { deleteSessionDb(selectedGrp, selectedDate).then(refreshIndex).catch(() => {}); goBack(true) }}
             className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
             style={{ background:'rgba(248,113,113,.12)', border:'1px solid rgba(248,113,113,.25)', color:'#f87171' }}>
             Salir sin guardar
@@ -608,14 +650,33 @@ export default function Attendance() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 rounded-xl px-3"
+        <div className="flex items-center gap-1 rounded-xl pl-3 pr-1.5 py-1.5"
           style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.10)' }}>
           <Clock size={14} style={{ color:'rgba(255,255,255,.35)' }}/>
           <input type="number" min="1" max="120" value={tolInput}
             onChange={e => setTolInput(e.target.value)}
-            className="flex-1 bg-transparent py-2.5 text-sm font-semibold outline-none"
+            className="flex-1 min-w-0 bg-transparent py-1 px-2 text-sm font-semibold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             style={{ color:'rgba(255,255,255,.85)' }}/>
-          <span className="text-xs" style={{ color:'rgba(255,255,255,.35)' }}>minutos</span>
+          <span className="text-xs flex-shrink-0" style={{ color:'rgba(255,255,255,.35)' }}>min</span>
+          <div className="flex flex-col flex-shrink-0 rounded-lg overflow-hidden"
+            style={{ border:'1px solid rgba(255,255,255,.12)' }}>
+            <button type="button" aria-label="Sumar un minuto"
+              onClick={() => setTolInput(String(Math.min(120, (parseInt(tolInput, 10) || 0) + 1)))}
+              className="w-6 h-4 flex items-center justify-center transition-colors"
+              style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.65)', borderBottom:'1px solid rgba(255,255,255,.12)' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.16)'}
+              onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.08)'}>
+              <ChevronUp size={11}/>
+            </button>
+            <button type="button" aria-label="Restar un minuto"
+              onClick={() => setTolInput(String(Math.max(1, (parseInt(tolInput, 10) || 0) - 1)))}
+              className="w-6 h-4 flex items-center justify-center transition-colors"
+              style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.65)' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.16)'}
+              onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.08)'}>
+              <ChevronDown size={11}/>
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -651,7 +712,9 @@ export default function Attendance() {
           <ArrowLeft size={15}/> Pasar Lista
         </button>
         <ChevronRight size={12} style={{ color:'rgba(255,255,255,.20)' }}/>
-        <span className="text-sm font-semibold" style={{ color: accentColor }}>{grp?.name}</span>
+        <span className="text-sm font-semibold" style={{ color: accentColor }}>
+          {grp?.sucursal ? `${grp.sucursal} - ${grp.name}` : grp?.name}
+        </span>
         <span className="text-xs hidden sm:inline" style={{ color:'rgba(255,255,255,.28)' }}>· {grp?.subject}</span>
         {finished && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
@@ -992,8 +1055,8 @@ export default function Attendance() {
             </div>
 
             <div className="space-y-2">
-              {listSessions(historyGroupId).map(s => (
-                <button key={s.date} onClick={() => applySession(s)}
+              {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => (
+                <button key={s.date} onClick={() => applySession(toUiSession(s))}
                   className="w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left transition-all active:scale-[.98]"
                   style={{
                     background: s.date === selectedDate ? `${accentColor}1a` : 'rgba(255,255,255,.05)',
@@ -1002,9 +1065,9 @@ export default function Attendance() {
                   <div>
                     <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.85)' }}>{fmtDate(s.date)}</p>
                     <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,.40)' }}>
-                      {s.log?.length ?? 0} presentes
-                      {Object.values(s.retardos ?? {}).filter(Boolean).length > 0 &&
-                        ` · ${Object.values(s.retardos).filter(Boolean).length} retardos`}
+                      {s.records.length} presentes
+                      {s.records.filter(r => r.retardo).length > 0 &&
+                        ` · ${s.records.filter(r => r.retardo).length} retardos`}
                     </p>
                   </div>
                   <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full flex-shrink-0"

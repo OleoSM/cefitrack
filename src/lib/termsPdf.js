@@ -51,7 +51,33 @@ function buildBaseDoc({ studentName, tcText, privText }) {
   return { doc, y }
 }
 
-export function downloadStampedPdf({ studentName, tcText, privText, signatureDataUrl, signedAt }) {
+/**
+ * La firma se dibuja en el canvas con trazo blanco (tema oscuro); sobre el
+ * PDF blanco sería invisible. Recolorea cada pixel con alfa a tinta oscura.
+ */
+function darkenSignature(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = img.width
+      c.height = img.height
+      const ctx = c.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      const px = ctx.getImageData(0, 0, c.width, c.height)
+      const d = px.data
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] > 0) { d[i] = 15; d[i + 1] = 23; d[i + 2] = 42 } // #0f172a
+      }
+      ctx.putImageData(px, 0, 0)
+      resolve(c.toDataURL('image/png'))
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
+export async function downloadStampedPdf({ studentName, tcText, privText, signatureDataUrl, signedAt }) {
   const { doc, y } = buildBaseDoc({ studentName, tcText, privText })
   let sigY = y
   if (sigY > 245) { doc.addPage(); sigY = MARGIN }
@@ -62,7 +88,10 @@ export function downloadStampedPdf({ studentName, tcText, privText, signatureDat
   doc.text('Firma digital del alumno', MARGIN, sigY)
   sigY += 4
 
-  if (signatureDataUrl) doc.addImage(signatureDataUrl, 'PNG', MARGIN, sigY, 60, 24)
+  if (signatureDataUrl) {
+    const inked = await darkenSignature(signatureDataUrl)
+    doc.addImage(inked, 'PNG', MARGIN, sigY, 60, 24)
+  }
   sigY += 30
 
   doc.setFont('helvetica', 'normal')

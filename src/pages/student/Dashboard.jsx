@@ -82,7 +82,11 @@ export default function StudentDashboard() {
   const targetSchool = getTargetSchool(s.id)
   const allSims = getSimulacrosByStudent(s.id)
 
-  const attPie = Object.entries(asis.counts).map(([k, v]) => ({ name: attendanceColors[k].label, value: v }))
+  // Solo categorías con valor > 0: con todo en cero Recharts genera arcos NaN
+  // (SVG corrupto, se ve como pantalla rota, especialmente en móvil).
+  const attPieAll = Object.entries(asis.counts).map(([k, v]) => ({ name: attendanceColors[k].label, value: v }))
+  const attPie = attPieAll.filter(d => d.value > 0)
+  const hasAttendance = attPie.length > 0
 
   /* ── Últimas evaluaciones/exámenes/tareas ── */
   const ultimasOptions = [
@@ -188,8 +192,8 @@ export default function StudentDashboard() {
             go: () => document.getElementById('prediccion')?.scrollIntoView({ behavior: 'smooth' }) },
           { icon: CalendarCheck, label: 'Asistencia',        value: `${asis.pct}%`,
             sub: `${asis.counts.presente} presentes`, color: 'bg-blue-600', go: () => navigate('/student/asistencias') },
-          { icon: BookOpen,      label: 'Tareas Entregadas', value: `${s.assignmentsDone}/${s.assignmentsTotal}`,
-            sub: `${Math.round(s.assignmentsDone / s.assignmentsTotal * 100)}% completado`, color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
+          { icon: BookOpen,      label: 'Tareas Entregadas', value: `${s.assignmentsDone ?? 0}/${s.assignmentsTotal ?? 0}`,
+            sub: `${s.assignmentsTotal > 0 ? Math.round(s.assignmentsDone / s.assignmentsTotal * 100) : 0}% completado`, color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
           { icon: BrainCircuit,  label: 'Reporte IA',        value: 'Ver',
             sub: 'Análisis personalizado', color: 'bg-purple-600', go: () => navigate('/student/reporte-ia') },
         ].map(({ icon: Icon, label, value, sub, color, go }) => (
@@ -380,21 +384,32 @@ export default function StudentDashboard() {
           </div>
           <div className="flex items-center justify-center">
             <div className="relative">
-              <ResponsiveContainer width={150} height={150}>
-                <PieChart>
-                  <Pie data={attPie} cx="50%" cy="50%" innerRadius={45} outerRadius={68} dataKey="value" stroke="none">
-                    {attPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]}/>)}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              {hasAttendance ? (
+                <ResponsiveContainer width={150} height={150}>
+                  <PieChart>
+                    <Pie data={attPie} cx="50%" cy="50%" innerRadius={45} outerRadius={68} dataKey="value" stroke="none">
+                      {attPie.map((d, i) => (
+                        <Cell key={d.name} fill={PIE_COLORS[attPieAll.findIndex(x => x.name === d.name)]}/>
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="w-[150px] h-[150px] flex items-center justify-center">
+                  <div className="w-[136px] h-[136px] rounded-full"
+                    style={{ border: `12px solid ${t.softBg}` }}/>
+                </div>
+              )}
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold tabular-nums" style={{ color: gradeColor(asis.pct / 10) }}>{asis.pct}%</span>
-                <span className="text-[10px]" style={{ color: t.t3 }}>asistencia</span>
+                <span className="text-2xl font-bold tabular-nums" style={{ color: hasAttendance ? gradeColor(asis.pct / 10) : t.t4 }}>
+                  {hasAttendance ? `${asis.pct}%` : '—'}
+                </span>
+                <span className="text-[10px]" style={{ color: t.t3 }}>{hasAttendance ? 'asistencia' : 'sin registros'}</span>
               </div>
             </div>
           </div>
           <div className="space-y-1.5 mt-2">
-            {attPie.map((d, i) => (
+            {attPieAll.map((d, i) => (
               <div key={d.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i] }}/>

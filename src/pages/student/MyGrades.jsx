@@ -3,7 +3,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, LineChart, Line,
 } from 'recharts'
-import { ChevronDown, Layers } from 'lucide-react'
+import {
+  Layers, Sigma, Atom, FlaskConical, Dna, Landmark, Globe2,
+  BookOpen, Languages, Cpu, BookMarked, ArrowLeft, ChevronRight,
+} from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
 import { getStudentEvals } from '../../lib/studentMetrics'
 import { useStudentTheme } from '../../context/StudentThemeContext'
@@ -12,12 +15,26 @@ import Dropdown from '../../components/ui/Dropdown'
 /* Color personalizado por materia (línea de acento de cada card) */
 const MATERIA_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa', '#f472b6', '#22d3ee', '#fb7185', '#facc15']
 
+/* Icono representativo según el nombre de la materia */
+function materiaIcon(m) {
+  const n = (m || '').toLowerCase()
+  if (/(álgebra|algebra|matem|cálculo|calculo|geometr|trigono|aritm)/.test(n)) return Sigma
+  if (/(fís|fisic)/.test(n)) return Atom
+  if (/(quím|quimic)/.test(n)) return FlaskConical
+  if (/biolog/.test(n)) return Dna
+  if (/(histor|cívic|civic|étic|etic)/.test(n)) return Landmark
+  if (/geograf/.test(n)) return Globe2
+  if (/(español|espanol|lectur|redacc|literat)/.test(n)) return BookOpen
+  if (/(inglés|ingles|idiom)/.test(n)) return Languages
+  if (/(comput|inform|tecnolog)/.test(n)) return Cpu
+  return BookMarked
+}
+
 export default function MyGrades() {
   const { t } = useStudentTheme()
   const { student: s } = useStudentData()
 
   const [scope, setScope] = useState('general')      // 'general' | nombre de materia
-  const [openMats, setOpenMats] = useState([])       // acordeones abiertos
 
   const evals = useMemo(() => s ? getStudentEvals(s.id) : [], [s])
 
@@ -56,18 +73,14 @@ export default function MyGrades() {
       }))
     : []
 
-  const toggleMat = mat =>
-    setOpenMats(prev => prev.includes(mat) ? prev.filter(m => m !== mat) : [...prev, mat])
-
   const gradeColor = g => g >= 8 ? '#34d399' : g >= 6 ? '#60a5fa' : '#f87171'
-  const visibleMaterias = scope === 'general' ? materias : [scope]
 
   const scopeOptions = [
-    { value: 'general', label: 'General', icon: <Layers size={12}/> },
-    ...materias.map(m => ({
-      value: m, label: m,
-      icon: <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: colorOf(m) }}/>,
-    })),
+    { value: 'general', label: 'Todas las materias', icon: <Layers size={12}/> },
+    ...materias.map(m => {
+      const Icon = materiaIcon(m)
+      return { value: m, label: m, icon: <Icon size={12} style={{ color: colorOf(m) }}/> }
+    }),
   ]
 
   return (
@@ -103,77 +116,102 @@ export default function MyGrades() {
         </div>
       </div>
 
-      {/* ── Materias (acordeones, primero) ─────────────────────── */}
-      <div className="space-y-3">
-        {visibleMaterias.map(mat => {
-          const evs = byMateria[mat]
-          const prom = +(evs.reduce((sum, e) => sum + e.calificacion, 0) / evs.length).toFixed(1)
+      {/* ── Materias ───────────────────────────────────────────────
+          General: grid compacto tipo KPI (una tarjetita por materia).
+          Materia seleccionada: una sola card con su desglose completo. */}
+      {scope === 'general' ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {materias.map(mat => {
+            const evs = byMateria[mat]
+            const prom = +(evs.reduce((sum, e) => sum + e.calificacion, 0) / evs.length).toFixed(1)
+            const accent = colorOf(mat)
+            const Icon = materiaIcon(mat)
+            return (
+              <button key={mat} onClick={() => setScope(mat)}
+                className="stat-card text-left transition-all active:scale-[.97] group"
+                style={{ borderTop: `3px solid ${accent}` }}>
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${accent}1a`, border: `1px solid ${accent}40` }}>
+                    <Icon size={15} style={{ color: accent }}/>
+                  </div>
+                  <ChevronRight size={14} className="opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: t.t3 }}/>
+                </div>
+                <p className="text-2xl font-bold tabular-nums mt-2" style={{ color: gradeColor(prom) }}>{prom}</p>
+                <p className="text-xs font-semibold mt-0.5 truncate" style={{ color: t.t1 }}>{mat}</p>
+                <p className="text-[10px] mt-0.5" style={{ color: t.t4 }}>{evs.length} evaluacion{evs.length !== 1 ? 'es' : ''}</p>
+              </button>
+            )
+          })}
+        </div>
+      ) : (
+        (() => {
+          const mat = scope
+          const evs = byMateria[mat] ?? []
+          const prom = evs.length ? +(evs.reduce((sum, e) => sum + e.calificacion, 0) / evs.length).toFixed(1) : 0
           const accent = colorOf(mat)
-          const open = scope !== 'general' || openMats.includes(mat)
+          const Icon = materiaIcon(mat)
           return (
-            <div key={mat} className="card overflow-hidden" style={{ borderLeft: `3px solid ${accent}` }}>
-              {/* Header clickeable (dropdown) */}
-              <button onClick={() => scope === 'general' && toggleMat(mat)}
-                className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left transition-colors"
-                style={{ background: open ? t.softBg : 'transparent', cursor: scope === 'general' ? 'pointer' : 'default' }}>
+            <div className="card overflow-hidden" style={{ borderLeft: `3px solid ${accent}` }}>
+              <div className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3" style={{ background: t.softBg }}>
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: accent }}/>
+                  <button onClick={() => setScope('general')} aria-label="Volver a todas las materias"
+                    className="p-1.5 rounded-lg transition-colors flex-shrink-0" style={{ color: t.t3 }}
+                    onMouseEnter={e => e.currentTarget.style.background = t.ddBg}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <ArrowLeft size={15}/>
+                  </button>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${accent}1a`, border: `1px solid ${accent}40` }}>
+                    <Icon size={15} style={{ color: accent }}/>
+                  </div>
                   <h3 className="font-bold text-sm sm:text-base truncate" style={{ color: t.t1 }}>{mat}</h3>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 hidden sm:inline"
                     style={{ background: `${accent}18`, color: t.light ? t.t2 : accent, border: `1px solid ${accent}40` }}>
                     {evs.length} / {evals.length}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-base sm:text-lg font-bold tabular-nums" style={{ color: gradeColor(prom) }}>{prom}</span>
-                  {scope === 'general' && (
-                    <ChevronDown size={16} className="transition-transform duration-200"
-                      style={{ color: t.t3, transform: open ? 'rotate(180deg)' : 'none' }}/>
-                  )}
-                </div>
-              </button>
+                <span className="text-base sm:text-lg font-bold tabular-nums flex-shrink-0" style={{ color: gradeColor(prom) }}>{prom}</span>
+              </div>
 
-              {/* Tabla desplegable */}
-              {open && (
-                <div className="overflow-x-auto animate-fade-in" style={{ borderTop: `1px solid ${t.divider}` }}>
-                  <table className="w-full min-w-[360px]">
-                    <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
-                      <tr>
-                        <th className="table-header">Tipo</th>
-                        <th className="table-header">Calificación</th>
-                        <th className="table-header hidden sm:table-cell">Periodo</th>
-                        <th className="table-header">Fecha</th>
+              <div className="overflow-x-auto" style={{ borderTop: `1px solid ${t.divider}` }}>
+                <table className="w-full min-w-[360px]">
+                  <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
+                    <tr>
+                      <th className="table-header">Tipo</th>
+                      <th className="table-header">Calificación</th>
+                      <th className="table-header hidden sm:table-cell">Periodo</th>
+                      <th className="table-header">Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {evs.map(e => (
+                      <tr key={e.id} className="transition-colors" style={{ borderBottom: `1px solid ${t.divider}` }}>
+                        <td className="table-cell">
+                          <span className="badge text-[11px]" style={{ background: t.softBg, color: t.t2, border: `1px solid ${t.cardBorder}` }}>{e.tipo}</span>
+                        </td>
+                        <td className="table-cell">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-base sm:text-lg tabular-nums" style={{ color: gradeColor(e.calificacion) }}>{e.calificacion}</span>
+                            {e.editedByAdmin && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold hidden sm:inline"
+                                style={{ background: 'rgba(251,191,36,.15)', color: '#d97706' }}>
+                                actualizado
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="table-cell hidden sm:table-cell" style={{ color: t.t2 }}>{e.periodo}</td>
+                        <td className="table-cell text-xs" style={{ color: t.t3 }}>{e.fecha}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {evs.map(e => (
-                        <tr key={e.id} className="transition-colors" style={{ borderBottom: `1px solid ${t.divider}` }}>
-                          <td className="table-cell">
-                            <span className="badge text-[11px]" style={{ background: t.softBg, color: t.t2, border: `1px solid ${t.cardBorder}` }}>{e.tipo}</span>
-                          </td>
-                          <td className="table-cell">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-base sm:text-lg tabular-nums" style={{ color: gradeColor(e.calificacion) }}>{e.calificacion}</span>
-                              {e.editedByAdmin && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold hidden sm:inline"
-                                  style={{ background: 'rgba(251,191,36,.15)', color: '#d97706' }}>
-                                  actualizado
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="table-cell hidden sm:table-cell" style={{ color: t.t2 }}>{e.periodo}</td>
-                          <td className="table-cell text-xs" style={{ color: t.t3 }}>{e.fecha}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )
-        })}
-      </div>
+        })()
+      )}
 
       {/* ── Gráfica (después de la tabla de materias) ──────────── */}
       <div className="card p-4 sm:p-5">

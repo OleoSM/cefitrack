@@ -134,7 +134,7 @@ function WeekPicker({ weekStart, onSelect, recordDates, t }) {
       </button>
 
       {open && (
-        <div className="absolute z-50 right-0 mt-1.5 w-72 rounded-xl p-3 animate-fade-in"
+        <div className="absolute z-50 right-0 mt-1.5 w-72 max-w-[calc(100vw-2.5rem)] rounded-xl p-3 animate-fade-in"
           style={{ background: t.ddPanel, border: `1px solid ${t.cardBorder}`, boxShadow: '0 18px 48px rgba(0,0,0,.30)' }}>
           {/* Nav de mes */}
           <div className="flex items-center justify-between mb-2">
@@ -229,7 +229,10 @@ export default function MyAttendance() {
   const todayRecord = byDate.get(iso(new Date())) ?? null
   const lastRecord  = sortedAtt[0]
 
-  const pie = Object.entries(counts).map(([k, v]) => ({ name: attendanceColors[k].label, value: v }))
+  // Solo categorías > 0: con todos los valores en cero Recharts dibuja arcos NaN (SVG corrupto)
+  const pieAll = Object.entries(counts).map(([k, v]) => ({ name: attendanceColors[k].label, value: v }))
+  const pie = pieAll.filter(d => d.value > 0)
+  const hasRecords = pie.length > 0
 
   /* Semana seleccionada: exactamente 7 días */
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -262,11 +265,7 @@ export default function MyAttendance() {
         <p className="text-sm mt-1" style={{ color: t.t3 }}>Registro conectado al pase de lista de tu grupo.</p>
       </div>
 
-      {/* Estado de HOY */}
-      <TodayCard record={todayRecord} lastRecord={lastRecord} t={t}
-        tardanzasRestantes={tardanzasRestantes} tardanzasConvertidas={tardanzasConvertidas}/>
-
-      {/* KPI cards */}
+      {/* KPI cards (primero) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {Object.entries(counts).map(([k, v]) => {
           const c = attendanceColors[k]
@@ -285,28 +284,42 @@ export default function MyAttendance() {
         })}
       </div>
 
+      {/* Estado de HOY */}
+      <TodayCard record={todayRecord} lastRecord={lastRecord} t={t}
+        tardanzasRestantes={tardanzasRestantes} tardanzasConvertidas={tardanzasConvertidas}/>
+
       {/* Distribución + semana */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Pie */}
         <div className="card p-4 sm:p-5">
           <h2 className="section-title mb-3">Distribución</h2>
           <div className="relative flex justify-center">
-            <ResponsiveContainer width={160} height={160}>
-              <PieChart>
-                <Pie data={pie} cx="50%" cy="50%" innerRadius={45} outerRadius={72} dataKey="value" stroke="none">
-                  {pie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]}/>)}
-                </Pie>
-                <Tooltip wrapperStyle={{ outline: 'none' }}
-                  contentStyle={{ fontSize: 11, borderRadius: 10, background: t.tooltipBg, border: `1px solid ${t.tooltipBorder}`, color: t.tooltipText }}/>
-              </PieChart>
-            </ResponsiveContainer>
+            {hasRecords ? (
+              <ResponsiveContainer width={160} height={160}>
+                <PieChart>
+                  <Pie data={pie} cx="50%" cy="50%" innerRadius={45} outerRadius={72} dataKey="value" stroke="none">
+                    {pie.map(d => (
+                      <Cell key={d.name} fill={PIE_COLORS[pieAll.findIndex(x => x.name === d.name)]}/>
+                    ))}
+                  </Pie>
+                  <Tooltip wrapperStyle={{ outline: 'none' }}
+                    contentStyle={{ fontSize: 11, borderRadius: 10, background: t.tooltipBg, border: `1px solid ${t.tooltipBorder}`, color: t.tooltipText }}/>
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="w-[160px] h-[160px] flex items-center justify-center">
+                <div className="w-[144px] h-[144px] rounded-full" style={{ border: `14px solid ${t.softBg}` }}/>
+              </div>
+            )}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-2xl sm:text-3xl font-bold tabular-nums" style={{ color: attColor }}>{pct}%</span>
-              <span className="text-[10px]" style={{ color: t.t3 }}>real</span>
+              <span className="text-2xl sm:text-3xl font-bold tabular-nums" style={{ color: hasRecords ? attColor : t.t4 }}>
+                {hasRecords ? `${pct}%` : '—'}
+              </span>
+              <span className="text-[10px]" style={{ color: t.t3 }}>{hasRecords ? 'real' : 'sin registros'}</span>
             </div>
           </div>
           <div className="space-y-1.5 mt-3">
-            {pie.map((d, i) => (
+            {pieAll.map((d, i) => (
               <div key={d.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i] }}/>
@@ -393,7 +406,7 @@ export default function MyAttendance() {
                     const c = attendanceColors[a.status]
                     const d = new Date(a.date + 'T12:00')
                     return (
-                      <div key={a.id} className="px-4 py-2.5 flex items-center gap-3"
+                      <div key={a.date} className="px-4 py-2.5 flex items-center gap-3"
                         style={{ borderBottom: `1px solid ${t.divider}` }}>
                         <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center flex-shrink-0`}>
                           <span className={`text-[10px] font-bold uppercase ${c.text}`}>

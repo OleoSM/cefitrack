@@ -24,6 +24,7 @@ export async function fetchGroups() {
     schedule: g.schedule,
     room: g.room,
     color: g.color,
+    sucursal: g.sucursal,
   }))
 }
 
@@ -45,5 +46,45 @@ export async function fetchStudents() {
     termsStatus: s.terms_status,
     signedAt: s.signed_at,
     waAdded: s.wa_added,
+    sucursal: s.sucursal,
   }))
+}
+
+export async function fetchSubAdmins() {
+  const { data, error } = await supabase.rpc('list_sub_admins')
+  if (error) throw error
+  return data
+}
+
+export async function createSubAdmin({ name, email, password }) {
+  const { data, error } = await supabase.rpc('create_user_with_password', {
+    p_name: name,
+    p_email: email,
+    p_password: password,
+    p_role: 'sub_admin',
+  })
+  if (error) return { ok: false, message: 'No se pudo crear el sub-admin (¿correo ya registrado?).' }
+  const row = data?.[0]
+  if (!row) return { ok: false, message: 'No se pudo crear el sub-admin.' }
+  return { ok: true, user: { id: row.id, name: row.name, email: row.email, role: row.role } }
+}
+
+export async function fetchSubAdminAccess(userId) {
+  const { data, error } = await supabase.from('sub_admin_access').select('*').eq('user_id', userId)
+  if (error) throw error
+  return data.map(a => ({ id: a.id, sucursal: a.sucursal, groupId: a.group_id }))
+}
+
+export async function grantSubAdminAccess(userId, sucursal, groupId = null) {
+  const { error } = await supabase.rpc('grant_sub_admin_access', {
+    p_user_id: userId,
+    p_sucursal: sucursal,
+    p_group_id: groupId,
+  })
+  if (error) throw error
+}
+
+export async function revokeSubAdminAccess(id) {
+  const { error } = await supabase.rpc('revoke_sub_admin_access', { p_id: id })
+  if (error) throw error
 }

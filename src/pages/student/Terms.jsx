@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { useAuth } from '../../context/AuthContext'
-import { getStudentById } from '../../data/mockData'
+import { useStudentData } from '../../hooks/useStudentData'
+import { signTerms } from '../../lib/supabaseData'
 import {
   CheckCircle2, Clock, FileText, Shield, PenLine,
-  Upload, Trash2, Check, AlertTriangle,
+  Upload, Trash2, Check, AlertTriangle, Download, FileSignature,
 } from 'lucide-react'
 import clsx from 'clsx'
+import { downloadStampedPdf, downloadBlankPdf } from '../../lib/termsPdf'
 
 // ── Canvas de firma ──────────────────────────────────────────────────────────
 function SignaturePad({ onCapture, disabled }) {
@@ -152,6 +153,30 @@ function DocUpload({ label, icon: Icon, file, onChange, disabled }) {
   )
 }
 
+// ── Subida del PDF firmado a mano ─────────────────────────────────────────────
+function HandSignedUpload({ file, onChange }) {
+  const ref = useRef(null)
+  return (
+    <>
+      <button type="button" onClick={() => ref.current?.click()}
+        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all active:scale-95"
+        style={{
+          background: file ? 'rgba(52,211,153,.10)' : 'rgba(255,255,255,.06)',
+          border: `1px solid ${file ? 'rgba(52,211,153,.28)' : 'rgba(255,255,255,.12)'}`,
+          color: file ? '#34d399' : 'rgba(255,255,255,.70)',
+        }}>
+        {file ? <CheckCircle2 size={13}/> : <Upload size={13}/>}
+        {file ? file.name : 'Subir PDF firmado'}
+      </button>
+      <input ref={ref} type="file" className="hidden" accept="application/pdf"
+        onChange={e => {
+          const f = e.target.files[0]
+          onChange(f ? { name: f.name, file: f } : null)
+        }}/>
+    </>
+  )
+}
+
 // ── Textos placeholder (se reemplazarán con el contenido real) ───────────────
 const TC_TEXT = `TÉRMINOS Y CONDICIONES — CEFIMAT
 [Versión: pendiente de publicación oficial]
@@ -202,47 +227,71 @@ Tus datos no serán transferidos a terceros sin tu consentimiento previo, salvo 
 
 // ── Página principal ─────────────────────────────────────────────────────────
 export default function Terms() {
-  const { currentUser } = useAuth()
-  const s = getStudentById(currentUser?.studentId)
+  const { student: s } = useStudentData()
 
   const [tab,        setTab]        = useState('tc')
-  const [signature,  setSignature]  = useState(s?.signatureDataUrl ?? null)
-  const [curpFile,   setCurpFile]   = useState(s?.curpDoc    ?? null)
-  const [ineFile,    setIneFile]    = useState(s?.ineTutorDoc ?? null)
-  const [signed,     setSigned]     = useState(s?.termsStatus === 'firmado')
-  const [signedAt,   setSignedAt]   = useState(s?.signedAt   ?? null)
-  const [tcRead,     setTcRead]     = useState(s?.termsStatus === 'firmado')
-  const [privRead,   setPrivRead]   = useState(s?.termsStatus === 'firmado')
+  const [signature,  setSignature]  = useState(null)
+  const [curpFile,   setCurpFile]   = useState(null)
+  const [ineFile,    setIneFile]    = useState(null)
+  const [signed,     setSigned]     = useState(false)
+  const [signedAt,   setSignedAt]   = useState(null)
+  const [tcRead,     setTcRead]     = useState(false)
+  const [privRead,   setPrivRead]   = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [handSignedFile, setHandSignedFile] = useState(null) // { name, file } — firmado a mano, no persiste en Supabase todavía
+
+  // Sincroniza el estado de firma con lo registrado en la BD.
+  useEffect(() => {
+    if (!s) return
+    const isSigned = s.termsStatus === 'firmado'
+    setSigned(isSigned)
+    setTcRead(r => r || isSigned)
+    setPrivRead(r => r || isSigned)
+    setSignedAt(s.signedAt
+      ? new Date(s.signedAt).toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' })
+      : null)
+  }, [s])
 
   if (!s) return null
 
-  const canSign = !!signature && !!curpFile && !!ineFile && tcRead && privRead && !signed
+  const hasSignature = !!signature || !!handSignedFile
+  const canSign = hasSignature && !!curpFile && !!ineFile && tcRead && privRead && !signed
 
   const checklist = [
     { ok: tcRead,       label:'Términos y Condiciones leídos' },
     { ok: privRead,     label:'Aviso de Privacidad leído' },
     { ok: !!curpFile,   label:'CURP subida' },
     { ok: !!ineFile,    label:'INE del tutor subida' },
-    { ok: !!signature,  label:'Firma capturada' },
+    { ok: hasSignature, label:'Firma digital o PDF firmado a mano' },
   ]
+
+  const handleDownloadStamped = () => {
+    downloadStampedPdf({
+      studentName: s.name, tcText: TC_TEXT, privText: PRIV_TEXT,
+      signatureDataUrl: signature, signedAt: signedAt ?? new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' }),
+    })
+  }
+
+  const handleDownloadBlank = () => {
+    downloadBlankPdf({ studentName: s.name, tcText: TC_TEXT, privText: PRIV_TEXT })
+  }
 
   const handleSign = async () => {
     if (!canSign) return
     setSubmitting(true)
-    await new Promise(r => setTimeout(r, 1100))
-    const now = new Date().toLocaleDateString('es-MX', {
-      year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit',
-    })
-    setSigned(true)
-    setSignedAt(now)
-    setSubmitting(false)
-    // Persiste en el objeto de mockData (en memoria, se pierde al recargar)
-    s.termsStatus     = 'firmado'
-    s.signatureDataUrl = signature
-    s.signedAt        = now
-    s.curpDoc         = curpFile
-    s.ineTutorDoc     = ineFile
+    try {
+      // Persiste la firma en Supabase (students.terms_status / signed_at)
+      const res = await signTerms(s.id)
+      const when = res?.signedAt ? new Date(res.signedAt) : new Date()
+      setSigned(true)
+      setSignedAt(when.toLocaleDateString('es-MX', {
+        year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit',
+      }))
+    } catch {
+      // sin conexión: se mantiene pendiente para reintentar
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const TABS = [
@@ -412,6 +461,30 @@ export default function Terms() {
                     </button>
                   </div>
                 )}
+                {signature && (
+                  <button onClick={handleDownloadStamped}
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all active:scale-95"
+                    style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}>
+                    <Download size={13}/> Descargar PDF con firma digital
+                  </button>
+                )}
+
+                {/* Alternativa: firmar a mano */}
+                <div className="pt-3 space-y-2.5" style={{ borderTop:'1px dashed rgba(255,255,255,.10)' }}>
+                  <p className="text-xs font-semibold" style={{ color:'rgba(255,255,255,.45)' }}>¿Prefieres firmar a mano?</p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button onClick={handleDownloadBlank}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all active:scale-95"
+                      style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}>
+                      <FileSignature size={13}/> Descargar PDF en blanco
+                    </button>
+                    <HandSignedUpload file={handSignedFile} onChange={setHandSignedFile}/>
+                  </div>
+                  <p className="text-[10px]" style={{ color:'rgba(255,255,255,.22)' }}>
+                    Descarga, fírmalo a mano y vuelve a subirlo aquí. El PDF que subas se adjunta a tu registro localmente por ahora —
+                    la subida permanente a almacenamiento seguro está pendiente de habilitarse por el administrador.
+                  </p>
+                </div>
               </>
             )}
           </div>

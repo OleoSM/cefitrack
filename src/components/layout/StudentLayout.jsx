@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { LayoutDashboard, BookOpen, CalendarCheck, BrainCircuit, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings } from 'lucide-react'
-import { getStudentById, groups } from '../../data/mockData'
+import { useStudentData } from '../../hooks/useStudentData'
 import { useState, Suspense } from 'react'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
@@ -28,8 +28,7 @@ function LayoutInner() {
   const { currentUser, logout } = useAuth()
   const navigate = useNavigate()
   const { appearance, t } = useStudentTheme()
-  const student  = getStudentById(currentUser?.studentId)
-  const grp      = groups.find(g => g.id === student?.groupId)
+  const { student, group: grp } = useStudentData()
   const initials = student?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'AL'
 
   const handleLogout = () => { logout(); navigate('/login') }

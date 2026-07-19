@@ -29,9 +29,10 @@ export function promedioExamenes(evs) {
   return +(pool.reduce((sum, e) => sum + e.calificacion, 0) / pool.length).toFixed(2)
 }
 
-/* Asistencia real del alumno (3 retardos = 1 inasistencia; justificados no cuentan) */
-export function statsAsistencia(sid) {
-  const records = attendance.filter(a => a.studentId === sid)
+/* Asistencia real del alumno (3 retardos = 1 inasistencia; justificados no cuentan).
+   `recordsOverride`: registros reales de la BD; si se omite, usa los de mockData. */
+export function statsAsistencia(sid, recordsOverride) {
+  const records = recordsOverride ?? attendance.filter(a => a.studentId === sid)
   const counts = { presente: 0, tardanza: 0, ausente: 0, justificado: 0 }
   records.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1 })
   const tardanzasConvertidas = Math.floor(counts.tardanza / 3)

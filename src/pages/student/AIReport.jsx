@@ -1,15 +1,14 @@
-import { useAuth } from '../../context/AuthContext'
 import { BrainCircuit, CheckCircle, AlertTriangle, TrendingUp, Star, Zap } from 'lucide-react'
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts'
-import { getStudentById, getInsightByStudent, studentRadar, statusConfig } from '../../data/mockData'
+import { getInsightByStudent, studentRadar, statusConfig } from '../../data/mockData'
+import { useStudentData } from '../../hooks/useStudentData'
 
 export default function AIReport() {
-  const { currentUser } = useAuth()
-  const s = getStudentById(currentUser?.studentId)
+  const { student: s } = useStudentData()
   const insight = getInsightByStudent(s?.id)
   const radar = studentRadar[s?.id]
 
-  if (!s) return <div style={{ color:'rgba(255,255,255,.40)' }}>Perfil no disponible.</div>
+  if (!s) return null
 
   const cfg = statusConfig[s.status]
   const isGood = s.status === 'excellent' || s.status === 'good'

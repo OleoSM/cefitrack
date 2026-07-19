@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
-import { useAuth } from '../../context/AuthContext'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, LineChart, Line,
 } from 'recharts'
 import { ChevronDown, Layers } from 'lucide-react'
-import { getStudentById } from '../../data/mockData'
+import { useStudentData } from '../../hooks/useStudentData'
 import { getStudentEvals } from '../../lib/studentMetrics'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
@@ -14,9 +13,8 @@ import Dropdown from '../../components/ui/Dropdown'
 const MATERIA_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa', '#f472b6', '#22d3ee', '#fb7185', '#facc15']
 
 export default function MyGrades() {
-  const { currentUser } = useAuth()
   const { t } = useStudentTheme()
-  const s = getStudentById(currentUser?.studentId)
+  const { student: s } = useStudentData()
 
   const [scope, setScope] = useState('general')      // 'general' | nombre de materia
   const [openMats, setOpenMats] = useState([])       // acordeones abiertos

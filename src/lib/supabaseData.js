@@ -50,6 +50,82 @@ export async function fetchStudents() {
   }))
 }
 
+export async function fetchStudentById(id) {
+  if (!id) return null
+  const { data, error } = await supabase.from('students').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    id: data.id,
+    name: data.name,
+    email: data.email,
+    groupId: data.group_id,
+    tutor: { name: data.tutor_name, email: data.tutor_email, phone: data.tutor_phone },
+    attendanceRate: Number(data.attendance_rate),
+    avgGrade: Number(data.avg_grade),
+    assignmentsDone: data.assignments_done,
+    assignmentsTotal: data.assignments_total,
+    rank: data.rank,
+    status: data.status,
+    termsStatus: data.terms_status,
+    signedAt: data.signed_at,
+    waAdded: data.wa_added,
+    sucursal: data.sucursal,
+  }
+}
+
+export async function fetchGroupById(id) {
+  if (!id) return null
+  const { data, error } = await supabase.from('groups').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  return data
+    ? { id: data.id, name: data.name, subject: data.subject, schedule: data.schedule, room: data.room, color: data.color, sucursal: data.sucursal }
+    : null
+}
+
+export async function signTerms(studentId) {
+  const { data, error } = await supabase.rpc('sign_terms', { p_student_id: studentId })
+  if (error) throw error
+  const row = data?.[0]
+  return row ? { termsStatus: row.terms_status, signedAt: row.signed_at } : null
+}
+
+/** Registro de asistencia del alumno escaneando el QR de sesión del docente. */
+export async function registerAttendance(token, studentId) {
+  const { data, error } = await supabase.rpc('register_attendance', {
+    p_token: token,
+    p_student_id: studentId,
+  })
+  if (error) {
+    const msg = error.message ?? ''
+    if (msg.includes('invalid_or_expired_token'))
+      return { ok: false, code: 'expired', message: 'El código QR ya no es válido. Pídele al docente el código actualizado.' }
+    if (msg.includes('student_not_in_group'))
+      return { ok: false, code: 'wrong_group', message: 'Este QR pertenece a otro grupo. Verifica con tu docente.' }
+    return { ok: false, code: 'error', message: 'No se pudo registrar la asistencia. Intenta de nuevo.' }
+  }
+  const row = data?.[0]
+  return { ok: true, status: row?.status ?? 'presente', scannedAt: row?.scanned_at }
+}
+
+/**
+ * Historial de asistencia del alumno: una entrada por sesión de su grupo
+ * (ausente si la sesión existe y no tiene registro).
+ */
+export async function fetchStudentAttendance(studentId, groupId) {
+  if (!studentId || !groupId) return []
+  const { data, error } = await supabase
+    .from('attendance_sessions')
+    .select('session_date, attendance_records(student_id, status, arrival_label)')
+    .eq('group_id', groupId)
+    .order('session_date', { ascending: true })
+  if (error) throw error
+  return data.map(s => {
+    const rec = (s.attendance_records ?? []).find(r => r.student_id === studentId)
+    return { date: s.session_date, status: rec ? rec.status : 'ausente', time: rec?.arrival_label ?? null, studentId }
+  })
+}
+
 export async function fetchSubAdmins() {
   const { data, error } = await supabase.rpc('list_sub_admins')
   if (error) throw error

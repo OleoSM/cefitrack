@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { useAuth } from '../../context/AuthContext'
-import { getStudentById, getGroupById, getTargetSchool } from '../../data/mockData'
+import { getTargetSchool } from '../../data/mockData'
+import { useStudentData } from '../../hooks/useStudentData'
 import { Download, Shield, Printer, Info, AlertTriangle, Pencil, Maximize2, RotateCw, X, ChevronDown } from 'lucide-react'
 import FlipCard from '../../components/ui/FlipCard'
 import { useStudentTheme } from '../../context/StudentThemeContext'
@@ -395,10 +395,8 @@ function BackCard({ student, grp, theme, avatar, targetSchool }) {
    MAIN COMPONENT
 ════════════════════════════════════════════════════════════════ */
 export default function MyQR() {
-  const { currentUser } = useAuth()
   const { t: tt } = useStudentTheme()
-  const student = getStudentById(currentUser?.studentId)
-  const grp     = getGroupById(student?.groupId)
+  const { student, group: grp } = useStudentData()
   const targetSchool = student ? getTargetSchool(student.id) : null
   const qrRef   = useRef(null)
 

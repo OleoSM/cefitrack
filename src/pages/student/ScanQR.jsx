@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
 import { ArrowLeft, Camera, CameraOff, AlertTriangle, QrCode, RefreshCw, Shield } from 'lucide-react'
-import { getStudentById, getGroupById } from '../../data/mockData'
+import { useStudentData } from '../../hooks/useStudentData'
+import { registerAttendance } from '../../lib/supabaseData'
 
 const SESSION_PREFIX = 'EDUTRACK_SESSION:'
 
@@ -101,10 +101,8 @@ function ErrorScreen({ result, onRetry, onHome }) {
 
 /* ── Main component ─────────────────────────────────────────── */
 export default function ScanQR() {
-  const { currentUser } = useAuth()
-  const navigate        = useNavigate()
-  const student         = getStudentById(currentUser?.studentId)
-  const grp             = getGroupById(student?.groupId)
+  const navigate = useNavigate()
+  const { student, group: grp } = useStudentData()
 
   const qrRef      = useRef(null)
   const scannedRef = useRef(false)
@@ -113,8 +111,8 @@ export default function ScanQR() {
   const [camError, setCamError] = useState('')
   const [result,   setResult]   = useState(null)
 
-  /* ── Decode & validate ──────────────────────────────────── */
-  const handleDecode = useCallback((raw) => {
+  /* ── Decode, validate & register in Supabase ─────────────── */
+  const handleDecode = useCallback(async (raw) => {
     if (scannedRef.current) return
     if (!raw.startsWith(SESSION_PREFIX)) return
     scannedRef.current = true
@@ -126,8 +124,7 @@ export default function ScanQR() {
       return
     }
 
-    const [qrGroup, qrDate] = parts
-    const sessionGrp = getGroupById(qrGroup)
+    const [qrGroup, qrDate, qrToken] = parts
 
     if (!isDateValid(qrDate)) {
       setResult({ ok:false, title:'Código expirado', body:'Este QR ya no es válido. Pídele al docente que muestre el código actualizado.' })
@@ -138,13 +135,25 @@ export default function ScanQR() {
       setResult({
         ok: false,
         title: 'Grupo incorrecto',
-        body: `Este QR es para ${sessionGrp?.name ?? 'otro grupo'} — pero tú perteneces a ${grp?.name}. Verifica con tu docente.`,
+        body: `Este QR es de otro grupo — pero tú perteneces a ${grp?.name ?? 'tu grupo'}. Verifica con tu docente.`,
+      })
+      return
+    }
+
+    // Registro real en Supabase: el servidor valida el token y decide
+    // presente/tardanza según la tolerancia de la sesión.
+    const res = await registerAttendance(qrToken, student.id)
+    if (!res.ok) {
+      setResult({
+        ok: false,
+        title: res.code === 'expired' ? 'Código expirado' : res.code === 'wrong_group' ? 'Grupo incorrecto' : 'Error al registrar',
+        body: res.message,
       })
       return
     }
 
     const now = new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' })
-    setResult({ ok:true, grpName: sessionGrp?.name, time: now })
+    setResult({ ok:true, grpName: grp?.name, time: now, status: res.status })
   }, [student, grp])
 
   /* ── Camera ─────────────────────────────────────────────── */

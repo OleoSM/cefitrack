@@ -1,6 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, ResponsiveContainer,
@@ -8,7 +7,8 @@ import {
 import {
   BookOpen, CalendarCheck, BrainCircuit, ArrowRight, Target, Zap, Trophy, Info,
 } from 'lucide-react'
-import { getStudentById, getGroupById, getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
+import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
+import { useStudentData } from '../../hooks/useStudentData'
 import { promedioPonderado, rankingGrupo, statsAsistencia, getStudentEvals, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
@@ -54,29 +54,28 @@ function HoverInfo({ trigger, children }) {
 }
 
 export default function StudentDashboard() {
-  const { currentUser } = useAuth()
   const navigate = useNavigate()
   const { t, card } = useStudentTheme()
 
-  const s   = getStudentById(currentUser?.studentId)
-  const grp = getGroupById(s?.groupId)
+  const { student: s, group: grp, attendance } = useStudentData({ withAttendance: true })
 
   const [ultimasFilter, setUltimasFilter] = useState('todas')
   const [hiddenMaterias, setHiddenMaterias] = useState([])
 
-  /* ── Pipeline oficial: promedio ponderado + lugar en el grupo ── */
+  /* ── Pipeline oficial: promedio ponderado + lugar en el grupo ──
+     (evaluaciones/simulacros siguen en mockData; la asistencia es real de BD) */
   const pipeline = useMemo(() => {
     if (!s) return null
     const pond    = promedioPonderado(s)
     const ranking = rankingGrupo(s.groupId, pond.pesos)
     const myPos   = ranking.findIndex(x => x.id === s.id) + 1
-    const asis    = statsAsistencia(s.id)
+    const asis    = statsAsistencia(s.id, attendance)
     const evs     = getStudentEvals(s.id)
     const evo     = evolucionPorMateria(s.id)
     return { pond, ranking, myPos, asis, evs, evo }
-  }, [s])
+  }, [s, attendance])
 
-  if (!s || !pipeline) return <div style={{ color: t.t3 }}>Perfil no disponible.</div>
+  if (!s || !pipeline) return null
 
   const { pond, ranking, myPos, asis, evs, evo } = pipeline
   const lastSim = getLastSimulacro(s.id)

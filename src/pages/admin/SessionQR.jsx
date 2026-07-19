@@ -5,14 +5,11 @@ import {
   ArrowLeft, RefreshCw, Maximize2, Minimize2,
   ChevronDown, Clock, Users, CheckCircle, QrCode, Shield
 } from 'lucide-react'
-import { groups } from '../../data/mockData'
+import { fetchGroups } from '../../lib/supabaseData'
+import { createQrSession, loadSessionDb } from '../../lib/attendanceDb'
 
 const QR_SESSION_PREFIX = 'EDUTRACK_SESSION:'
 const TOKEN_DURATION_S  = 300   // token válido 5 minutos
-
-function makeToken() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase()
-}
 
 function todayISO() {
   return new Date().toISOString().split('T')[0]
@@ -21,19 +18,50 @@ function todayISO() {
 export default function SessionQR() {
   const navigate = useNavigate()
 
-  const [group,       setGroup]       = useState(groups[0].id)
+  const [groups,      setGroups]      = useState([])
+  const [group,       setGroup]       = useState(null)
   const [date,        setDate]        = useState(todayISO())
-  const [token,       setToken]       = useState(makeToken)
+  const [token,       setToken]       = useState(null)
   const [countdown,   setCountdown]   = useState(TOKEN_DURATION_S)
   const [fullscreen,  setFullscreen]  = useState(false)
   const [scannedCount,setScannedCount]= useState(0)
 
-  /* qr value: "EDUTRACK_SESSION:g1:2026-05-07:ABC123" */
-  const qrValue = `${QR_SESSION_PREFIX}${group}:${date}:${token}`
+  useEffect(() => {
+    fetchGroups().then(gs => {
+      setGroups(gs)
+      if (gs.length > 0) setGroup(g => g ?? gs[0].id)
+    }).catch(() => {})
+  }, [])
+
+  /* qr value: "EDUTRACK_SESSION:g1:2026-05-07:<token BD>" */
+  const qrValue = token ? `${QR_SESSION_PREFIX}${group}:${date}:${token}` : ''
+
+  // Crea/renueva la sesión en la BD: el token del QR es el que valida
+  // register_attendance en el servidor.
+  const refreshToken = useCallback(() => {
+    if (!group || !date) return
+    createQrSession(group, date, TOKEN_DURATION_S / 60)
+      .then(s => { if (s) { setToken(s.token); setCountdown(TOKEN_DURATION_S) } })
+      .catch(() => {})
+  }, [group, date])
+
+  useEffect(() => { refreshToken() }, [refreshToken])
+
+  // Conteo en vivo de alumnos registrados en la sesión (cada 10 s).
+  useEffect(() => {
+    if (!group || !date) return
+    const poll = () =>
+      loadSessionDb(group, date)
+        .then(s => setScannedCount(s?.records.length ?? 0))
+        .catch(() => {})
+    poll()
+    const iv = setInterval(poll, 10000)
+    return () => clearInterval(iv)
+  }, [group, date])
 
   /* countdown timer */
   useEffect(() => {
-    setCountdown(TOKEN_DURATION_S)
+    if (!token) return
     const iv = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) { refreshToken(); return TOKEN_DURATION_S }
@@ -41,12 +69,7 @@ export default function SessionQR() {
       })
     }, 1000)
     return () => clearInterval(iv)
-  }, [token])
-
-  const refreshToken = useCallback(() => {
-    setToken(makeToken())
-    setCountdown(TOKEN_DURATION_S)
-  }, [])
+  }, [token, refreshToken])
 
   const mins = String(Math.floor(countdown / 60)).padStart(2, '0')
   const secs = String(countdown % 60).padStart(2, '0')

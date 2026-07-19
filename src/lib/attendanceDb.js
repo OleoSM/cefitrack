@@ -83,6 +83,21 @@ export async function saveSessionDb(groupId, date, { tolMin, startedAt, pausedAt
   if (error) throw error
 }
 
+/**
+ * Crea (o renueva el token de) la sesión QR del día para un grupo.
+ * Devuelve { id, token, expiresAt } — el token va embebido en el QR del salón.
+ */
+export async function createQrSession(groupId, date, ttlMinutes = 5) {
+  const { data, error } = await supabase.rpc('create_attendance_session', {
+    p_group_id: groupId,
+    p_session_date: date,
+    p_ttl_minutes: ttlMinutes,
+  })
+  if (error) throw error
+  const row = data?.[0]
+  return row ? { id: row.id, token: row.token, expiresAt: row.expires_at } : null
+}
+
 export async function deleteSessionDb(groupId, date) {
   const { error } = await supabase.rpc('delete_attendance_list', {
     p_group_id: groupId,

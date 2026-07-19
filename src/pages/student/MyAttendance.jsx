@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAuth } from '../../context/AuthContext'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { getStudentById, attendanceColors } from '../../data/mockData'
+import { attendanceColors } from '../../data/mockData'
 import { statsAsistencia } from '../../lib/studentMetrics'
+import { useStudentData } from '../../hooks/useStudentData'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
 import { CheckCircle2, Clock, XCircle, ShieldAlert, Calendar, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
@@ -201,12 +201,11 @@ function WeekPicker({ weekStart, onSelect, recordDates, t }) {
 
 /* ── Página principal ── */
 export default function MyAttendance() {
-  const { currentUser } = useAuth()
   const { t } = useStudentTheme()
   const [filterStatus, setFilterStatus] = useState('todos')
 
-  const s = getStudentById(currentUser?.studentId)
-  const stats = useMemo(() => s ? statsAsistencia(s.id) : null, [s])
+  const { student: s, attendance } = useStudentData({ withAttendance: true })
+  const stats = useMemo(() => s ? statsAsistencia(s.id, attendance) : null, [s, attendance])
 
   const [weekStart, setWeekStart] = useState(() => {
     // Por defecto: la semana del registro más reciente (o la actual)

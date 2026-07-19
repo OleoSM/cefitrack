@@ -7,9 +7,9 @@ export const users = [
 
 // ─── GRUPOS ───────────────────────────────────────────────────────────────────
 export const groups = [
-  { id: 'g1', name: 'Grupo A', subject: 'Matemáticas Avanzadas', schedule: 'Lun / Mié / Vie  08:00 – 09:30', room: 'Aula 201', studentCount: 7,  avgGrade: 8.2, attendanceRate: 91, color: '#3b82f6' },
-  { id: 'g2', name: 'Grupo B', subject: 'Física Aplicada',       schedule: 'Mar / Jue         09:00 – 11:00', room: 'Lab 102',  studentCount: 7,  avgGrade: 7.8, attendanceRate: 87, color: '#10b981' },
-  { id: 'g3', name: 'Grupo C', subject: 'Química General',       schedule: 'Lun / Mié         11:00 – 12:30', room: 'Lab 305', studentCount: 6,  avgGrade: 8.5, attendanceRate: 93, color: '#f59e0b' },
+  { id: 'g1', name: 'Grupo A', subject: 'Matemáticas Avanzadas', schedule: 'Lun / Mié / Vie  08:00 – 09:30', room: 'Aula 201', studentCount: 7,  avgGrade: 8.2, attendanceRate: 91, color: '#3b82f6', sucursal: 'CN1' },
+  { id: 'g2', name: 'Grupo B', subject: 'Física Aplicada',       schedule: 'Mar / Jue         09:00 – 11:00', room: 'Lab 102',  studentCount: 7,  avgGrade: 7.8, attendanceRate: 87, color: '#10b981', sucursal: 'CN2' },
+  { id: 'g3', name: 'Grupo C', subject: 'Química General',       schedule: 'Lun / Mié         11:00 – 12:30', room: 'Lab 305', studentCount: 6,  avgGrade: 8.5, attendanceRate: 93, color: '#f59e0b', sucursal: 'CN3' },
 ]
 
 // ─── ALUMNOS ──────────────────────────────────────────────────────────────────
@@ -263,11 +263,12 @@ export const getTargetSchool = sid => {
 
 // ─── ACTIVIDAD RECIENTE ───────────────────────────────────────────────────────
 export const recentActivity = [
-  { id:1, tipo:'asistencia',   texto:'Lista de asistencia Grupo A registrada',              hora:'Hace 2 horas',  icon:'check-circle' },
-  { id:2, tipo:'evaluacion',   texto:'Calificaciones de Examen Parcial Grupo B subidas',    hora:'Hace 4 horas',  icon:'file-text'    },
-  { id:3, tipo:'alerta',       texto:'Roberto Jiménez: 7 ausencias consecutivas',           hora:'Hoy 09:15',     icon:'alert-triangle'},
-  { id:4, tipo:'reporte',      texto:'Reporte mensual febrero generado para Grupo C',       hora:'Ayer 17:30',    icon:'file-check'   },
-  { id:5, tipo:'importacion',  texto:'2 alumnos importados al Grupo C',                    hora:'05/09/2025',    icon:'upload'       },
+  { id:1, tipo:'correo',       texto:'Correo de reporte quincenal enviado a 18 tutores',    hora:'Hace 40 min',   icon:'mail'         },
+  { id:2, tipo:'asistencia',   texto:'Lista de asistencia Grupo A registrada',              hora:'Hace 2 horas',  icon:'check-circle' },
+  { id:3, tipo:'evaluacion',   texto:'Calificaciones de Examen Parcial Grupo B subidas',    hora:'Hace 4 horas',  icon:'file-text'    },
+  { id:4, tipo:'alerta',       texto:'Roberto Jiménez: 7 ausencias consecutivas',           hora:'Hoy 09:15',     icon:'alert-triangle'},
+  { id:5, tipo:'reporte',      texto:'Reporte mensual febrero generado para Grupo C',       hora:'Ayer 17:30',    icon:'file-check'   },
+  { id:6, tipo:'importacion',  texto:'2 alumnos importados al Grupo C',                    hora:'05/09/2025',    icon:'upload'       },
 ]
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────

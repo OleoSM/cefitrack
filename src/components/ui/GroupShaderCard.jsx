@@ -235,10 +235,13 @@ export default function GroupShaderCard({
             )}
 
             {onClick && (
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.45)' }}>
+              <button type="button" onClick={onClick} aria-label="Ver grupo"
+                className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200"
+                style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.45)' }}
+                onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.16)'; e.currentTarget.style.color='white' }}
+                onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.08)'; e.currentTarget.style.color='rgba(255,255,255,.45)' }}>
                 <span className="font-bold text-sm">→</span>
-              </div>
+              </button>
             )}
           </div>
         </div>

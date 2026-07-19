@@ -6,6 +6,9 @@ import {
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, calcularScore } from '../../lib/settings'
 import { sendNotification, NOTIF_EVENTS } from '../../lib/notifications'
 import { students } from '../../data/mockData'
+import { useAdminTheme } from '../../context/AdminThemeContext'
+import { TOKENS } from '../../context/StudentThemeContext'
+import AppearancePicker from '../../components/ui/AppearancePicker'
 
 const PESO_FIELDS = [
   { id: 'examenes',   label: 'Exámenes',   icon: Scale,         desc: 'Promedio de evaluaciones y simulacros' },
@@ -27,6 +30,7 @@ function Toggle({ checked, onChange }) {
 export default function Settings() {
   const [settings, setSettings] = useState(loadSettings)
   const [toast, setToast]       = useState(null)
+  const { appearance, setAppearance, t: adminT } = useAdminTheme()
 
   const showToast = (msg) => {
     setToast(msg)
@@ -200,6 +204,9 @@ export default function Settings() {
             style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.90)' }}/>
         </div>
       </div>
+
+      {/* ── Identidad institucional (UNAM/IPN) ─────────────────── */}
+      <AppearancePicker appearance={appearance} setAppearance={setAppearance} t={adminT} />
 
       {/* ── Guardar ─────────────────────────────────────────── */}
       <div className="flex items-center gap-3">

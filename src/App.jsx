@@ -33,26 +33,29 @@ const StudentSettings  = lazy(() => import('./pages/student/Settings'))
 const TermsManager     = lazy(() => import('./pages/admin/TermsManager'))
 const Registrar        = lazy(() => import('./pages/admin/Registrar'))
 const Settings         = lazy(() => import('./pages/admin/Settings'))
+const AccesoDisposicion = lazy(() => import('./pages/admin/AccesoDisposicion'))
+
+const ADMIN_ROLES = ['admin', 'sub_admin']
 
 /* ── Route guards ────────────────────────────────────────── */
 function ProtectedAdmin({ children }) {
   const { currentUser } = useAuth()
   if (!currentUser) return <Navigate to="/login" replace />
-  if (currentUser.role !== 'admin') return <Navigate to="/student" replace />
+  if (!ADMIN_ROLES.includes(currentUser.role)) return <Navigate to="/student" replace />
   return children
 }
 
 function ProtectedStudent({ children }) {
   const { currentUser } = useAuth()
   if (!currentUser) return <Navigate to="/login" replace />
-  if (currentUser.role === 'admin') return <Navigate to="/admin" replace />
+  if (ADMIN_ROLES.includes(currentUser.role)) return <Navigate to="/admin" replace />
   return children
 }
 
 function RootRedirect() {
   const { currentUser } = useAuth()
   if (!currentUser) return <Navigate to="/login" replace />
-  return currentUser.role === 'admin'
+  return ADMIN_ROLES.includes(currentUser.role)
     ? <Navigate to="/admin" replace />
     : <Navigate to="/student" replace />
 }
@@ -89,6 +92,7 @@ export default function App() {
               <Route path="terminos"              element={<TermsManager />} />
               <Route path="registrar"             element={<Registrar />} />
               <Route path="configuracion"         element={<Settings />} />
+              <Route path="configuracion/acceso"  element={<AccesoDisposicion />} />
             </Route>
 
             {/* ── Alumno ─────────────────────────────────────── */}

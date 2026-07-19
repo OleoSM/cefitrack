@@ -9,6 +9,7 @@ import {
 } from '../../components/ui/DataTable'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { useGroupColors } from '../../hooks/useGroupColors'
+import { useAuth } from '../../context/AuthContext'
 
 const attColor   = r => r >= 90 ? '#34d399' : r >= 75 ? '#60a5fa' : '#f87171'
 const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
@@ -27,12 +28,15 @@ const COLUMNS = [
 export default function Students() {
   const navigate = useNavigate()
   const { getAccent } = useGroupColors()
+  const { currentUser, allowedSucursales, canAccess } = useAuth()
+  const isAdmin = currentUser?.role === 'admin'
 
   const [students, setStudents]   = useState([])
   const [groups, setGroups]       = useState([])
   const [loading, setLoading]     = useState(true)
 
   const [query, setQuery]         = useState('')
+  const [sucursalFilter, setSucursalFilter] = useState('all')
   const [groupFilter, setGroup]   = useState('all')
   const [statusFilter, setStatus] = useState('all')
   const [sort, setSort]           = useState('name')
@@ -49,10 +53,17 @@ export default function Students() {
     return () => { alive = false }
   }, [])
 
+  const visibleGroups = isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id))
+  const sucursalOptions = isAdmin ? [...new Set(groups.map(g => g.sucursal).filter(Boolean))] : allowedSucursales
+  const visibleGroupIds = new Set(visibleGroups.map(g => g.id))
+
   const filtered = students
+    .filter(s => visibleGroupIds.has(s.groupId))
     .filter(s => {
       const q = query.toLowerCase()
+      const grp = groups.find(g => g.id === s.groupId)
       return (s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q))
+        && (sucursalFilter === 'all' || grp?.sucursal === sucursalFilter)
         && (groupFilter === 'all' || s.groupId === groupFilter)
         && (statusFilter === 'all' || s.status === statusFilter)
     })
@@ -79,8 +90,10 @@ export default function Students() {
           </div>
 
           {[
+            { label:'Sucursal', value:sucursalFilter, setter:setSucursalFilter,
+              opts:[{v:'all',l: isAdmin ? 'Todas' : 'Mis sucursales'}, ...sucursalOptions.map(s=>({v:s,l:s}))] },
             { label:'Grupo', value:groupFilter, setter:setGroup,
-              opts:[{v:'all',l:'Todos los grupos'}, ...groups.map(g=>({v:g.id,l:g.name}))] },
+              opts:[{v:'all',l:'Todos los grupos'}, ...visibleGroups.map(g=>({v:g.id,l:g.name}))] },
             { label:'Estado', value:statusFilter, setter:setStatus,
               opts:[{v:'all',l:'Todos'}, ...Object.entries(statusConfig).map(([k,v])=>({v:k,l:v.label}))] },
             { label:'Ordenar', value:sort, setter:setSort,
@@ -111,7 +124,7 @@ export default function Students() {
           {filtered.length} de {students.length} alumnos
           {visual && (
             <span className="ml-2 flex items-center gap-1.5">
-              {groups.map(g => {
+              {visibleGroups.map(g => {
                 const accent = getAccent(g.id)
                 return (
                   <span key={g.id} className="flex items-center gap-1">

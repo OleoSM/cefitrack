@@ -1,8 +1,20 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, ArrowRight } from 'lucide-react'
+import { Users, Clock, MapPin, ArrowRight, Filter } from 'lucide-react'
 import { groups, students } from '../../data/mockData'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
+import { useAuth } from '../../context/AuthContext'
+
+function FilterSelect({ value, onChange, options }) {
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      className="text-xs font-semibold rounded-xl py-2 px-3 outline-none"
+      style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.85)' }}>
+      {options.map(o => <option key={o.value} value={o.value} style={{ color:'#000', background:'#fff' }}>{o.label}</option>)}
+    </select>
+  )
+}
 
 function GradeBar({ value }) {
   const color = value >= 8.5 ? '#34d399' : value >= 7 ? '#60a5fa' : '#fbbf24'
@@ -31,15 +43,30 @@ function AttBar({ value }) {
 export default function Groups() {
   const navigate      = useNavigate()
   const { getAccent } = useGroupColors()
-  const totalStudents = students.length
+  const { currentUser, allowedSucursales, canAccess } = useAuth()
+  const isAdmin = currentUser?.role === 'admin'
+
+  const visibleGroups = isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id))
+  const sucursalOptions = isAdmin ? [...new Set(groups.map(g => g.sucursal))] : allowedSucursales
+
+  const [sucursal, setSucursal] = useState('todas')
+  const filteredGroups = sucursal === 'todas' ? visibleGroups : visibleGroups.filter(g => g.sucursal === sucursal)
+  const filteredStudents = students.filter(s => filteredGroups.some(g => g.id === s.groupId))
 
   return (
     <div className="max-w-5xl space-y-5">
+      {/* Filtro sucursal */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter size={14} style={{ color:'rgba(255,255,255,.35)' }} />
+        <FilterSelect value={sucursal} onChange={setSucursal}
+          options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:s }))]} />
+      </div>
+
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { label:'Total Grupos',    value:groups.length },
-          { label:'Total Alumnos',   value:totalStudents },
+          { label:'Total Grupos',    value:filteredGroups.length },
+          { label:'Total Alumnos',   value:filteredStudents.length },
           { label:'Promedio Global', value:'8.2' },
         ].map(({ label, value }) => (
           <div key={label} className="stat-card text-center">
@@ -51,7 +78,7 @@ export default function Groups() {
 
       {/* Group cards */}
       <div className="grid gap-4">
-        {groups.map(g => {
+        {filteredGroups.map(g => {
           const grpStudents = students.filter(s => s.groupId === g.id)
           const critical    = grpStudents.filter(s => s.status === 'critical' || s.status === 'at-risk').length
 

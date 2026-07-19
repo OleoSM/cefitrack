@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -5,12 +6,25 @@ import {
 } from 'recharts'
 import {
   Users, TrendingUp, CalendarCheck, ClipboardList,
-  AlertTriangle, CheckCircle, ArrowUpRight, ArrowRight
+  AlertTriangle, CheckCircle, ArrowUpRight, ArrowRight, Filter
 } from 'lucide-react'
 import {
   students, groups, monthlyTrend, subjectPerformance,
   recentActivity, statusConfig
 } from '../../data/mockData'
+import { useAuth } from '../../context/AuthContext'
+
+const AREA_KEYS = { g1: 'grupoA', g2: 'grupoB', g3: 'grupoC' }
+
+function FilterSelect({ value, onChange, options, style }) {
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      className="text-xs font-semibold rounded-xl py-2 px-3 outline-none"
+      style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.85)', ...style }}>
+      {options.map(o => <option key={o.value} value={o.value} style={{ color:'#000', background:'#fff' }}>{o.label}</option>)}
+    </select>
+  )
+}
 
 const COLORS = ['#10b981','#f59e0b','#ef4444','#3b82f6']
 const AREA_COLORS = ['#3b82f6','#10b981','#f59e0b']
@@ -60,16 +74,55 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const atRisk     = students.filter(s => s.status === 'critical' || s.status === 'at-risk')
-  const top5       = [...students].sort((a,b) => b.avgGrade - a.avgGrade).slice(0,5)
-  const presentHoy = students.filter(s => s.attendanceRate >= 80).length
+  const { currentUser, allowedSucursales, canAccess } = useAuth()
+  const isAdmin = currentUser?.role === 'admin'
+
+  const visibleGroups = useMemo(
+    () => isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id)),
+    [isAdmin, canAccess]
+  )
+  const sucursalOptions = isAdmin
+    ? [...new Set(groups.map(g => g.sucursal))]
+    : allowedSucursales
+
+  const [sucursal, setSucursal] = useState('todas')
+  const [grupoId, setGrupoId]   = useState('todos')
+
+  const groupsInSucursal = sucursal === 'todas'
+    ? visibleGroups
+    : visibleGroups.filter(g => g.sucursal === sucursal)
+
+  const handleSucursalChange = (val) => {
+    setSucursal(val)
+    setGrupoId('todos')
+  }
+
+  const selectedGroups = grupoId === 'todos'
+    ? groupsInSucursal
+    : groupsInSucursal.filter(g => g.id === grupoId)
+  const selectedGroupIds = new Set(selectedGroups.map(g => g.id))
+
+  const filteredStudents = students.filter(s => selectedGroupIds.has(s.groupId))
+  const atRisk     = filteredStudents.filter(s => s.status === 'critical' || s.status === 'at-risk')
+  const top5       = [...filteredStudents].sort((a,b) => b.avgGrade - a.avgGrade).slice(0,5)
+  const presentHoy = filteredStudents.filter(s => s.attendanceRate >= 80).length
+  const trendKeys  = selectedGroups.map(g => AREA_KEYS[g.id]).filter(Boolean)
 
   return (
     <div className="space-y-6 max-w-7xl">
+      {/* Filtro sucursal / grupo */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter size={14} style={{ color:'rgba(255,255,255,.35)' }} />
+        <FilterSelect value={sucursal} onChange={handleSucursalChange}
+          options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:s }))]} />
+        <FilterSelect value={grupoId} onChange={setGrupoId}
+          options={[{ value:'todos', label:'Todos los grupos' }, ...groupsInSucursal.map(g => ({ value:g.id, label:g.name }))]} />
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard icon={Users}         label="Total Alumnos"    value={students.length} sub={`${groups.length} grupos activos`} color="bg-navy-900" onClick={()=>navigate('/admin/alumnos')} />
-        <StatCard icon={CalendarCheck} label="Asistencia Hoy"   value={`${presentHoy}/${students.length}`} sub="Datos estimados" color="bg-emerald-600" onClick={()=>navigate('/admin/asistencias')} />
+        <StatCard icon={Users}         label="Total Alumnos"    value={filteredStudents.length} sub={`${selectedGroups.length} grupo(s) activo(s)`} color="bg-navy-900" onClick={()=>navigate('/admin/alumnos')} />
+        <StatCard icon={CalendarCheck} label="Asistencia Hoy"   value={`${presentHoy}/${filteredStudents.length}`} sub="Datos estimados" color="bg-emerald-600" onClick={()=>navigate('/admin/asistencias')} />
         <StatCard icon={TrendingUp}    label="Promedio General"  value="8.1" sub="↑ +0.3 vs mes anterior" color="bg-blue-600" onClick={()=>navigate('/admin/rankings')} />
         <StatCard icon={ClipboardList} label="Alumnos en Riesgo" value={atRisk.length} sub="Requieren atención" color="bg-red-500" onClick={()=>navigate('/admin/ia')} />
       </div>
@@ -102,9 +155,9 @@ export default function Dashboard() {
               <YAxis domain={[6,10]} tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ stroke:'rgba(255,255,255,.10)', strokeWidth:1 }} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color:'rgba(255,255,255,.50)' }} />
-              <Area type="monotone" dataKey="grupoA" name="Grupo A" stroke={AREA_COLORS[0]} fill={`url(#gradblue)`}  strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[0] }} activeDot={{ r:4, fill:AREA_COLORS[0], stroke:'none' }} />
-              <Area type="monotone" dataKey="grupoB" name="Grupo B" stroke={AREA_COLORS[1]} fill={`url(#gradgreen)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[1] }} activeDot={{ r:4, fill:AREA_COLORS[1], stroke:'none' }} />
-              <Area type="monotone" dataKey="grupoC" name="Grupo C" stroke={AREA_COLORS[2]} fill={`url(#gradamber)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[2] }} activeDot={{ r:4, fill:AREA_COLORS[2], stroke:'none' }} />
+              {trendKeys.includes('grupoA') && <Area type="monotone" dataKey="grupoA" name="Grupo A" stroke={AREA_COLORS[0]} fill={`url(#gradblue)`}  strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[0] }} activeDot={{ r:4, fill:AREA_COLORS[0], stroke:'none' }} />}
+              {trendKeys.includes('grupoB') && <Area type="monotone" dataKey="grupoB" name="Grupo B" stroke={AREA_COLORS[1]} fill={`url(#gradgreen)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[1] }} activeDot={{ r:4, fill:AREA_COLORS[1], stroke:'none' }} />}
+              {trendKeys.includes('grupoC') && <Area type="monotone" dataKey="grupoC" name="Grupo C" stroke={AREA_COLORS[2]} fill={`url(#gradamber)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[2] }} activeDot={{ r:4, fill:AREA_COLORS[2], stroke:'none' }} />}
             </AreaChart>
           </ResponsiveContainer>
         </div>

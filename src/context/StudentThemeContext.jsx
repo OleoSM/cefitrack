@@ -9,7 +9,7 @@ export const APPEARANCES = [
   { id: 'unam',    label: 'Identidad Universitaria' },
 ]
 
-const TOKENS = {
+export const TOKENS = {
   default: {
     light: false,
     mainBg: '#070b16', mainBgImage: 'none',

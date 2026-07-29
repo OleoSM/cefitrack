@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, LineChart, Line,
 } from 'recharts'
 import {
   Layers, Sigma, Atom, FlaskConical, Dna, Landmark, Globe2,
   BookOpen, Languages, Cpu, BookMarked, ArrowLeft, ChevronRight,
+  GraduationCap, ClipboardList, AlertTriangle,
 } from 'lucide-react'
+import MateriaBarChart from '../../components/ui/MateriaBarChart'
 import { useStudentData } from '../../hooks/useStudentData'
-import { getStudentEvals } from '../../lib/studentMetrics'
+import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
 
@@ -32,11 +34,15 @@ function materiaIcon(m) {
 
 export default function MyGrades() {
   const { t } = useStudentTheme()
-  const { student: s } = useStudentData()
+  const { student: s, evaluations } = useStudentData({ withEvaluations: true })
 
   const [scope, setScope] = useState('general')      // 'general' | nombre de materia
 
-  const evals = useMemo(() => s ? getStudentEvals(s.id) : [], [s])
+  // Se normalizan a escala 10 para que convivan evaluaciones con distinto máximo.
+  const evals = useMemo(
+    () => evaluations.map(e => ({ ...e, calificacion: +calificacionBase10(e).toFixed(1) })),
+    [evaluations],
+  )
 
   const byMateria = useMemo(() => evals.reduce((acc, e) => {
     if (!acc[e.materia]) acc[e.materia] = []
@@ -98,29 +104,56 @@ export default function MyGrades() {
 
       {/* KPI cards (en función del alcance elegido) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="stat-card text-center">
-          <p className="text-3xl sm:text-4xl font-bold tabular-nums" style={{ color: gradeColor(scopeProm) }}>{scopeProm}</p>
-          <p className="text-sm mt-1" style={{ color: t.t3 }}>
-            {scope === 'general' ? 'Promedio General' : `Promedio ${scope}`}
-          </p>
-        </div>
-        <div className="stat-card text-center">
-          <p className="text-3xl sm:text-4xl font-bold tabular-nums" style={{ color: '#60a5fa' }}>
-            {scopeEvals.length}<span className="text-lg font-semibold" style={{ color: t.t4 }}> / {evals.length}</span>
-          </p>
-          <p className="text-sm mt-1" style={{ color: t.t3 }}>Evaluaciones</p>
-        </div>
-        <div className="stat-card text-center">
-          <p className="text-3xl sm:text-4xl font-bold tabular-nums" style={{ color: '#fbbf24' }}>{scopeBajo6}</p>
-          <p className="text-sm mt-1" style={{ color: t.t3 }}>Por debajo de 6</p>
-        </div>
+        {[
+          {
+            icon: GraduationCap,
+            accent: gradeColor(scopeProm),
+            value: <>{scopeProm}<span className="text-base font-semibold ml-0.5" style={{ color: t.t4 }}>/ 10</span></>,
+            label: scope === 'general' ? 'Promedio General' : `Promedio · ${scope}`,
+            bar: scopeProm / 10,
+          },
+          {
+            icon: ClipboardList,
+            accent: '#60a5fa',
+            value: <>{scopeEvals.length}<span className="text-base font-semibold ml-0.5" style={{ color: t.t4 }}>/ {evals.length}</span></>,
+            label: 'Evaluaciones registradas',
+            bar: evals.length > 0 ? scopeEvals.length / evals.length : 0,
+          },
+          {
+            icon: AlertTriangle,
+            accent: scopeBajo6 > 0 ? '#fbbf24' : '#34d399',
+            value: scopeBajo6,
+            label: scopeBajo6 > 0 ? 'Por debajo de 6' : 'Ninguna reprobada',
+            bar: scopeEvals.length > 0 ? scopeBajo6 / scopeEvals.length : 0,
+          },
+        ].map(({ icon: Icon, accent, value, label, bar }, i) => (
+          <div key={i} className="stat-card relative overflow-hidden">
+            {/* halo de acento en la esquina */}
+            <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full pointer-events-none"
+              style={{ background: `radial-gradient(circle, ${accent}22, transparent 70%)` }}/>
+            <div className="relative flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `${accent}1a`, border: `1px solid ${accent}40` }}>
+                <Icon size={20} style={{ color: accent }}/>
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xl sm:text-3xl font-bold tabular-nums leading-none" style={{ color: accent }}>{value}</p>
+                <p className="text-xs mt-1.5 truncate" style={{ color: t.t3 }}>{label}</p>
+              </div>
+            </div>
+            <div className="relative h-1 rounded-full overflow-hidden mt-3.5" style={{ background: t.softBg }}>
+              <div className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${Math.round(bar * 100)}%`, background: `linear-gradient(90deg, ${accent}66, ${accent})` }}/>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* ── Materias ───────────────────────────────────────────────
           General: grid compacto tipo KPI (una tarjetita por materia).
           Materia seleccionada: una sola card con su desglose completo. */}
       {scope === 'general' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
           {materias.map(mat => {
             const evs = byMateria[mat]
             const prom = +(evs.reduce((sum, e) => sum + e.calificacion, 0) / evs.length).toFixed(1)
@@ -219,19 +252,7 @@ export default function MyGrades() {
           {scope === 'general' ? 'Promedio por Materia' : `Evolución — ${scope}`}
         </h2>
         {scope === 'general' ? (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={materiaStats} margin={{ top: 5, right: 10, bottom: 24, left: -10 }} barSize={30}>
-              <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false}/>
-              <XAxis dataKey="materia" tick={{ fontSize: 10, fill: t.axis }} angle={-15} textAnchor="end" axisLine={false} tickLine={false}/>
-              <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false}/>
-              <Tooltip wrapperStyle={{ outline: 'none' }} cursor={{ fill: t.softBg }}
-                contentStyle={{ fontSize: 11, borderRadius: 10, background: t.tooltipBg, border: `1px solid ${t.tooltipBorder}`, color: t.tooltipText }}
-                formatter={v => [v, 'Promedio']}/>
-              <Bar dataKey="promedio" radius={[6, 6, 0, 0]}>
-                {materiaStats.map((m, i) => <Cell key={i} fill={colorOf(m.materia)}/>)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <MateriaBarChart stats={materiaStats} colorOf={colorOf} t={t} avg={scopeProm}/>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={materiaSerie} margin={{ top: 5, right: 8, bottom: 0, left: -22 }}>

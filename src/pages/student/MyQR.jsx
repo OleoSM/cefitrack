@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { getTargetSchool } from '../../data/mockData'
 import { useStudentData } from '../../hooks/useStudentData'
@@ -682,7 +683,7 @@ img{width:296px;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.18)}
       </div>
 
       {/* ══ Modal: QR en pantalla completa ══ */}
-      {qrModal && (
+      {qrModal && createPortal(
         <div className="kw fixed inset-0 z-[9999] flex flex-col items-center justify-center p-6"
           style={{ background: 'rgba(0,0,0,.92)', backdropFilter: 'blur(8px)' }}
           onClick={() => setQrModal(false)}>
@@ -696,7 +697,8 @@ img{width:296px;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.18)}
           </div>
           <p className="font-display text-white text-xl font-bold mt-5">{student.name}</p>
           <p className="text-white/40 text-sm mt-1">{grp?.name} · Muestra este código al docente</p>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

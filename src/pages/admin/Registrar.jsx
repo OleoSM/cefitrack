@@ -7,7 +7,7 @@ import {
   Contrast, Save, AlertTriangle, RotateCw,
 } from 'lucide-react'
 import clsx from 'clsx'
-import { groups as allGroups, students as allStudents } from '../../data/mockData'
+import { fetchGroups, fetchStudents } from '../../lib/supabaseData'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import { folioEX, folioEXD } from '../../lib/folios'
@@ -103,50 +103,12 @@ const INIT_SUBJECTS = [
     ]},
 ]
 
-const INIT_STUDENTS = [
-  {id:'r1', name:'Danna Alexa Centeno Eslava',     pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r2', name:'Naomi Abigail Quiroga Martínez', pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r3', name:'Avril Alessa Koyoc Hernández',   pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r4', name:'Miguel Ángel Aguas Vázquez',     pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r5', name:'Jesús Aguas Vázquez',            pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r6', name:'Dilan Ramses Bautista Espinosa', pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r7', name:'Samuel Bautista Contreras',      pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r8', name:'Cristian Alexander Arteaga',     pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r9', name:'Yelin Novaly Vázquez Ramírez',   pago:'Liquidado',    firmaGar:false, firmaTyC:false, exGral:false},
-  {id:'r10',name:'Marco Hernández Cruz',           pago:'Al corriente', firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r11',name:'Karla Daniela Nieto Oliva',      pago:'Al corriente', firmaGar:true,  firmaTyC:true,  exGral:true },
-  {id:'r12',name:'Frida Pavia Quio',               pago:'Liquidado',    firmaGar:true,  firmaTyC:true,  exGral:true },
-]
-
-const INIT_CELLS = {
-  r1:{ hist_mx_a1:10,hist_mx_a2:9,hist_mx_a3:10,hist_mx_a4:9,hist_mx_a5:.95,hist_mx_a6:1,hist_mx_t1:10,hist_mx_t2:10,hist_mx_t3:9.6, hist_u_t1:9,hist_u_t2:10,hist_u_t3:9.6, geo_a1:10,geo_a2:10,geo_m1:9,geo_m2:10,geo_m3:9,geo_t1:10,geo_t2:9, hab_verb_ka1:.61,hab_verb_ka2:.8, hab_mat_ka1:.8,hab_mat_ka2:.7,hab_mat_lec:10,hab_mat_ej:8,hab_mat_tg:6.6, sim_1:93,sim_2:76,sim_3:96,sim_4:108,sim_5:109 },
-  r2:{ hist_mx_a1:10,hist_mx_a2:8.5,hist_mx_t1:10,hist_mx_t2:10,hist_mx_t3:10, hist_u_t1:9.6,hist_u_t2:10, hab_verb_ka1:.52,hab_mat_lec:10,hab_mat_ej:9, sim_1:58,sim_2:64,sim_3:111,sim_4:88,sim_5:102 },
-  r7:{ hist_mx_a1:10,hist_mx_a2:10,hist_mx_a3:10,hist_mx_t1:10,hist_mx_t2:10,hist_mx_t3:10, hist_u_t1:10,hist_u_t2:10, hab_verb_ka1:.81,hab_mat_lec:10,hab_mat_ej:10, sim_1:105,sim_2:97,sim_3:105,sim_4:107,sim_5:119 },
-  r9:{ sim_1:30 },
-}
-
-function buildInitialAttendance() {
-  const att = {}
-  INIT_STUDENTS.forEach(s => {
-    att[s.id] = {}
-    for (let mo = 0; mo < 6; mo++) {
-      weekdaysOfMonth(2026, mo).forEach(d => {
-        const r = Math.random()
-        att[s.id][dateKey(d)] = s.id === 'r9' ? (r < .20 ? 1 : 0)
-          : (s.id === 'r1' || s.id === 'r7') ? (r < .95 ? 1 : 0)
-          : (r < .82 ? 1 : 0)
-      })
-    }
-  })
-  return att
-}
-const INIT_ATTENDANCE = buildInitialAttendance()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SELECTOR DE GRUPO
 // ─────────────────────────────────────────────────────────────────────────────
 
-function GroupPicker({ onSelect }) {
+function GroupPicker({ groups, students, loading, onSelect }) {
   const { getAccent } = useGroupColors()
 
   return (
@@ -158,9 +120,17 @@ function GroupPicker({ onSelect }) {
         </p>
       </div>
 
+      {!loading && groups.length === 0 && (
+        <div className="card p-8 text-center">
+          <p className="text-sm" style={{ color:'rgba(255,255,255,.45)' }}>
+            No hay grupos todavía. Créalos desde la sección Grupos.
+          </p>
+        </div>
+      )}
+
       <div className="grid gap-4">
-        {allGroups.map(g => {
-          const grpStudents = allStudents.filter(s => s.groupId === g.id)
+        {groups.map(g => {
+          const grpStudents = students.filter(s => s.groupId === g.id)
           const accent      = getAccent(g.id)
 
           return (
@@ -195,11 +165,13 @@ function GroupPicker({ onSelect }) {
                 <p className="font-bold text-sm sm:text-base" style={{ color:'rgba(255,255,255,.90)' }}>{g.name}</p>
                 <p className="text-xs sm:text-sm mt-0.5" style={{ color:'rgba(255,255,255,.50)' }}>{g.subject}</p>
                 <div className="flex flex-wrap gap-3 mt-2">
+                  {g.schedule && (
+                    <span className="flex items-center gap-1 text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>
+                      <Clock size={11}/>{g.schedule}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1 text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>
-                    <Clock size={11}/>{g.schedule}
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>
-                    <Users size={11}/>{g.studentCount} alumnos
+                    <Users size={11}/>{grpStudents.length} alumnos
                   </span>
                 </div>
               </div>
@@ -616,16 +588,23 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
 // TABLA DE REGISTRO
 // ─────────────────────────────────────────────────────────────────────────────
 
-function RegisterTable({ group, onBack }) {
+function RegisterTable({ group, groupStudents, onBack }) {
   /* ── Draft restore ──────────────────────────────────────────── */
   const [draft] = useState(() => loadDraft(group.id))
 
-  const [students,      setStudents]      = useState(() => draft?.students      ?? INIT_STUDENTS)
+  // El padrón sale de la BD; las calificaciones de esta hoja siguen en el
+  // borrador local (no hay tablas para columnas/celdas/pagos todavía).
+  const rosterFromDb = () => groupStudents.map(s => ({
+    id: s.id, name: s.name, pago: 'Al corriente',
+    firmaGar: false, firmaTyC: s.termsStatus === 'firmado', exGral: false,
+  }))
+
+  const [students,      setStudents]      = useState(() => draft?.students      ?? rosterFromDb())
   const [subjects,      setSubjects]      = useState(() => draft?.subjects      ?? INIT_SUBJECTS)
   const [simCount,      setSimCount]      = useState(() => draft?.simCount      ?? 10)
   const [onlineCount,   setOnlineCount]   = useState(() => draft?.onlineCount   ?? 5)
-  const [cells,         setCells]         = useState(() => draft?.cells         ?? INIT_CELLS)
-  const [attendance,    setAttendance]    = useState(() => draft?.attendance    ?? INIT_ATTENDANCE)
+  const [cells,         setCells]         = useState(() => draft?.cells         ?? {})
+  const [attendance,    setAttendance]    = useState(() => draft?.attendance    ?? {})
   const [collapsed,     setCollapsed]     = useState({})
   const [isFullscreen,  setIsFullscreen]  = useState(false)
   const [attModal,      setAttModal]      = useState(null)
@@ -1256,7 +1235,27 @@ function RegisterTable({ group, onBack }) {
 
 export default function Registrar() {
   const [selectedGroup, setSelectedGroup] = useState(null)
+  const [groups, setGroups]     = useState([])
+  const [students, setStudents] = useState([])
+  const [loading, setLoading]   = useState(true)
 
-  if (!selectedGroup) return <GroupPicker onSelect={setSelectedGroup}/>
-  return <RegisterTable group={selectedGroup} onBack={() => setSelectedGroup(null)}/>
+  useEffect(() => {
+    let alive = true
+    Promise.all([fetchGroups(), fetchStudents()])
+      .then(([g, s]) => { if (alive) { setGroups(g); setStudents(s) } })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  if (!selectedGroup) {
+    return <GroupPicker groups={groups} students={students} loading={loading} onSelect={setSelectedGroup}/>
+  }
+  return (
+    <RegisterTable
+      group={selectedGroup}
+      groupStudents={students.filter(s => s.groupId === selectedGroup.id)}
+      onBack={() => setSelectedGroup(null)}
+    />
+  )
 }

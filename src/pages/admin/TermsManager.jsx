@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { students } from '../../data/mockData'
+import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+import { fetchStudents, resetTerms } from '../../lib/supabaseData'
 import {
   CheckCircle2, Clock, FileText, Trash2, Upload,
   Shield, AlertTriangle, Search, Eye, RefreshCw,
@@ -9,7 +10,7 @@ import clsx from 'clsx'
 const VERSION_MOCK = { version: '1.0', updatedAt: '31 de mayo de 2026', updatedBy: 'Prof. Mario Sánchez' }
 
 export default function TermsManager() {
-  const [list, setList]         = useState(() => students.map(s => ({ ...s })))
+  const [list, setList]         = useState([])
   const [search, setSearch]     = useState('')
   const [filter, setFilter]     = useState('todos')
   const [preview, setPreview]   = useState(null)   // alumno seleccionado para ver firma
@@ -27,23 +28,21 @@ export default function TermsManager() {
     return matchSearch && matchFilter
   })
 
-  const resetSignature = (id) => {
+  const load = useCallback(async () => {
+    try { setList(await fetchStudents()) } catch { /* lista vacía */ }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const resetSignature = async (id) => {
+    setConfirmReset(null)
+    if (preview?.id === id) setPreview(null)
     setList(prev => prev.map(s =>
       s.id === id
         ? { ...s, termsStatus:'pendiente', signatureDataUrl:null, signedAt:null, curpDoc:null, ineTutorDoc:null }
         : s
     ))
-    // También en mockData en memoria
-    const s = students.find(s => s.id === id)
-    if (s) {
-      s.termsStatus      = 'pendiente'
-      s.signatureDataUrl = null
-      s.signedAt         = null
-      s.curpDoc          = null
-      s.ineTutorDoc      = null
-    }
-    setConfirmReset(null)
-    if (preview?.id === id) setPreview(null)
+    try { await resetTerms(id) } catch { load() }   // si falla, se recarga el estado real
   }
 
   return (
@@ -229,9 +228,9 @@ export default function TermsManager() {
         })}
       </div>
 
-      {/* Modal: ver firma */}
-      {preview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setPreview(null)}>
+      {/* Modal: ver firma — por portal, si no se posiciona contra el contenedor de página */}
+      {preview && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setPreview(null)}>
           <div className="w-full max-w-sm rounded-2xl p-5 space-y-4" style={{ background:'rgba(12,12,20,.97)', border:'1px solid rgba(255,255,255,.12)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <p className="font-bold text-sm" style={{ color:'rgba(255,255,255,.85)' }}>Firma de {preview.name}</p>
@@ -255,12 +254,13 @@ export default function TermsManager() {
               <Trash2 size={13}/> Resetear firma de este alumno
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal: confirmar reset */}
-      {confirmReset && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setConfirmReset(null)}>
+      {confirmReset && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setConfirmReset(null)}>
           <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'rgba(12,12,20,.97)', border:'1px solid rgba(248,113,113,.20)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               <AlertTriangle size={18} style={{ color:'#f87171', flexShrink:0, marginTop:2 }}/>
@@ -281,7 +281,8 @@ export default function TermsManager() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

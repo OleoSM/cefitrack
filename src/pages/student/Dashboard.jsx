@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
 import { useStudentData } from '../../hooks/useStudentData'
-import { promedioPonderado, rankingGrupo, statsAsistencia, getStudentEvals, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
+import { promedioPonderado, rankingGrupo, statsAsistencia, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
+import { fetchGroupMetrics } from '../../lib/supabaseData'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
 
@@ -57,23 +58,37 @@ export default function StudentDashboard() {
   const navigate = useNavigate()
   const { t, card } = useStudentTheme()
 
-  const { student: s, group: grp, attendance } = useStudentData({ withAttendance: true })
+  const { student: s, group: grp, attendance, evaluations } = useStudentData({
+    withAttendance: true, withEvaluations: true,
+  })
 
   const [ultimasFilter, setUltimasFilter] = useState('todas')
   const [hiddenMaterias, setHiddenMaterias] = useState([])
+  const [groupMetrics, setGroupMetrics] = useState(null)
+
+  // Datos del grupo completo: necesarios para calcular el lugar del alumno.
+  useEffect(() => {
+    if (!s?.groupId) return
+    let alive = true
+    fetchGroupMetrics(s.groupId)
+      .then(m => { if (alive) setGroupMetrics(m) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [s?.groupId])
 
   /* ── Pipeline oficial: promedio ponderado + lugar en el grupo ──
-     (evaluaciones/simulacros siguen en mockData; la asistencia es real de BD) */
+     (los simulacros siguen en mockData; calificaciones y asistencia son de BD) */
   const pipeline = useMemo(() => {
     if (!s) return null
-    const pond    = promedioPonderado(s)
-    const ranking = rankingGrupo(s.groupId, pond.pesos)
+    const pond    = promedioPonderado(s, { evals: evaluations, attendance })
+    const ranking = groupMetrics
+      ? rankingGrupo(groupMetrics.members, groupMetrics.evalsByStudent, groupMetrics.attendanceByStudent, pond.pesos)
+      : []
     const myPos   = ranking.findIndex(x => x.id === s.id) + 1
-    const asis    = statsAsistencia(s.id, attendance)
-    const evs     = getStudentEvals(s.id)
-    const evo     = evolucionPorMateria(s.id)
-    return { pond, ranking, myPos, asis, evs, evo }
-  }, [s, attendance])
+    const asis    = statsAsistencia(attendance)
+    const evo     = evolucionPorMateria(evaluations)
+    return { pond, ranking, myPos, asis, evs: evaluations, evo }
+  }, [s, attendance, evaluations, groupMetrics])
 
   if (!s || !pipeline) return null
 

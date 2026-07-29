@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -77,9 +78,11 @@ export default function SessionQR() {
   const grp  = groups.find(g => g.id === group)
 
   /* ── Fullscreen mode ───────────────────────────────────────── */
+  // Va por portal: el contenedor de página tiene un transform residual de
+  // animate-page-in, que haría que inset-0 se recorte a la página, no a la ventana.
   if (fullscreen) {
-    return (
-      <div className="fixed inset-0 bg-navy-950 z-50 flex flex-col items-center justify-center gap-6 p-8">
+    return createPortal(
+      <div className="fixed inset-0 bg-navy-950 z-[9999] flex flex-col items-center justify-center gap-6 p-8">
         {/* Header */}
         <div className="flex items-center gap-3">
           <img src="/logo.jpeg" alt="SIGA CEFIMAT" className="w-10 h-10 rounded-full object-cover"
@@ -143,7 +146,8 @@ export default function SessionQR() {
           <span className="font-bold">{scannedCount}</span>
           <span className="text-emerald-200 text-sm">escaneados</span>
         </div>
-      </div>
+      </div>,
+      document.body,
     )
   }
 

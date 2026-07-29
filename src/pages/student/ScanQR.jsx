@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Camera, CameraOff, AlertTriangle, QrCode, RefreshCw, Shield } from 'lucide-react'
@@ -13,8 +14,8 @@ function isDateValid(dateStr) {
 
 /* ── Full-screen success ────────────────────────────────────── */
 function SuccessScreen({ student, result, onHome }) {
-  return (
-    <div className="fixed inset-0 bg-emerald-500 flex flex-col items-center justify-center z-50 p-8 text-center">
+  return createPortal(
+    <div className="fixed inset-0 bg-emerald-500 flex flex-col items-center justify-center z-[9999] p-8 text-center">
       {/* Animated checkmark circle */}
       <div className="animate-scale-in w-32 h-32 rounded-full bg-white/20 flex items-center justify-center mb-6">
         <svg viewBox="0 0 100 100" width="72" height="72" fill="none">
@@ -52,14 +53,15 @@ function SuccessScreen({ student, result, onHome }) {
         style={{ animationDelay: '0.6s', animationFillMode: 'both' }}>
         Ir al inicio
       </button>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
 /* ── Full-screen error ──────────────────────────────────────── */
 function ErrorScreen({ result, onRetry, onHome }) {
-  return (
-    <div className="fixed inset-0 bg-red-600 flex flex-col items-center justify-center z-50 p-8 text-center">
+  return createPortal(
+    <div className="fixed inset-0 bg-red-600 flex flex-col items-center justify-center z-[9999] p-8 text-center">
       {/* Animated X circle */}
       <div className="animate-scale-in w-32 h-32 rounded-full bg-white/20 flex items-center justify-center mb-6">
         <svg viewBox="0 0 100 100" width="72" height="72" fill="none">
@@ -95,7 +97,8 @@ function ErrorScreen({ result, onRetry, onHome }) {
           Inicio
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

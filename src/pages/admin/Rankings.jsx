@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Trophy, TrendingUp, TrendingDown, Minus, Medal } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell
 } from 'recharts'
-import { students, groups, statusConfig } from '../../data/mockData'
+import { statusConfig } from '../../data/mockData'
+import { fetchStudents, fetchGroups, fetchAttendanceStats } from '../../lib/supabaseData'
 import { DataTable, DataTableRow, DataTableAvatar } from '../../components/ui/DataTable'
 import { loadSettings, calcularScore } from '../../lib/settings'
 
@@ -28,6 +29,26 @@ export default function Rankings() {
   const [groupFilter, setGroup] = useState('all')
   const { pesos } = loadSettings()
 
+  const [students, setStudents] = useState([])
+  const [groups, setGroups]     = useState([])
+  const [loading, setLoading]   = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const [sts, grs] = await Promise.all([fetchStudents(), fetchGroups()])
+        // La asistencia se recalcula de las sesiones reales, no del valor sembrado.
+        const stats = await fetchAttendanceStats(sts)
+        if (!alive) return
+        setStudents(sts.map(s => ({ ...s, attendanceRate: stats.byStudent[s.id] ?? null })))
+        setGroups(grs)
+      } catch { /* se muestra la tabla vacía */ }
+      finally { if (alive) setLoading(false) }
+    })()
+    return () => { alive = false }
+  }, [])
+
   // Lugar en el grupo = score ponderado (Exámenes / Tareas / Asistencia según Configuración)
   const sorted = [...students]
     .filter(s => groupFilter === 'all' || s.groupId === groupFilter)
@@ -37,8 +58,8 @@ export default function Rankings() {
   const chartData = sorted.slice(0,10).map(s => ({
     name: s.name.split(' ')[0],
     score: s.score,
-    promedio: s.avgGrade,
-    asistencia: s.attendanceRate/10,
+    promedio: s.avgGrade ?? 0,
+    asistencia: (s.attendanceRate ?? 0)/10,
   }))
 
   const top3 = sorted.slice(0,3)
@@ -151,11 +172,12 @@ export default function Rankings() {
           { key:'tasks',  label:'Tareas',     className:'w-24 hidden md:flex' },
           { key:'trend',  label:'',           className:'w-8' },
         ]}
-        isEmpty={sorted.length === 0}>
+        isEmpty={!loading && sorted.length === 0}
+        emptyText="Aún no hay alumnos con datos para rankear.">
         {sorted.map((s, i) => {
-          const cfg        = statusConfig[s.status]
+          const cfg        = statusConfig[s.status] ?? statusConfig.good
           const trend      = trendIcons[trends[i % trends.length]]
-          const gradeColor = s.avgGrade>=8.5?'text-emerald-400':s.avgGrade>=7?'text-blue-400':'text-red-400'
+          const gradeColor = (s.avgGrade ?? 0)>=8.5?'text-emerald-400':(s.avgGrade ?? 0)>=7?'text-blue-400':'text-red-400'
           return (
             <DataTableRow key={s.id} onClick={() => navigate(`/admin/alumnos/${s.id}`)}
               cells={[
@@ -188,7 +210,7 @@ export default function Rankings() {
                   className:'w-24 hidden sm:flex flex-col items-start',
                   content:(
                     <>
-                      <p className={`font-bold ${gradeColor}`}>{s.avgGrade}</p>
+                      <p className={`font-bold ${gradeColor}`}>{s.avgGrade ?? '—'}</p>
                       <p className="text-[10px]" style={{ color:'rgba(255,255,255,.30)' }}>promedio</p>
                     </>
                   ),
@@ -197,7 +219,9 @@ export default function Rankings() {
                   className:'w-24 hidden sm:flex flex-col items-start',
                   content:(
                     <>
-                      <p className="font-bold" style={{ color:'rgba(255,255,255,.65)' }}>{s.attendanceRate}%</p>
+                      <p className="font-bold" style={{ color:'rgba(255,255,255,.65)' }}>
+                        {s.attendanceRate === null ? '—' : `${s.attendanceRate}%`}
+                      </p>
                       <p className="text-[10px]" style={{ color:'rgba(255,255,255,.30)' }}>asistencia</p>
                     </>
                   ),

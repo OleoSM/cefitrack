@@ -28,6 +28,10 @@ export async function fetchGroups() {
   }))
 }
 
+// null se conserva como null (alumno sin datos aún) en vez de convertirse en 0,
+// que se leería como "0% de asistencia" o "promedio 0".
+const num = v => (v === null || v === undefined ? null : Number(v))
+
 export async function fetchStudents() {
   const { data, error } = await supabase.from('students').select('*').order('name')
   if (error) throw error
@@ -37,8 +41,8 @@ export async function fetchStudents() {
     email: s.email,
     groupId: s.group_id,
     tutor: { name: s.tutor_name, email: s.tutor_email, phone: s.tutor_phone },
-    attendanceRate: Number(s.attendance_rate),
-    avgGrade: Number(s.avg_grade),
+    attendanceRate: num(s.attendance_rate),
+    avgGrade: num(s.avg_grade),
     assignmentsDone: s.assignments_done,
     assignmentsTotal: s.assignments_total,
     rank: s.rank,
@@ -61,8 +65,8 @@ export async function fetchStudentById(id) {
     email: data.email,
     groupId: data.group_id,
     tutor: { name: data.tutor_name, email: data.tutor_email, phone: data.tutor_phone },
-    attendanceRate: Number(data.attendance_rate),
-    avgGrade: Number(data.avg_grade),
+    attendanceRate: num(data.attendance_rate),
+    avgGrade: num(data.avg_grade),
     assignmentsDone: data.assignments_done,
     assignmentsTotal: data.assignments_total,
     rank: data.rank,
@@ -85,6 +89,14 @@ export async function fetchGroupById(id) {
 
 export async function signTerms(studentId) {
   const { data, error } = await supabase.rpc('sign_terms', { p_student_id: studentId })
+  if (error) throw error
+  const row = data?.[0]
+  return row ? { termsStatus: row.terms_status, signedAt: row.signed_at } : null
+}
+
+/** Revierte la firma de términos de un alumno (Gestión de T&C). */
+export async function resetTerms(studentId) {
+  const { data, error } = await supabase.rpc('reset_terms', { p_student_id: studentId })
   if (error) throw error
   const row = data?.[0]
   return row ? { termsStatus: row.terms_status, signedAt: row.signed_at } : null
@@ -124,6 +136,255 @@ export async function fetchStudentAttendance(studentId, groupId) {
     const rec = (s.attendance_records ?? []).find(r => r.student_id === studentId)
     return { date: s.session_date, status: rec ? rec.status : 'ausente', time: rec?.arrival_label ?? null, studentId }
   })
+}
+
+/**
+ * Tasa de asistencia real calculada desde las sesiones y registros de la BD.
+ * Devuelve { byStudent, byGroup } con porcentajes 0–100, o null cuando el
+ * grupo todavía no tiene sesiones (para no mostrar un 0% engañoso).
+ */
+export async function fetchAttendanceStats(students) {
+  const { data, error } = await supabase
+    .from('attendance_sessions')
+    .select('group_id, attendance_records(student_id, status)')
+  if (error) throw error
+
+  const sessionsByGroup = {}
+  const attendedByStudent = {}
+  for (const s of data) {
+    sessionsByGroup[s.group_id] = (sessionsByGroup[s.group_id] ?? 0) + 1
+    for (const r of s.attendance_records ?? []) {
+      if (r.status === 'presente' || r.status === 'tardanza')
+        attendedByStudent[r.student_id] = (attendedByStudent[r.student_id] ?? 0) + 1
+    }
+  }
+
+  const byStudent = {}
+  for (const st of students) {
+    const total = sessionsByGroup[st.groupId] ?? 0
+    byStudent[st.id] = total === 0 ? null : Math.round(((attendedByStudent[st.id] ?? 0) / total) * 100)
+  }
+
+  const byGroup = {}
+  for (const gid of new Set(students.map(s => s.groupId))) {
+    const rates = students.filter(s => s.groupId === gid).map(s => byStudent[s.id]).filter(r => r !== null)
+    byGroup[gid] = rates.length === 0 ? null : Math.round(rates.reduce((a, b) => a + b, 0) / rates.length)
+  }
+
+  return { byStudent, byGroup }
+}
+
+/**
+ * Datos de todo un grupo para calcular el ranking: alumnos, sus evaluaciones y
+ * su historial de asistencia (una entrada por sesión, ausente si no hay registro).
+ */
+export async function fetchGroupMetrics(groupId) {
+  if (!groupId) return { members: [], evalsByStudent: {}, attendanceByStudent: {} }
+
+  const [{ data: sts, error: e1 }, { data: sessions, error: e2 }] = await Promise.all([
+    supabase.from('students').select('*').eq('group_id', groupId),
+    supabase.from('attendance_sessions')
+      .select('session_date, attendance_records(student_id, status, arrival_label)')
+      .eq('group_id', groupId)
+      .order('session_date', { ascending: true }),
+  ])
+  if (e1) throw e1
+  if (e2) throw e2
+
+  const ids = sts.map(s => s.id)
+  const { data: evs, error: e3 } = await supabase
+    .from('evaluations').select('*').in('student_id', ids.length ? ids : ['__none__'])
+  if (e3) throw e3
+
+  const evalsByStudent = {}
+  for (const e of evs) (evalsByStudent[e.student_id] ??= []).push(mapEvaluation(e))
+
+  const attendanceByStudent = {}
+  for (const id of ids) {
+    attendanceByStudent[id] = sessions.map(s => {
+      const rec = (s.attendance_records ?? []).find(r => r.student_id === id)
+      return { date: s.session_date, status: rec ? rec.status : 'ausente', time: rec?.arrival_label ?? null, studentId: id }
+    })
+  }
+
+  const members = sts.map(s => ({
+    id: s.id,
+    name: s.name,
+    groupId: s.group_id,
+    assignmentsDone: s.assignments_done,
+    assignmentsTotal: s.assignments_total,
+  }))
+
+  return { members, evalsByStudent, attendanceByStudent }
+}
+
+/** Métricas derivadas por grupo: alumnos, promedio y asistencia reales. */
+export function computeGroupStats(group, students, attendanceByGroup = {}) {
+  const members = students.filter(s => s.groupId === group.id)
+  const grades = members.map(s => s.avgGrade).filter(g => Number.isFinite(g))
+  return {
+    studentCount: members.length,
+    avgGrade: grades.length ? +(grades.reduce((a, b) => a + b, 0) / grades.length).toFixed(1) : null,
+    attendanceRate: attendanceByGroup[group.id] ?? null,
+  }
+}
+
+/* ── Calificaciones ── */
+
+const mapEvaluation = e => ({
+  id: e.id,
+  studentId: e.student_id,
+  materia: e.materia,
+  tipo: e.tipo,
+  calificacion: Number(e.calificacion),
+  calMax: Number(e.cal_max),
+  fecha: e.fecha,
+  periodo: e.periodo,
+})
+
+export async function fetchEvaluations() {
+  const { data, error } = await supabase.from('evaluations').select('*').order('fecha', { ascending: false })
+  if (error) throw error
+  return data.map(mapEvaluation)
+}
+
+export async function fetchEvaluationsByStudent(studentId) {
+  if (!studentId) return []
+  const { data, error } = await supabase
+    .from('evaluations')
+    .select('*')
+    .eq('student_id', studentId)
+    .order('fecha', { ascending: false })
+  if (error) throw error
+  return data.map(mapEvaluation)
+}
+
+/** id null → alta; id presente → edición. */
+export async function saveEvaluation({ id = null, studentId, materia, tipo, calificacion, calMax = 10, fecha, periodo = null }) {
+  const { data, error } = await supabase.rpc('upsert_evaluation', {
+    p_id: id,
+    p_student_id: studentId,
+    p_materia: materia,
+    p_tipo: tipo,
+    p_calificacion: calificacion,
+    p_cal_max: calMax,
+    p_fecha: fecha ?? new Date().toISOString().slice(0, 10),
+    p_periodo: periodo,
+  })
+  if (error) {
+    if ((error.message ?? '').includes('calificacion_no_excede_max'))
+      return { ok: false, message: 'La calificación no puede ser mayor que el máximo.' }
+    return { ok: false, message: 'No se pudo guardar la calificación.' }
+  }
+  const row = data?.[0]
+  return { ok: true, evaluation: row ? mapEvaluation(row) : null }
+}
+
+/** Captura masiva: guarda toda la lista de un grupo en una sola llamada. */
+export async function saveEvaluationsBulk(rows) {
+  const { data, error } = await supabase.rpc('upsert_evaluations_bulk', { p_rows: rows })
+  if (error) return { ok: false, message: 'No se pudieron guardar las calificaciones.' }
+  return { ok: true, count: data ?? 0 }
+}
+
+export async function deleteEvaluation(id) {
+  const { error } = await supabase.rpc('delete_evaluation', { p_id: id })
+  if (error) throw error
+}
+
+/* ── Grupos (escritura) ── */
+
+export async function createGroup({ name, subject, schedule = null, room = null, color = '#3b82f6', sucursal = null }) {
+  const { data, error } = await supabase.rpc('create_group', {
+    p_name: name,
+    p_subject: subject,
+    p_schedule: schedule,
+    p_room: room,
+    p_color: color,
+    p_sucursal: sucursal,
+  })
+  if (error) return { ok: false, message: 'No se pudo crear el grupo.' }
+  const row = data?.[0]
+  return { ok: true, group: row ? { ...row, id: row.id } : null }
+}
+
+export async function updateGroup({ id, name, subject, schedule = null, room = null, color = null, sucursal = null }) {
+  const { error } = await supabase.rpc('update_group', {
+    p_id: id,
+    p_name: name,
+    p_subject: subject,
+    p_schedule: schedule,
+    p_room: room,
+    p_color: color,
+    p_sucursal: sucursal,
+  })
+  if (error) return { ok: false, message: 'No se pudo actualizar el grupo.' }
+  return { ok: true }
+}
+
+export async function deleteGroup(id) {
+  const { error } = await supabase.rpc('delete_group', { p_id: id })
+  if (error) {
+    if ((error.message ?? '').includes('group_has_students'))
+      return { ok: false, message: 'El grupo tiene alumnos asignados. Muévelos o elimínalos primero.' }
+    return { ok: false, message: 'No se pudo eliminar el grupo.' }
+  }
+  return { ok: true }
+}
+
+/* ── Alumnos (escritura) ── */
+
+/** Crea el alumno y su cuenta de acceso. La contraseña se genera en el cliente. */
+export async function createStudent({ name, email, groupId, password, tutor = {}, sucursal = null }) {
+  const { data, error } = await supabase.rpc('create_student', {
+    p_name: name,
+    p_email: email,
+    p_group_id: groupId,
+    p_password: password,
+    p_tutor_name: tutor.name ?? null,
+    p_tutor_email: tutor.email ?? null,
+    p_tutor_phone: tutor.phone ?? null,
+    p_sucursal: sucursal,
+  })
+  if (error) {
+    const msg = error.message ?? ''
+    if (msg.includes('email_already_exists'))
+      return { ok: false, message: `El correo ${email} ya está registrado.` }
+    if (msg.includes('group_not_found'))
+      return { ok: false, message: 'El grupo seleccionado no existe.' }
+    return { ok: false, message: 'No se pudo crear el alumno.' }
+  }
+  const row = data?.[0]
+  return { ok: true, student: row ? { id: row.id, name: row.name, email: row.email, groupId: row.group_id } : null }
+}
+
+export async function updateStudent({ id, name, email, groupId, tutor = {}, sucursal = null }) {
+  const { error } = await supabase.rpc('update_student', {
+    p_id: id,
+    p_name: name,
+    p_email: email,
+    p_group_id: groupId,
+    p_tutor_name: tutor.name ?? null,
+    p_tutor_email: tutor.email ?? null,
+    p_tutor_phone: tutor.phone ?? null,
+    p_sucursal: sucursal,
+  })
+  if (error) return { ok: false, message: 'No se pudo actualizar el alumno.' }
+  return { ok: true }
+}
+
+export async function deleteStudent(id) {
+  const { error } = await supabase.rpc('delete_student', { p_id: id })
+  if (error) throw error
+}
+
+export async function resetStudentPassword(studentId, password) {
+  const { error } = await supabase.rpc('reset_student_password', {
+    p_student_id: studentId,
+    p_password: password,
+  })
+  if (error) return { ok: false, message: 'No se pudo restablecer la contraseña.' }
+  return { ok: true }
 }
 
 export async function fetchSubAdmins() {

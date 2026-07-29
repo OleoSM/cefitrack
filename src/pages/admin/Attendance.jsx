@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import * as XLSX from 'xlsx'
-import { getEvalsByStudent, getLastSimulacro } from '../../data/mockData'
-import { fetchGroups, fetchStudents } from '../../lib/supabaseData'
+import { getLastSimulacro } from '../../data/mockData'
+import { fetchGroups, fetchStudents, fetchEvaluations } from '../../lib/supabaseData'
 import { loadSettings } from '../../lib/settings'
 import {
   todayISO, remainingSeconds, loadSessionDb, saveSessionDb, deleteSessionDb, fetchSessionIndex,
@@ -29,6 +29,7 @@ export default function Attendance() {
   const [groups,         setGroups]        = useState([])
   const [students,       setStudents]      = useState([])
   const [sessionIndex,   setSessionIndex]  = useState([])  // sesiones guardadas en BD (todas, con registros)
+  const [evaluations,    setEvaluations]   = useState([])  // para la columna de calificación del Excel
   const [view,           setView]          = useState('pick')  // 'pick' | 'scan'
   const [selectedGrp,    setSelectedGrp]   = useState(null)
   const [selectedDate,   setSelectedDate]  = useState(todayISO())
@@ -66,10 +67,12 @@ export default function Attendance() {
   useEffect(() => { groupIdRef.current = selectedGrp }, [selectedGrp])
   useEffect(() => { studentsRef.current = students }, [students])
 
-  // Carga inicial desde Supabase: grupos, alumnos e historial de listas.
+  // Carga inicial desde Supabase: grupos, alumnos, evaluaciones e historial de listas.
   useEffect(() => {
-    Promise.all([fetchGroups(), fetchStudents(), fetchSessionIndex()])
-      .then(([gs, ss, idx]) => { setGroups(gs); setStudents(ss); setSessionIndex(idx) })
+    Promise.all([fetchGroups(), fetchStudents(), fetchSessionIndex(), fetchEvaluations()])
+      .then(([gs, ss, idx, evs]) => {
+        setGroups(gs); setStudents(ss); setSessionIndex(idx); setEvaluations(evs)
+      })
       .catch(() => {})
   }, [])
 
@@ -318,10 +321,8 @@ export default function Attendance() {
   }
 
   /* ── Excel export ───────────────────────────────────────────── */
-  const lastEvalOf = (sid) => {
-    const evs = getEvalsByStudent(sid).sort((a, b) => b.fecha.localeCompare(a.fecha))
-    return evs[0] ?? null
-  }
+  // fetchEvaluations ya devuelve ordenado por fecha desc, así que basta la primera.
+  const lastEvalOf = (sid) => evaluations.find(e => e.studentId === sid) ?? null
 
   const exportExcel = () => {
     const buildRow = (student, idx, time, estado) => {

@@ -1,15 +1,21 @@
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Users, Clock, MapPin } from 'lucide-react'
+import { ArrowLeft, Users, Clock, MapPin, UserPlus } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { getGroupById, getStudentsByGroup, monthlyTrend, statusConfig } from '../../data/mockData'
+import { statusConfig } from '../../data/mockData'
+import {
+  fetchGroupById, fetchStudents, fetchGroups, fetchAttendanceStats,
+  fetchGroupMetrics, computeGroupStats,
+} from '../../lib/supabaseData'
+import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { DataTable, DataTableRow, DataTableAvatar, DataTableBadge, DataTableBar } from '../../components/ui/DataTable'
-
-const grpTrendKey = { g1:'grupoA', g2:'grupoB', g3:'grupoC' }
+import StudentFormModal from '../../components/admin/StudentFormModal'
+import CredentialsPanel from '../../components/admin/CredentialsPanel'
 
 const COLUMNS = [
   { key:'rank',   label:'#',          className:'w-8' },
@@ -21,20 +27,66 @@ const COLUMNS = [
   { key:'action', label:'',           className:'w-16 flex justify-end' },
 ]
 
+/** Evolución mensual del promedio del grupo a partir de sus evaluaciones reales. */
+function buildTrend(evalsByStudent) {
+  const buckets = {}
+  for (const evs of Object.values(evalsByStudent)) {
+    for (const e of evs) {
+      const mes = e.fecha.slice(0, 7)
+      ;(buckets[mes] ??= []).push(calificacionBase10(e))
+    }
+  }
+  return Object.keys(buckets).sort().map(mes => ({
+    mes: new Date(mes + '-15T12:00').toLocaleDateString('es-MX', { month:'short' }).replace('.', ''),
+    promedio: +(buckets[mes].reduce((a, b) => a + b, 0) / buckets[mes].length).toFixed(1),
+  }))
+}
+
 export default function GroupDetail() {
   const { groupId }   = useParams()
   const navigate      = useNavigate()
   const { getAccent } = useGroupColors()
 
-  const grp        = getGroupById(groupId)
-  const grpStudents = getStudentsByGroup(groupId)
+  const [grp, setGrp]           = useState(null)
+  const [students, setStudents] = useState([])
+  const [attByStudent, setAtt]  = useState({})
+  const [attByGroup, setAttGrp] = useState({})
+  const [metrics, setMetrics]   = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [allGroups, setAllGroups] = useState([])
+  const [lastCred, setLastCred] = useState(null)
 
+  const load = useCallback(async () => {
+    try {
+      const [g, allStudents, m, grs] = await Promise.all([
+        fetchGroupById(groupId), fetchStudents(), fetchGroupMetrics(groupId), fetchGroups(),
+      ])
+      const stats = await fetchAttendanceStats(allStudents)
+      setGrp(g)
+      setStudents(allStudents.filter(s => s.groupId === groupId))
+      setAtt(stats.byStudent)
+      setAttGrp(stats.byGroup)
+      setMetrics(m)
+      setAllGroups(grs)
+    } catch { /* se muestra el estado vacío */ }
+    finally { setLoading(false) }
+  }, [groupId])
+
+  useEffect(() => { load() }, [load])
+
+  const trend = useMemo(
+    () => metrics ? buildTrend(metrics.evalsByStudent) : [],
+    [metrics],
+  )
+
+  if (loading) return <div style={{ color:'rgba(255,255,255,.40)' }} className="p-6">Cargando grupo…</div>
   if (!grp) return <div style={{ color:'rgba(255,255,255,.40)' }} className="p-6">Grupo no encontrado.</div>
 
-  const trendKey = grpTrendKey[groupId]
-  const accent   = getAccent(groupId)
+  const accent = getAccent(groupId)
+  const stats  = computeGroupStats(grp, students, attByGroup)
 
-  const sorted = [...grpStudents].sort((a,b) => b.avgGrade - a.avgGrade)
+  const sorted = [...students].sort((a, b) => (b.avgGrade ?? 0) - (a.avgGrade ?? 0))
   const attColor = r => r >= 90 ? '#34d399' : r >= 75 ? '#60a5fa' : '#f87171'
   const gradeClass = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
@@ -63,20 +115,22 @@ export default function GroupDetail() {
                 {grp.name} — {grp.subject}
               </h1>
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs" style={{ color:'rgba(255,255,255,.40)' }}>
-                <span className="flex items-center gap-1.5"><Clock size={12}/>{grp.schedule}</span>
-                <span className="flex items-center gap-1.5"><MapPin size={12}/>{grp.room}</span>
-                <span className="flex items-center gap-1.5"><Users size={12}/>{grp.studentCount} alumnos</span>
+                {grp.schedule && <span className="flex items-center gap-1.5"><Clock size={12}/>{grp.schedule}</span>}
+                {grp.room && <span className="flex items-center gap-1.5"><MapPin size={12}/>{grp.room}</span>}
+                <span className="flex items-center gap-1.5"><Users size={12}/>{stats.studentCount} alumnos</span>
               </div>
             </div>
             <div className="flex gap-2 flex-shrink-0">
               <div className="text-center px-3 py-2 rounded-xl"
                 style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.10)' }}>
-                <p className="text-lg font-bold" style={{ color:'rgba(255,255,255,.90)' }}>{grp.avgGrade}</p>
+                <p className="text-lg font-bold" style={{ color:'rgba(255,255,255,.90)' }}>{stats.avgGrade ?? '—'}</p>
                 <p className="text-[10px]" style={{ color:'rgba(255,255,255,.38)' }}>Promedio</p>
               </div>
               <div className="text-center px-3 py-2 rounded-xl"
                 style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.10)' }}>
-                <p className="text-lg font-bold" style={{ color:'rgba(255,255,255,.90)' }}>{grp.attendanceRate}%</p>
+                <p className="text-lg font-bold" style={{ color:'rgba(255,255,255,.90)' }}>
+                  {stats.attendanceRate === null ? '—' : `${stats.attendanceRate}%`}
+                </p>
                 <p className="text-[10px]" style={{ color:'rgba(255,255,255,.38)' }}>Asistencia</p>
               </div>
             </div>
@@ -87,31 +141,55 @@ export default function GroupDetail() {
       {/* Trend chart */}
       <div className="card p-4 sm:p-5">
         <h2 className="section-title mb-4">Evolución del Promedio</h2>
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={monthlyTrend} margin={{ top:5, right:10, bottom:0, left:-15 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" />
-            <XAxis dataKey="mes" tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
-            <YAxis domain={[6,10]} tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
-            <Tooltip wrapperStyle={{ outline:'none' }} cursor={{ stroke:'rgba(255,255,255,.10)', strokeWidth:1 }} contentStyle={{ fontSize:11, borderRadius:10, background:'rgba(10,10,20,.92)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.80)' }} />
-            <Line type="monotone" dataKey={trendKey} name={grp.name} stroke={accent} strokeWidth={2.5}
-              dot={{ r:4, fill:accent }} activeDot={{ r:5 }} />
-          </LineChart>
-        </ResponsiveContainer>
+        {trend.length === 0 ? (
+          <p className="text-sm py-8 text-center" style={{ color:'rgba(255,255,255,.32)' }}>
+            Aún no hay calificaciones capturadas para este grupo.
+          </p>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={trend} margin={{ top:5, right:10, bottom:0, left:-15 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" />
+              <XAxis dataKey="mes" tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0,10]} tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
+              <Tooltip wrapperStyle={{ outline:'none' }} cursor={{ stroke:'rgba(255,255,255,.10)', strokeWidth:1 }} contentStyle={{ fontSize:11, borderRadius:10, background:'rgba(10,10,20,.92)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.80)' }} />
+              <Line type="monotone" dataKey="promedio" name={grp.name} stroke={accent} strokeWidth={2.5}
+                dot={{ r:4, fill:accent }} activeDot={{ r:5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
+
+      {showAddStudent && (
+        <StudentFormModal
+          groups={allGroups}
+          defaultGroupId={groupId}
+          onClose={() => setShowAddStudent(false)}
+          onSaved={cred => { if (cred) setLastCred(cred); load() }}
+        />
+      )}
+
+      {lastCred && <CredentialsPanel cred={lastCred} onClose={() => setLastCred(null)}/>}
 
       {/* Students table */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <h2 className="section-title">Alumnos del Grupo</h2>
-          <button onClick={() => navigate('/admin/asistencias')} className="btn-primary text-xs py-1.5">
-            Pasar lista
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setShowAddStudent(true)} className="btn-secondary text-xs py-1.5">
+              <UserPlus size={13}/> Añadir alumno
+            </button>
+            <button onClick={() => navigate('/admin/asistencias')} className="btn-primary text-xs py-1.5">
+              Pasar lista
+            </button>
+          </div>
         </div>
 
-        <DataTable columns={COLUMNS} isEmpty={sorted.length === 0}>
+        <DataTable columns={COLUMNS} isEmpty={sorted.length === 0}
+          emptyText="Este grupo todavía no tiene alumnos asignados.">
           {sorted.map((s, i) => {
-            const cfg = statusConfig[s.status]
-            const ac  = attColor(s.attendanceRate)
+            const cfg = statusConfig[s.status] ?? statusConfig.good
+            const rate = attByStudent[s.id]
+            const ac  = attColor(rate ?? 0)
             return (
               <DataTableRow
                 key={s.id}
@@ -132,15 +210,21 @@ export default function GroupDetail() {
                   },
                   {
                     className: 'w-32 hidden sm:flex',
-                    content: <DataTableBar value={s.attendanceRate} color={ac} label={`${s.attendanceRate}%`} />,
+                    content: rate === null || rate === undefined
+                      ? <span className="text-xs" style={{ color:'rgba(255,255,255,.28)' }}>Sin sesiones</span>
+                      : <DataTableBar value={rate} color={ac} label={`${rate}%`} />,
                   },
                   {
                     className: 'w-20',
-                    content: <span className={`text-base font-bold ${gradeClass(s.avgGrade)}`}>{s.avgGrade}</span>,
+                    content: Number.isFinite(s.avgGrade)
+                      ? <span className={`text-base font-bold ${gradeClass(s.avgGrade)}`}>{s.avgGrade}</span>
+                      : <span className="text-sm" style={{ color:'rgba(255,255,255,.28)' }}>—</span>,
                   },
                   {
                     className: 'w-28 hidden md:flex',
-                    content: <DataTableBar value={s.assignmentsDone} max={s.assignmentsTotal} color="#60a5fa" label={`${s.assignmentsDone}/${s.assignmentsTotal}`} />,
+                    content: s.assignmentsTotal > 0
+                      ? <DataTableBar value={s.assignmentsDone} max={s.assignmentsTotal} color="#60a5fa" label={`${s.assignmentsDone}/${s.assignmentsTotal}`} />
+                      : <span className="text-xs" style={{ color:'rgba(255,255,255,.28)' }}>—</span>,
                   },
                   {
                     className: 'w-28',

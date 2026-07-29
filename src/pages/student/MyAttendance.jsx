@@ -205,7 +205,7 @@ export default function MyAttendance() {
   const [filterStatus, setFilterStatus] = useState('todos')
 
   const { student: s, attendance } = useStudentData({ withAttendance: true })
-  const stats = useMemo(() => s ? statsAsistencia(s.id, attendance) : null, [s, attendance])
+  const stats = useMemo(() => s ? statsAsistencia(attendance) : null, [s, attendance])
 
   const [weekStart, setWeekStart] = useState(() => {
     // Por defecto: la semana del registro más reciente (o la actual)

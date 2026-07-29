@@ -34,11 +34,12 @@ export function saveSettings(settings) {
 /* Score compuesto 0-10 para el lugar en el grupo:
    exámenes (promedio) + tareas (entregadas/total) + asistencia (%) según pesos. */
 export function calcularScore(student, pesos = DEFAULT_SETTINGS.pesos) {
-  const ex = student.avgGrade
+  // avgGrade/attendanceRate son null mientras el alumno no tenga datos.
+  const ex = student.avgGrade ?? 0
   const ta = student.assignmentsTotal > 0
     ? (student.assignmentsDone / student.assignmentsTotal) * 10
     : 0
-  const as = student.attendanceRate / 10
+  const as = (student.attendanceRate ?? 0) / 10
   const total = (pesos.examenes + pesos.tareas + pesos.asistencia) || 100
   return +(((ex * pesos.examenes) + (ta * pesos.tareas) + (as * pesos.asistencia)) / total).toFixed(2)
 }

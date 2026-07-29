@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Users, ArrowRight } from 'lucide-react'
+import { Search, Users, Plus, Pencil, Trash2, KeyRound } from 'lucide-react'
 import { statusConfig } from '../../data/mockData'
-import { fetchStudents, fetchGroups } from '../../lib/supabaseData'
+import { fetchStudents, fetchGroups, deleteStudent } from '../../lib/supabaseData'
 import {
   DataTable, DataTableRow,
   DataTableAvatar, DataTableBadge, DataTableBar,
@@ -10,6 +10,10 @@ import {
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import { useAuth } from '../../context/AuthContext'
+import StudentFormModal from '../../components/admin/StudentFormModal'
+import ResetPasswordModal from '../../components/admin/ResetPasswordModal'
+import ConfirmDialog from '../../components/admin/ConfirmDialog'
+import CredentialsPanel from '../../components/admin/CredentialsPanel'
 
 const attColor   = r => r >= 90 ? '#34d399' : r >= 75 ? '#60a5fa' : '#f87171'
 const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
@@ -22,7 +26,7 @@ const COLUMNS = [
   { key:'tasks',   label:'Tareas',     className:'w-32 hidden md:flex' },
   { key:'status',  label:'Estado',     className:'w-28' },
   { key:'contact', label:'Contacto',   className:'w-40 hidden lg:flex' },
-  { key:'action',  label:'',           className:'w-10' },
+  { key:'action',  label:'',           className:'w-28 flex justify-end' },
 ]
 
 export default function Students() {
@@ -42,16 +46,20 @@ export default function Students() {
   const [sort, setSort]           = useState('name')
   const [visual, setVisual]       = useState(false)   // ← modo visual
 
-  useEffect(() => {
-    let alive = true
-    Promise.all([fetchStudents(), fetchGroups()]).then(([s, g]) => {
-      if (!alive) return
-      setStudents(s)
-      setGroups(g)
-      setLoading(false)
-    })
-    return () => { alive = false }
+  /* CRUD */
+  const [formFor, setFormFor]     = useState(null)   // { student } | { student:null } para alta
+  const [resetFor, setResetFor]   = useState(null)
+  const [deleteFor, setDeleteFor] = useState(null)
+  const [lastCred, setLastCred]   = useState(null)
+
+  const load = useCallback(async () => {
+    const [s, g] = await Promise.all([fetchStudents(), fetchGroups()])
+    setStudents(s)
+    setGroups(g)
+    setLoading(false)
   }, [])
+
+  useEffect(() => { load() }, [load])
 
   const visibleGroups = isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id))
   const sucursalOptions = isAdmin ? [...new Set(groups.map(g => g.sucursal).filter(Boolean))] : allowedSucursales
@@ -68,14 +76,43 @@ export default function Students() {
         && (statusFilter === 'all' || s.status === statusFilter)
     })
     .sort((a, b) => {
-      if (sort === 'grade')  return b.avgGrade - a.avgGrade
-      if (sort === 'attend') return b.attendanceRate - a.attendanceRate
-      if (sort === 'rank')   return a.rank - b.rank
+      // Los alumnos sin datos van al final en vez de romper el orden con NaN.
+      const desc = (x, y) => (y ?? -Infinity) - (x ?? -Infinity)
+      if (sort === 'grade')  return desc(a.avgGrade, b.avgGrade)
+      if (sort === 'attend') return desc(a.attendanceRate, b.attendanceRate)
+      if (sort === 'rank')   return (a.rank ?? Infinity) - (b.rank ?? Infinity)
       return a.name.localeCompare(b.name)
     })
 
   return (
     <div className="max-w-6xl space-y-4">
+
+      {formFor && (
+        <StudentFormModal
+          student={formFor.student}
+          groups={visibleGroups}
+          onClose={() => setFormFor(null)}
+          onSaved={cred => { if (cred) setLastCred(cred); load() }}
+        />
+      )}
+      {resetFor && (
+        <ResetPasswordModal
+          student={resetFor}
+          onClose={() => setResetFor(null)}
+          onDone={cred => setLastCred(cred)}
+        />
+      )}
+      {deleteFor && (
+        <ConfirmDialog
+          title="Eliminar alumno"
+          message={`Se eliminará a ${deleteFor.name} junto con su cuenta de acceso.`}
+          detail="También se borran sus calificaciones y registros de asistencia. Esta acción no se puede deshacer."
+          onConfirm={async () => { await deleteStudent(deleteFor.id); await load() }}
+          onClose={() => setDeleteFor(null)}
+        />
+      )}
+
+      {lastCred && <CredentialsPanel cred={lastCred} onClose={() => setLastCred(null)}/>}
 
       {/* ── Filtros ─────────────────────────────────────────── */}
       <div className="card p-4">
@@ -117,6 +154,11 @@ export default function Students() {
               color="#a78bfa"
             />
           </div>
+
+          <button onClick={() => setFormFor({ student: null })} disabled={visibleGroups.length === 0}
+            className="btn-primary ml-auto">
+            <Plus size={14}/> Nuevo alumno
+          </button>
         </div>
 
         <p className="text-[11px] mt-3 flex items-center gap-1.5" style={{ color:'rgba(255,255,255,.28)' }}>
@@ -146,9 +188,9 @@ export default function Students() {
         emptyText="No se encontraron alumnos con ese criterio.">
 
         {loading ? null : filtered.map(s => {
-          const cfg         = statusConfig[s.status]
+          const cfg         = statusConfig[s.status] ?? statusConfig.good
           const grp         = groups.find(g => g.id === s.groupId)
-          const ac          = attColor(s.attendanceRate)
+          const ac          = attColor(s.attendanceRate ?? 0)
           const groupAccent = getAccent(s.groupId)   // mismo color que Groups / Attendance / Registrar
 
           /* En modo visual: la fila toma el color del grupo */
@@ -198,34 +240,40 @@ export default function Students() {
                 /* Asistencia */
                 {
                   className: 'w-36 hidden sm:flex',
-                  content: (
-                    <DataTableBar
-                      value={s.attendanceRate}
-                      color={visual ? groupAccent : ac}
-                      label={`${s.attendanceRate}%`}
-                    />
-                  ),
+                  content: s.attendanceRate === null
+                    ? <span className="text-xs" style={{ color:'rgba(255,255,255,.25)' }}>Sin datos</span>
+                    : (
+                      <DataTableBar
+                        value={s.attendanceRate}
+                        color={visual ? groupAccent : ac}
+                        label={`${s.attendanceRate}%`}
+                      />
+                    ),
                 },
                 /* Promedio */
                 {
                   className: 'w-24',
-                  content: (
-                    <span className={`text-base font-bold ${gradeColor(s.avgGrade)}`}>
-                      {s.avgGrade}
-                    </span>
-                  ),
+                  content: s.avgGrade === null
+                    ? <span className="text-sm" style={{ color:'rgba(255,255,255,.25)' }}>—</span>
+                    : (
+                      <span className={`text-base font-bold ${gradeColor(s.avgGrade)}`}>
+                        {s.avgGrade}
+                      </span>
+                    ),
                 },
                 /* Tareas */
                 {
                   className: 'w-32 hidden md:flex',
-                  content: (
-                    <DataTableBar
-                      value={s.assignmentsDone}
-                      max={s.assignmentsTotal}
-                      color={visual ? groupAccent : '#60a5fa'}
-                      label={`${s.assignmentsDone}/${s.assignmentsTotal}`}
-                    />
-                  ),
+                  content: s.assignmentsTotal > 0
+                    ? (
+                      <DataTableBar
+                        value={s.assignmentsDone}
+                        max={s.assignmentsTotal}
+                        color={visual ? groupAccent : '#60a5fa'}
+                        label={`${s.assignmentsDone}/${s.assignmentsTotal}`}
+                      />
+                    )
+                    : <span className="text-xs" style={{ color:'rgba(255,255,255,.25)' }}>—</span>,
                 },
                 /* Estado */
                 {
@@ -254,12 +302,25 @@ export default function Students() {
                     </>
                   ),
                 },
-                /* Acción */
+                /* Acciones */
                 {
-                  className: 'w-10 flex justify-end',
+                  className: 'w-28 flex justify-end',
                   content: (
-                    <div className="p-1.5 rounded-lg" style={{ color: visual ? `${groupAccent}99` : 'rgba(255,255,255,.28)' }}>
-                      <ArrowRight size={14} />
+                    <div className="flex items-center gap-0.5">
+                      {[
+                        { icon: Pencil,   title: 'Editar alumno',           hover: '#60a5fa', act: () => setFormFor({ student: s }) },
+                        { icon: KeyRound, title: 'Restablecer contraseña',  hover: '#fbbf24', act: () => setResetFor(s) },
+                        { icon: Trash2,   title: 'Eliminar alumno',         hover: '#f87171', act: () => setDeleteFor(s) },
+                      ].map(({ icon: Icon, title, hover, act }) => (
+                        <button key={title} title={title}
+                          onClick={e => { e.stopPropagation(); act() }}
+                          className="p-1.5 rounded-lg transition-colors"
+                          style={{ color:'rgba(255,255,255,.25)' }}
+                          onMouseEnter={e => e.currentTarget.style.color = hover}
+                          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,.25)'}>
+                          <Icon size={13}/>
+                        </button>
+                      ))}
                     </div>
                   ),
                 },

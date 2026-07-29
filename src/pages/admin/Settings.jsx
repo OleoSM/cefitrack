@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   SlidersHorizontal, Timer, Mail, Save, CheckCircle2,
   Scale, ClipboardList, CalendarCheck, Send, Palette,
 } from 'lucide-react'
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, calcularScore } from '../../lib/settings'
 import { sendNotification, NOTIF_EVENTS } from '../../lib/notifications'
-import { students } from '../../data/mockData'
+import { fetchStudents } from '../../lib/supabaseData'
 import { useAdminTheme } from '../../context/AdminThemeContext'
 import { TOKENS } from '../../context/StudentThemeContext'
 import AppearancePicker from '../../components/ui/AppearancePicker'
@@ -30,7 +30,12 @@ function Toggle({ checked, onChange }) {
 export default function Settings() {
   const [settings, setSettings] = useState(loadSettings)
   const [toast, setToast]       = useState(null)
+  const [sampleStudent, setSampleStudent] = useState(null)
   const { appearance, setAppearance, t: adminT } = useAdminTheme()
+
+  useEffect(() => {
+    fetchStudents().then(s => setSampleStudent(s[0] ?? null)).catch(() => {})
+  }, [])
 
   const showToast = (msg) => {
     setToast(msg)
@@ -56,8 +61,8 @@ export default function Settings() {
     showToast('Correo de prueba enviado a tutor@ejemplo.com (simulado)')
   }
 
-  // Vista previa del score con la ponderación actual (primer alumno como muestra)
-  const sample = students[0]
+  // Vista previa del score con la ponderación actual (primer alumno real como muestra)
+  const sample = sampleStudent
   const sampleScore = sample ? calcularScore(sample, settings.pesos) : null
 
   return (
@@ -115,8 +120,8 @@ export default function Settings() {
 
         {sampleScore !== null && (
           <p className="text-xs" style={{ color:'rgba(255,255,255,.35)' }}>
-            Vista previa — {sample.name}: promedio {sample.avgGrade}, tareas {sample.assignmentsDone}/{sample.assignmentsTotal},
-            asistencia {sample.attendanceRate}% → <strong style={{ color:'#10b981' }}>score {sampleScore}</strong>
+            Vista previa — {sample.name}: promedio {sample.avgGrade ?? '—'}, tareas {sample.assignmentsDone ?? 0}/{sample.assignmentsTotal ?? 0},
+            asistencia {sample.attendanceRate ?? 0}% → <strong style={{ color:'#10b981' }}>score {sampleScore}</strong>
           </p>
         )}
       </div>

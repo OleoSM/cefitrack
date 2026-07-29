@@ -5,7 +5,8 @@ import {
   QrCode, Camera, CameraOff, CheckCircle, AlertTriangle,
   ArrowLeft, Users, Clock, Trash2, ChevronDown
 } from 'lucide-react'
-import { students, groups, attendanceColors } from '../../data/mockData'
+import { attendanceColors } from '../../data/mockData'
+import { fetchStudents, fetchGroups } from '../../lib/supabaseData'
 import clsx from 'clsx'
 
 const QR_PREFIX = 'EDUTRACK:'
@@ -22,6 +23,18 @@ export default function QRScanner() {
   const [lastScanned, setLastScanned] = useState(null) // { student, time }
   const [scannedLog,  setScannedLog]  = useState([])   // accumulated list
   const [flashGreen,  setFlashGreen]  = useState(false)
+  const [students,    setStudents]    = useState([])
+  const [groups,      setGroups]      = useState([])
+
+  // El padrón se lee de la BD: un alumno dado de alta hoy debe poder escanear hoy.
+  const studentsRef = useRef(students)
+  useEffect(() => { studentsRef.current = students }, [students])
+
+  useEffect(() => {
+    Promise.all([fetchStudents(), fetchGroups()])
+      .then(([sts, grs]) => { setStudents(sts); setGroups(grs) })
+      .catch(() => {})
+  }, [])
 
   /* ── helpers ───────────────────────────────────────────────── */
   const flashSuccess = () => {
@@ -38,7 +51,7 @@ export default function QRScanner() {
     recentRef.current.add(studentId)
     setTimeout(() => recentRef.current.delete(studentId), DEBOUNCE_MS)
 
-    const s = students.find(st => st.id === studentId)
+    const s = studentsRef.current.find(st => st.id === studentId)
     if (!s) return
 
     // optional group filter

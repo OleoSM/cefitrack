@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload, FileText, CheckCircle, X, Download, AlertCircle, Users, KeyRound } from 'lucide-react'
-import { importHistory, users } from '../../data/mockData'
 import { DataTable, DataTableRow } from '../../components/ui/DataTable'
 import { generarCredenciales, exportCredencialesExcel } from '../../lib/credentials'
+import { createStudent, fetchGroups } from '../../lib/supabaseData'
 
 const CSV_TEMPLATE = `nombre,email,grupo,contacto_nombre,contacto_email,contacto_telefono
 Ana García López,ana.garcia@edutrack.mx,g1,Carmen López,carmen@gmail.com,555-0101
@@ -34,9 +34,13 @@ export default function ImportStudents() {
   const [error, setError]         = useState('')
   const [importing, setImporting] = useState(false)
   const [done, setDone]           = useState(false)
-  const [history, setHistory]     = useState(importHistory)
+  const [history, setHistory]     = useState([])
   const [creds, setCreds]         = useState(null)
+  const [failed, setFailed]       = useState([])
+  const [groups, setGroups]       = useState([])
   const inputRef = useRef()
+
+  useEffect(() => { fetchGroups().then(setGroups).catch(() => setGroups([])) }, [])
 
   const processFile = f => {
     setError(''); setDone(false)
@@ -58,30 +62,48 @@ export default function ImportStudents() {
 
   const handleImport = async () => {
     setImporting(true)
-    await new Promise(r => setTimeout(r, 1500))
 
     // Credenciales predefinidas por el sistema — el alumno no puede crear contraseña
     const generated = generarCredenciales(preview)
-    generated.forEach((c, i) => {
-      users.push({
-        id: `u-imp-${Date.now()}-${i}`,
-        name: c.nombre,
-        email: c.email || c.usuario,
-        usuario: c.usuario,
-        password: c.password,
-        role: 'student',
-      })
-    })
-    setCreds(generated)
+    const ok = []
+    const errores = []
 
-    setImporting(false); setDone(true)
+    for (let i = 0; i < generated.length; i++) {
+      const c = generated[i]
+      const grupo = preview[i].grupo?.trim() || null
+      const res = await createStudent({
+        name: c.nombre,
+        email: c.email,
+        groupId: grupo,
+        password: c.password,
+        tutor: c.tutor,
+        sucursal: groups.find(g => g.id === grupo)?.sucursal ?? null,
+      })
+      if (res.ok) ok.push({ ...c, grupo: grupo ?? '' })
+      else errores.push({ nombre: c.nombre, email: c.email, motivo: res.message })
+    }
+
+    setCreds(ok)
+    setFailed(errores)
+    setImporting(false)
+    setDone(true)
     setHistory(h => [
-      { id:`imp${Date.now()}`, fecha:new Date().toISOString().split('T')[0], archivo:file.name, alumnos:preview.length, estado:'completado' },
-      ...h
+      {
+        id: `imp${Date.now()}`,
+        fecha: new Date().toISOString().split('T')[0],
+        archivo: file.name,
+        alumnos: ok.length,
+        estado: errores.length === 0 ? 'completado' : `${errores.length} con error`,
+        conErrores: errores.length > 0,
+      },
+      ...h,
     ])
   }
 
-  const reset = () => { setFile(null); setPreview(null); setError(''); setDone(false); setCreds(null) }
+  const reset = () => {
+    setFile(null); setPreview(null); setError('')
+    setDone(false); setCreds(null); setFailed([])
+  }
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -123,7 +145,7 @@ export default function ImportStudents() {
             ))}
           </div>
           <p className="text-[11px] mt-2" style={{ color:'rgba(255,255,255,.28)' }}>
-            El campo "grupo" acepta: g1, g2, g3
+            El campo "grupo" acepta: {groups.length ? groups.map(g => `${g.id} (${g.name})`).join(', ') : 'cargando…'}
           </p>
         </div>
       </div>
@@ -245,17 +267,40 @@ export default function ImportStudents() {
               <CheckCircle size={28} className="text-emerald-400"/>
             </div>
             <h3 className="text-base font-bold mb-1" style={{ color:'rgba(255,255,255,.90)' }}>
-              ¡Importación exitosa!
+              {failed.length === 0 ? '¡Importación exitosa!' : 'Importación parcial'}
             </h3>
             <p className="text-sm" style={{ color:'rgba(255,255,255,.45)' }}>
               Se registraron{' '}
-              <span className="font-bold" style={{ color:'rgba(255,255,255,.75)' }}>{preview?.length}</span>{' '}
-              alumnos y se generaron sus credenciales de acceso.
+              <span className="font-bold" style={{ color:'rgba(255,255,255,.75)' }}>{creds?.length ?? 0}</span>{' '}
+              de {preview?.length} alumnos y se generaron sus credenciales de acceso.
             </p>
           </div>
 
+          {/* Filas rechazadas */}
+          {failed.length > 0 && (
+            <div className="mt-5 rounded-xl overflow-hidden"
+              style={{ border:'1px solid rgba(239,68,68,.25)' }}>
+              <div className="px-4 py-2.5 flex items-center gap-2"
+                style={{ background:'rgba(239,68,68,.10)', borderBottom:'1px solid rgba(239,68,68,.20)' }}>
+                <AlertCircle size={13} className="text-red-400"/>
+                <span className="text-sm font-bold text-red-400">
+                  {failed.length} {failed.length === 1 ? 'alumno no se pudo registrar' : 'alumnos no se pudieron registrar'}
+                </span>
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                {failed.map(f => (
+                  <div key={f.email} className="px-4 py-2.5 flex items-center justify-between gap-3"
+                    style={{ borderBottom:'1px solid rgba(255,255,255,.04)' }}>
+                    <span className="text-sm truncate" style={{ color:'rgba(255,255,255,.72)' }}>{f.nombre}</span>
+                    <span className="text-[11px] text-right flex-shrink-0" style={{ color:'rgba(248,113,113,.85)' }}>{f.motivo}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Credenciales generadas */}
-          {creds && (
+          {creds?.length > 0 && (
             <div className="mt-6 rounded-xl overflow-hidden"
               style={{ border:'1px solid rgba(255,255,255,.08)' }}>
               <div className="px-4 py-3 flex items-center justify-between"
@@ -278,7 +323,7 @@ export default function ImportStudents() {
                 <table className="w-full">
                   <thead>
                     <tr style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
-                      {['Alumno','Usuario','Contraseña'].map(h => (
+                      {['Alumno','Usuario (correo)','Contraseña'].map(h => (
                         <th key={h} className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-widest"
                           style={{ color:'rgba(255,255,255,.24)' }}>{h}</th>
                       ))}
@@ -298,7 +343,9 @@ export default function ImportStudents() {
               <p className="px-4 py-2.5 text-[11px]"
                 style={{ background:'rgba(251,191,36,.06)', borderTop:'1px solid rgba(255,255,255,.06)', color:'rgba(255,255,255,.40)' }}>
                 Las credenciales las asigna el sistema — los alumnos no pueden crear ni cambiar su contraseña.
-                Descarga el Excel y entrégalas de forma segura; también quedan guardadas en la plataforma.
+                Esta es la única vez que se muestran las contraseñas: descarga el Excel ahora y entrégalas de forma
+                segura. En la plataforma quedan guardadas cifradas, así que no podrán consultarse después
+                (solo restablecerse).
               </p>
             </div>
           )}
@@ -312,6 +359,9 @@ export default function ImportStudents() {
       {/* ── Historial ───────────────────────────────────────── */}
       <div>
         <h3 className="section-title mb-3">Historial de Importaciones</h3>
+        <p className="text-[11px] mb-3" style={{ color:'rgba(255,255,255,.28)' }}>
+          Los alumnos importados se guardan en la plataforma; este historial solo lista las importaciones de esta sesión.
+        </p>
         <DataTable
           columns={[
             { key:'archivo', label:'Archivo', className:'flex-grow min-w-[160px]' },
@@ -342,7 +392,11 @@ export default function ImportStudents() {
               },
               {
                 className: 'w-28',
-                content: (
+                content: h.conErrores ? (
+                  <span className="badge bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    <AlertCircle size={10}/> {h.estado}
+                  </span>
+                ) : (
                   <span className="badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                     <CheckCircle size={10}/> {h.estado}
                   </span>

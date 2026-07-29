@@ -265,7 +265,13 @@
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-page-in { animation: pageIn .24s cubic-bezier(0.22,1,0.36,1) both; }
+/* fill-mode `backwards`, no `both`: el estado final del keyframe es idéntico al
+   natural del elemento, así que retenerlo no cambia nada visualmente pero deja
+   un `transform: translateY(0)` permanente. Un transform distinto de none
+   convierte al contenedor en bloque contenedor de sus hijos `position: fixed`,
+   y los modales se posicionaban respecto a la página (desplazados al hacer
+   scroll) en vez de respecto a la ventana. */
+.animate-page-in { animation: pageIn .24s cubic-bezier(0.22,1,0.36,1) backwards; }
 
 /* Stagger — assign to list items */
 @keyframes staggerIn {

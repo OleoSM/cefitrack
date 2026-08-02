@@ -80,16 +80,19 @@ export const CARD_COLORS = [
   { id: 'atardecer', label: 'Atardecer',  grad: 'linear-gradient(135deg, #7c2d12 0%, #b45309 100%)' },
   { id: 'violeta',   label: 'Violeta',    grad: 'linear-gradient(135deg, #4c1d95 0%, #2e1065 100%)' },
 
-  /* Sólidos: un color pleno, sin degradado y sin alfa. Los de arriba se
-     desvanecen contra el blanco de IPN y UNAM y se leen como transparentes. */
-  { id: 'rojo',      label: 'Rojo',      mate: true, grad: '#C0392B' },
-  { id: 'guinda-solido', label: 'Guinda sólido', mate: true, grad: '#8E1F3D' },
-  { id: 'azul',      label: 'Azul',      mate: true, grad: '#1F4E79' },
-  { id: 'verde',     label: 'Verde',     mate: true, grad: '#1E7A4C' },
-  { id: 'teal',      label: 'Teal',      mate: true, grad: '#17706B' },
-  { id: 'ambar',     label: 'Ámbar',     mate: true, grad: '#B87400' },
-  { id: 'morado',    label: 'Morado',    mate: true, grad: '#5B3A8E' },
-  { id: 'pizarra',   label: 'Pizarra',   mate: true, grad: '#3D4A5C' },
+  /* Sólidos institucionales: un color pleno, sin degradado ni alfa. La tarjeta
+     lleva texto blanco sobre su propio fondo, así que aquí van los tonos
+     profundos tal cual, sin variante por tema. */
+  { id: 'guinda-solido', label: 'Guinda',    mate: true, grad: '#4D0B1D' },
+  { id: 'granate',       label: 'Granate',   mate: true, grad: '#681126' },
+  { id: 'rojo',          label: 'Rojo',      mate: true, grad: '#78182B' },
+  { id: 'marino',        label: 'Marino',    mate: true, grad: '#12345A' },
+  { id: 'petroleo',      label: 'Petróleo',  mate: true, grad: '#064B60' },
+  { id: 'bosque',        label: 'Bosque',    mate: true, grad: '#17502D' },
+  { id: 'verdemar',      label: 'Verde mar', mate: true, grad: '#075348' },
+  { id: 'morado',        label: 'Morado',    mate: true, grad: '#48245F' },
+  { id: 'ciruela',       label: 'Ciruela',   mate: true, grad: '#5E1948' },
+  { id: 'cafe',          label: 'Café',      mate: true, grad: '#633515' },
 ]
 
 const APP_KEY  = 'siga_student_appearance'

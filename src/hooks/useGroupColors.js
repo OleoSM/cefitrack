@@ -91,22 +91,24 @@ export const COLOR_PALETTES = [
   { id:'solid-slate',   name:'Gris',     type:'solid', accent:'#94a3b8', bg:'#1e293b', light:{ accent:'#4A5768', bg:'#EEF0F3' } },
   { id:'solid-white',   name:'Blanco',   type:'solid', accent:'#e2e8f0', bg:'#334155', light:{ accent:'#5A6270', bg:'#F1F2F4' } },
 
-  /* ── Sólidos formales ──
-     Color pleno, sin degradado y sin alfa. El MISMO valor en tema oscuro y en
-     IPN/UNAM: son lo bastante oscuros para contrastar contra blanco y lo
-     bastante claros para leerse sobre negro. Las paletas de arriba se apoyan
-     en pasteles muy claros para la identidad clara, y sobre página blanca eso
-     se percibe como transparencia; estas no. */
-  { id:'mate-rojo',     name:'Rojo',     type:'solid', mate:true, accent:'#C0392B', bg:'#C0392B', light:{ accent:'#B03227', bg:'#B03227' } },
-  { id:'mate-guinda',   name:'Guinda',   type:'solid', mate:true, accent:'#8E1F3D', bg:'#8E1F3D', light:{ accent:'#821B37', bg:'#821B37' } },
-  { id:'mate-azul',     name:'Azul',     type:'solid', mate:true, accent:'#1F4E79', bg:'#1F4E79', light:{ accent:'#1B466D', bg:'#1B466D' } },
-  { id:'mate-verde',    name:'Verde',    type:'solid', mate:true, accent:'#1E7A4C', bg:'#1E7A4C', light:{ accent:'#1A6B43', bg:'#1A6B43' } },
-  { id:'mate-teal',     name:'Teal',     type:'solid', mate:true, accent:'#17706B', bg:'#17706B', light:{ accent:'#146360', bg:'#146360' } },
-  { id:'mate-ambar',    name:'Ámbar',    type:'solid', mate:true, accent:'#B87400', bg:'#B87400', light:{ accent:'#A66900', bg:'#A66900' } },
-  { id:'mate-naranja',  name:'Naranja',  type:'solid', mate:true, accent:'#C25A1E', bg:'#C25A1E', light:{ accent:'#AF501A', bg:'#AF501A' } },
-  { id:'mate-morado',   name:'Morado',   type:'solid', mate:true, accent:'#5B3A8E', bg:'#5B3A8E', light:{ accent:'#513380', bg:'#513380' } },
-  { id:'mate-pizarra',  name:'Pizarra',  type:'solid', mate:true, accent:'#3D4A5C', bg:'#3D4A5C', light:{ accent:'#354152', bg:'#354152' } },
-  { id:'mate-grafito',  name:'Grafito',  type:'solid', mate:true, accent:'#4A4A4A', bg:'#4A4A4A', light:{ accent:'#404040', bg:'#404040' } },
+  /* ── Sólidos institucionales ──
+     Color pleno: sin degradado, sin alfa, sin sombra de color. Los hex de
+     `light` son los que pidió el equipo, en el registro de #4d0b1d, y se usan
+     COMO FONDO con texto blanco encima en IPN y UNAM.
+
+     El tema oscuro recibe el mismo matiz más luminoso: un #4d0b1d sobre el
+     fondo #070b16 casi no se separa, y la tarjeta se perdería igual que antes
+     se perdía sobre blanco — el problema sería el mismo, sólo que invertido. */
+  { id:'mate-guinda',   name:'Guinda',    type:'solid', mate:true, accent:'#9E1D3C', bg:'#9E1D3C', light:{ accent:'#4D0B1D', bg:'#4D0B1D' } },
+  { id:'mate-granate',  name:'Granate',   type:'solid', mate:true, accent:'#B02546', bg:'#B02546', light:{ accent:'#681126', bg:'#681126' } },
+  { id:'mate-rojo',     name:'Rojo',      type:'solid', mate:true, accent:'#C4304C', bg:'#C4304C', light:{ accent:'#78182B', bg:'#78182B' } },
+  { id:'mate-marino',   name:'Marino',    type:'solid', mate:true, accent:'#2C6BA8', bg:'#2C6BA8', light:{ accent:'#12345A', bg:'#12345A' } },
+  { id:'mate-petroleo', name:'Petróleo',  type:'solid', mate:true, accent:'#1286A0', bg:'#1286A0', light:{ accent:'#064B60', bg:'#064B60' } },
+  { id:'mate-bosque',   name:'Bosque',    type:'solid', mate:true, accent:'#2E8A50', bg:'#2E8A50', light:{ accent:'#17502D', bg:'#17502D' } },
+  { id:'mate-verdemar', name:'Verde mar', type:'solid', mate:true, accent:'#14907E', bg:'#14907E', light:{ accent:'#075348', bg:'#075348' } },
+  { id:'mate-morado',   name:'Morado',    type:'solid', mate:true, accent:'#8248A8', bg:'#8248A8', light:{ accent:'#48245F', bg:'#48245F' } },
+  { id:'mate-ciruela',  name:'Ciruela',   type:'solid', mate:true, accent:'#A93380', bg:'#A93380', light:{ accent:'#5E1948', bg:'#5E1948' } },
+  { id:'mate-cafe',     name:'Café',      type:'solid', mate:true, accent:'#A85F2A', bg:'#A85F2A', light:{ accent:'#633515', bg:'#633515' } },
 ]
 
 /** Sólidas y opacas: las recomendadas para IPN y UNAM. */

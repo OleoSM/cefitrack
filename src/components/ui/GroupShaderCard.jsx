@@ -199,12 +199,24 @@ export default function GroupShaderCard({
     /* Sin overflow-hidden en el root — lo ponemos solo en el shader layer */
     <div className={`relative rounded-2xl ${className}`}
       style={{
-        // En identidad clara el borde es del color del grupo a plena opacidad.
-        // Antes era `${accent}33` — 20 % de alfa sobre página blanca, que es
-        // exactamente lo que se percibía como transparencia.
-        border: `1px solid ${isLight ? accent : 'var(--card-border)'}`,
+        border: `1px solid ${isLight ? surface : 'var(--card-border)'}`,
         boxShadow: 'var(--card-shadow)',
         overflow: 'hidden',
+        /* En claro la tarjeta se pinta ENTERA del color del grupo, igual que
+           en oscuro se pinta entera con el shader. Con el color de fondo, la
+           escala de texto tiene que invertirse: se redefinen las variables en
+           este ámbito y todo lo anidado —cabecera, métricas, pie— las hereda
+           sin tener que saber nada del tema. */
+        ...(isLight ? {
+          '--t1': '#ffffff',
+          '--t2': 'rgba(255,255,255,.82)',
+          '--t3': 'rgba(255,255,255,.62)',
+          '--t4': 'rgba(255,255,255,.45)',
+          '--divider': 'rgba(255,255,255,.20)',
+          '--card-border': 'rgba(255,255,255,.24)',
+          '--soft-bg': 'rgba(255,255,255,.12)',
+          '--card-bg': 'rgba(255,255,255,.10)',
+        } : {}),
       }}>
 
       {/* ── Fondo ───────────────────────────────────────────────
@@ -216,9 +228,7 @@ export default function GroupShaderCard({
           el color del grupo se afirma en una franja lateral sólida. */}
       <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
         {isLight ? (
-          <div className="absolute inset-0" style={{ background:'var(--card-bg)' }}>
-            <div className="absolute inset-y-0 left-0" style={{ width: 6, background: accent }} />
-          </div>
+          <div className="absolute inset-0" style={{ background: surface }} />
         ) : palette.type === 'gradient' ? (
           <>
             <Warp style={{ width:'100%', height:'100%' }} colors={colors} {...SHADER_CONFIG} />
@@ -255,9 +265,10 @@ export default function GroupShaderCard({
 
           {/* Avatar */}
           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-            style={{ background: accent,
-              // Sombra neutra en claro: la de color con alfa lavaba el borde.
-              boxShadow: isLight ? '0 1px 3px rgba(15,23,42,.22)' : `0 0 20px ${accent}50` }}>
+            style={{
+              background: isLight ? 'rgba(255,255,255,.18)' : accent,
+              border: isLight ? '1px solid rgba(255,255,255,.35)' : 'none',
+              boxShadow: isLight ? 'none' : `0 0 20px ${accent}50` }}>
             {letter}
           </div>
 

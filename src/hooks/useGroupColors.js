@@ -7,89 +7,92 @@ import { useAdminTheme } from '../context/AdminThemeContext'
  *   accent   — color principal para avatar, barra, glow
  *   colors   — array de 4 colores para el Warp (solo en gradient)
  *   bg       — fondo sólido (solo en solid)
- *   light    — variante pastel mate para las identidades claras (IPN/UNAM):
+ *   light    — el MISMO matiz en versión sólida profunda, para IPN y UNAM:
  *              { accent, bg, colors? }
  *
- * Los valores base son neón a propósito: solo se usan en el tema oscuro.
- * En IPN y UNAM está prohibido el neón, así que ahí se sirve `light`.
- * Ver la regla de color al inicio de src/index.css.
+ * El color cambia de naturaleza según el tema, no de identidad:
+ *   · tema oscuro  → neón, con el shader de humo en movimiento
+ *   · IPN / UNAM   → color sólido y opaco, sin degradado ni alfa
+ * El grupo "océano" sigue siendo el azulado en los dos; lo que cambia es que
+ * un neón sobre página blanca se lava y un sólido profundo sobre fondo casi
+ * negro se pierde. Ver la regla de color al inicio de src/index.css.
  */
 export const COLOR_PALETTES = [
   /* ── Degradados ── */
   {
     id:'ocean',    name:'Océano',    type:'gradient', accent:'hsl(190,100%,55%)',
     colors:['hsl(210,100%,20%)','hsl(190,100%,55%)','hsl(200,90%,32%)','hsl(185,100%,68%)'],
-    light:{ accent:'#1F6B7D', bg:'#EAF3F6',
+    light:{ accent:'#064B60', bg:'#064B60',
              colors:['#CFE4EA','#A8D2DC','#E3F0F3','#BEDCE4'] },
   },
   {
     id:'forest',   name:'Bosque',    type:'gradient', accent:'hsl(130,70%,50%)',
     colors:['hsl(140,80%,16%)','hsl(120,70%,50%)','hsl(150,90%,26%)','hsl(130,80%,63%)'],
-    light:{ accent:'#2F6B41', bg:'#EAF3EC',
+    light:{ accent:'#17502D', bg:'#17502D',
              colors:['#CDE4D3','#A9D3B4','#E2F0E6','#BCDCC5'] },
   },
   {
     id:'sunset',   name:'Atardecer', type:'gradient', accent:'hsl(38,100%,58%)',
     colors:['hsl(20,100%,26%)','hsl(40,100%,58%)','hsl(10,90%,36%)','hsl(50,100%,70%)'],
-    light:{ accent:'#8A5A12', bg:'#F8F1E4',
+    light:{ accent:'#633515', bg:'#633515',
              colors:['#F0DEC0','#E6C99B','#F6EBD8','#EBD4AE'] },
   },
   {
     id:'aurora',   name:'Aurora',    type:'gradient', accent:'hsl(300,85%,58%)',
     colors:['hsl(270,100%,26%)','hsl(300,90%,58%)','hsl(290,80%,36%)','hsl(320,100%,70%)'],
-    light:{ accent:'#7A3474', bg:'#F3EAF2',
+    light:{ accent:'#5E1948', bg:'#5E1948',
              colors:['#E4D0E2','#D3B2D0','#EFE2EE','#DBC1D9'] },
   },
   {
     id:'fire',     name:'Fuego',     type:'gradient', accent:'hsl(25,100%,55%)',
     colors:['hsl(0,100%,26%)','hsl(30,100%,55%)','hsl(15,90%,34%)','hsl(45,100%,68%)'],
-    light:{ accent:'#93441F', bg:'#F7EDE7',
+    light:{ accent:'#78182B', bg:'#78182B',
              colors:['#EFD8CB','#E4BCA6','#F5E6DD','#EACAB9'] },
   },
   {
     id:'cosmos',   name:'Cosmos',    type:'gradient', accent:'hsl(258,100%,62%)',
     colors:['hsl(240,100%,14%)','hsl(260,100%,62%)','hsl(250,80%,28%)','hsl(270,80%,74%)'],
-    light:{ accent:'#4F3F96', bg:'#ECEAF7',
+    light:{ accent:'#48245F', bg:'#48245F',
              colors:['#D6D1EC','#BBB3DF','#E4E1F2','#C9C2E6'] },
   },
   {
     id:'arctic',   name:'Ártico',    type:'gradient', accent:'hsl(194,80%,68%)',
     colors:['hsl(200,60%,16%)','hsl(194,80%,68%)','hsl(205,50%,28%)','hsl(190,70%,83%)'],
-    light:{ accent:'#276B7A', bg:'#E9F3F5',
+    light:{ accent:'#12345A', bg:'#12345A',
              colors:['#CCE4E9','#A5D1DA','#E1EFF2','#BADBE2'] },
   },
   {
     id:'rose',     name:'Rosa',      type:'gradient', accent:'hsl(348,90%,62%)',
     colors:['hsl(330,80%,20%)','hsl(350,90%,62%)','hsl(340,80%,34%)','hsl(360,80%,74%)'],
-    light:{ accent:'#96334A', bg:'#F7EAED',
+    light:{ accent:'#681126', bg:'#681126',
              colors:['#EFD1D8','#E3AFBB','#F4E0E4','#E9C0C9'] },
   },
   {
     id:'emerald',  name:'Esmeralda', type:'gradient', accent:'hsl(160,85%,48%)',
     colors:['hsl(170,100%,14%)','hsl(160,85%,48%)','hsl(150,80%,24%)','hsl(165,90%,65%)'],
-    light:{ accent:'#1F6B57', bg:'#E8F3EF',
+    light:{ accent:'#075348', bg:'#075348',
              colors:['#CBE5DC','#A4D4C5','#E0F0EA','#B8DCD1'] },
   },
   {
     id:'gold',     name:'Dorado',    type:'gradient', accent:'hsl(45,100%,55%)',
     colors:['hsl(35,90%,18%)','hsl(45,100%,55%)','hsl(40,95%,30%)','hsl(50,100%,72%)'],
-    light:{ accent:'#85631A', bg:'#F6F1DF',
+    light:{ accent:'#5A4508', bg:'#5A4508',
              colors:['#EDE0BB','#E1CE93','#F3EBD3','#E7D7A7'] },
   },
 
   /* ── Colores sólidos ── */
-  { id:'solid-blue',    name:'Azul',     type:'solid', accent:'#3b82f6', bg:'#1e3a5f', light:{ accent:'#2B5F9E', bg:'#E7EEF7' } },
-  { id:'solid-green',   name:'Verde',    type:'solid', accent:'#22c55e', bg:'#14532d', light:{ accent:'#2F6B41', bg:'#E9F3EC' } },
-  { id:'solid-amber',   name:'Ámbar',    type:'solid', accent:'#f59e0b', bg:'#78350f', light:{ accent:'#8A5A12', bg:'#F7F0E1' } },
-  { id:'solid-red',     name:'Rojo',     type:'solid', accent:'#ef4444', bg:'#7f1d1d', light:{ accent:'#A03A32', bg:'#F8EAE8' } },
-  { id:'solid-purple',  name:'Violeta',  type:'solid', accent:'#a855f7', bg:'#3b0764', light:{ accent:'#5D3E90', bg:'#EEE9F6' } },
-  { id:'solid-pink',    name:'Rosa',     type:'solid', accent:'#ec4899', bg:'#500724', light:{ accent:'#94356B', bg:'#F6E9F1' } },
-  { id:'solid-cyan',    name:'Cian',     type:'solid', accent:'#06b6d4', bg:'#164e63', light:{ accent:'#1C6474', bg:'#E6F2F4' } },
-  { id:'solid-indigo',  name:'Índigo',   type:'solid', accent:'#6366f1', bg:'#1e1b4b', light:{ accent:'#3F4595', bg:'#E9EAF6' } },
-  { id:'solid-teal',    name:'Teal',     type:'solid', accent:'#14b8a6', bg:'#134e4a', light:{ accent:'#1B6659', bg:'#E5F1EF' } },
-  { id:'solid-orange',  name:'Naranja',  type:'solid', accent:'#f97316', bg:'#7c2d12', light:{ accent:'#90501C', bg:'#F7EEE5' } },
-  { id:'solid-slate',   name:'Gris',     type:'solid', accent:'#94a3b8', bg:'#1e293b', light:{ accent:'#4A5768', bg:'#EEF0F3' } },
-  { id:'solid-white',   name:'Blanco',   type:'solid', accent:'#e2e8f0', bg:'#334155', light:{ accent:'#5A6270', bg:'#F1F2F4' } },
+  { id:'solid-blue',    name:'Azul',     type:'solid', accent:'#3b82f6', bg:'#1e3a5f', light:{ accent:'#12345A', bg:'#12345A' } },
+  { id:'solid-green',   name:'Verde',    type:'solid', accent:'#22c55e', bg:'#14532d', light:{ accent:'#17502D', bg:'#17502D' } },
+  { id:'solid-amber',   name:'Ámbar',    type:'solid', accent:'#f59e0b', bg:'#78350f', light:{ accent:'#633515', bg:'#633515' } },
+  { id:'solid-red',     name:'Rojo',     type:'solid', accent:'#ef4444', bg:'#7f1d1d', light:{ accent:'#78182B', bg:'#78182B' } },
+  { id:'solid-purple',  name:'Violeta',  type:'solid', accent:'#a855f7', bg:'#3b0764', light:{ accent:'#48245F', bg:'#48245F' } },
+  { id:'solid-pink',    name:'Rosa',     type:'solid', accent:'#ec4899', bg:'#500724', light:{ accent:'#5E1948', bg:'#5E1948' } },
+  { id:'solid-cyan',    name:'Cian',     type:'solid', accent:'#06b6d4', bg:'#164e63', light:{ accent:'#064B60', bg:'#064B60' } },
+  { id:'solid-indigo',  name:'Índigo',   type:'solid', accent:'#6366f1', bg:'#1e1b4b', light:{ accent:'#2A2A5F', bg:'#2A2A5F' } },
+  { id:'solid-teal',    name:'Teal',     type:'solid', accent:'#14b8a6', bg:'#134e4a', light:{ accent:'#075348', bg:'#075348' } },
+  { id:'solid-orange',  name:'Naranja',  type:'solid', accent:'#f97316', bg:'#7c2d12', light:{ accent:'#6B3410', bg:'#6B3410' } },
+  { id:'solid-slate',   name:'Gris',     type:'solid', accent:'#94a3b8', bg:'#1e293b', light:{ accent:'#2F3A47', bg:'#2F3A47' } },
+  { id:'solid-white',   name:'Blanco',   type:'solid', accent:'#e2e8f0', bg:'#334155', light:{ accent:'#3A3F47', bg:'#3A3F47' } },
 
   /* ── Sólidos institucionales ──
      Color pleno: sin degradado, sin alfa, sin sombra de color. Los hex de

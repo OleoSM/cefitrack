@@ -151,7 +151,7 @@ export default function MyGrades() {
             </div>
             <div className="relative h-1 rounded-full overflow-hidden mt-3.5" style={{ background: t.softBg }}>
               <div className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${Math.round(bar * 100)}%`, background: `linear-gradient(90deg, ${accent}66, ${accent})` }}/>
+                style={{ width: `${Math.round(bar * 100)}%`, background: accent }}/>
             </div>
           </div>
         ))}
@@ -173,8 +173,8 @@ export default function MyGrades() {
                 style={{ borderTop: `3px solid ${accent}` }}>
                 <div className="flex items-center justify-between">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${accent}1a`, border: `1px solid ${accent}40` }}>
-                    <Icon size={15} style={{ color: accent }}/>
+                    style={{ background: accent }}>
+                    <Icon size={15} style={{ color:'#ffffff' }}/>
                   </div>
                   <ChevronRight size={14} className="opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: t.t3 }}/>
                 </div>
@@ -203,12 +203,12 @@ export default function MyGrades() {
                     <ArrowLeft size={15}/>
                   </button>
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${accent}1a`, border: `1px solid ${accent}40` }}>
-                    <Icon size={15} style={{ color: accent }}/>
+                    style={{ background: accent }}>
+                    <Icon size={15} style={{ color:'#ffffff' }}/>
                   </div>
                   <h3 className="font-bold text-sm sm:text-base truncate" style={{ color: t.t1 }}>{mat}</h3>
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 hidden sm:inline"
-                    style={{ background: `${accent}18`, color: t.light ? t.t2 : accent, border: `1px solid ${accent}40` }}>
+                    style={{ background: accent, color:'#ffffff' }}>
                     {evs.length} / {evals.length}
                   </span>
                 </div>

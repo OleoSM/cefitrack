@@ -527,8 +527,8 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
       textAlign:'center', padding:'5px 6px', fontWeight:800, fontSize:10,
       letterSpacing:'0.07em',
       color: color ? '#ffffff' : 'var(--t2)',
-      borderLeft:  hc ? `2px solid ${c}70` : '1px solid rgba(255,255,255,.06)',
-      borderRight: hc ? `2px solid ${c}70` : '1px solid rgba(255,255,255,.06)',
+      borderLeft:  hc ? `2px solid ${c}` : '1px solid rgba(255,255,255,.06)',
+      borderRight: hc ? `2px solid ${c}` : '1px solid rgba(255,255,255,.06)',
       borderBottom: color ? `3px solid ${color}` : 'none',
       // Cabecera de sección con el color pleno y texto blanco. El fondo al 7 %
       // de alfa era invisible sobre blanco y la sección no se distinguía.
@@ -869,7 +869,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
       {/* Group pill */}
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
-        style={{ background:`${accent}15`, border:`1px solid ${accent}30` }}>
+        style={{ background: accent, color:'#ffffff' }}>
         <span className="text-xs font-bold" style={{ color:accent }}>{group.name}</span>
         <span className="text-xs" style={{ color: 'var(--t3)' }}>·</span>
         <span className="text-xs" style={{ color: 'var(--t3)' }}>{group.subject}</span>

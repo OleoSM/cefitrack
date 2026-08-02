@@ -870,9 +870,11 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       {/* Group pill */}
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
         style={{ background: accent, color:'#ffffff' }}>
-        <span className="text-xs font-bold" style={{ color:accent }}>{group.name}</span>
-        <span className="text-xs" style={{ color: 'var(--t3)' }}>·</span>
-        <span className="text-xs" style={{ color: 'var(--t3)' }}>{group.subject}</span>
+        {/* El chip lleva ahora fondo pleno, así que su contenido va en blanco:
+            el nombre seguía pintado con el color del acento y desaparecía. */}
+        <span className="text-xs font-bold" style={{ color:'#ffffff' }}>{group.name}</span>
+        <span className="text-xs" style={{ color:'rgba(255,255,255,.55)' }}>·</span>
+        <span className="text-xs" style={{ color:'rgba(255,255,255,.80)' }}>{group.subject}</span>
       </div>
 
       {/* Stats */}

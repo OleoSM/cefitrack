@@ -467,13 +467,17 @@
    recorrer una fila con la vista. Muy tenue a propósito — es una guía, no una
    decoración, y debe leerse igual en las tres identidades. */
 [data-datatable] [data-fila]:nth-of-type(even) {
-  background: color-mix(in srgb, var(--soft-bg) 55%, transparent);
+  /* Tinte OPACO del acento sobre el fondo de tarjeta. Mezclarlo con
+     `transparent` no servía: --soft-bg ya es semitransparente en las
+     identidades claras, así que el resultado quedaba al 3 % de alfa y no se
+     veía. El rayado tiene que ser un color, no un velo sobre un velo. */
+  background: color-mix(in srgb, var(--accent) 5%, var(--card-bg));
 }
 [data-datatable] [data-fila]:hover { background: var(--soft-bg) !important; }
 
 /* Mismo rayado para las tablas nativas (portal del alumno, hoja de registro). */
 table tbody tr:nth-of-type(even) {
-  background: color-mix(in srgb, var(--soft-bg) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--card-bg));
 }
 table tbody tr:hover { background: var(--soft-bg); }
 

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#f6f7f9"/>
+  <text x="64" y="67" fill="#111827" font-family="Inter,Arial,sans-serif" font-size="30" font-weight="700">Grupos</text>
+  <text x="64" y="98" fill="#64748b" font-family="Inter,Arial,sans-serif" font-size="15">Vista comparativa para operación rápida</text>
+  <rect x="1145" y="51" width="230" height="48" rx="12" fill="#003366"/>
+  <text x="1196" y="82" fill="white" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">＋ Nuevo grupo</text>
+
+  <g font-family="Inter,Arial,sans-serif">
+    <rect x="64" y="132" width="128" height="98" rx="14" fill="white" stroke="#dce4ed"/>
+    <text x="82" y="162" fill="#64748b" font-size="12" font-weight="700">GRUPOS</text><text x="82" y="203" fill="#0f172a" font-size="31" font-weight="750">12</text>
+    <rect x="208" y="132" width="150" height="98" rx="14" fill="white" stroke="#dce4ed"/>
+    <text x="226" y="162" fill="#64748b" font-size="12" font-weight="700">ALUMNOS</text><text x="226" y="203" fill="#0f172a" font-size="31" font-weight="750">284</text>
+    <rect x="374" y="132" width="170" height="98" rx="14" fill="white" stroke="#dce4ed"/>
+    <text x="392" y="162" fill="#64748b" font-size="12" font-weight="700">PROMEDIO</text><text x="392" y="203" fill="#0f172a" font-size="31" font-weight="750">8.6</text>
+    <rect x="560" y="132" width="180" height="98" rx="14" fill="white" stroke="#dce4ed"/>
+    <text x="578" y="162" fill="#64748b" font-size="12" font-weight="700">ASISTENCIA</text><text x="578" y="203" fill="#0f172a" font-size="31" font-weight="750">92%</text>
+
+    <rect x="64" y="258" width="1312" height="66" rx="14" fill="white" stroke="#dce4ed"/>
+    <rect x="82" y="272" width="430" height="38" rx="9" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="105" y="296" fill="#94a3b8" font-size="14">⌕  Buscar grupo o materia…</text>
+    <rect x="528" y="272" width="174" height="38" rx="9" fill="white" stroke="#cbd5e1"/><text x="550" y="296" fill="#334155" font-size="13">Todas las sucursales⌄</text>
+    <rect x="716" y="272" width="140" height="38" rx="9" fill="white" stroke="#cbd5e1"/><text x="739" y="296" fill="#334155" font-size="13">Todos⌄</text>
+    <text x="1245" y="296" fill="#64748b" font-size="13">12 resultados</text>
+
+    <rect x="64" y="342" width="1312" height="468" rx="16" fill="white" stroke="#dce4ed"/>
+    <rect x="64" y="342" width="1312" height="54" rx="16" fill="#eef3f9"/>
+    <g fill="#64748b" font-size="12" font-weight="700">
+      <text x="88" y="375">GRUPO / MATERIA</text><text x="440" y="375">SUCURSAL</text><text x="580" y="375">ALUMNOS</text>
+      <text x="710" y="375">PROMEDIO</text><text x="850" y="375">ASISTENCIA</text><text x="1010" y="375">ALERTAS</text><text x="1260" y="375">ACCIONES</text>
+    </g>
+
+    <g font-size="14">
+      <rect x="64" y="396" width="5" height="90" fill="#003366"/>
+      <text x="88" y="430" fill="#0f172a" font-weight="700">Grupo A</text><text x="88" y="454" fill="#64748b">Cálculo diferencial · Lun/Mié 08:00</text>
+      <text x="440" y="442" fill="#334155">CN2</text><text x="580" y="442" fill="#0f172a" font-weight="700">28</text><text x="710" y="442" fill="#0f172a" font-weight="700">8.9</text>
+      <rect x="850" y="431" width="108" height="8" rx="4" fill="#e2e8f0"/><rect x="850" y="431" width="99" height="8" rx="4" fill="#1f6b55"/><text x="965" y="442" fill="#334155">92%</text>
+      <rect x="1010" y="421" width="96" height="28" rx="14" fill="#e2f1ea"/><text x="1032" y="440" fill="#1f6b55" font-size="12" font-weight="700">Sin alertas</text>
+      <text x="1260" y="442" fill="#003366" font-weight="700">Abrir →</text>
+
+      <line x1="82" y1="486" x2="1358" y2="486" stroke="#e2e8f0"/>
+      <rect x="64" y="487" width="5" height="90" fill="#881126"/>
+      <text x="88" y="521" fill="#0f172a" font-weight="700">Grupo B</text><text x="88" y="545" fill="#64748b">Comprensión lectora · Mar/Jue 10:00</text>
+      <text x="440" y="533" fill="#334155">CN1</text><text x="580" y="533" fill="#0f172a" font-weight="700">31</text><text x="710" y="533" fill="#0f172a" font-weight="700">7.6</text>
+      <rect x="850" y="522" width="108" height="8" rx="4" fill="#e2e8f0"/><rect x="850" y="522" width="84" height="8" rx="4" fill="#b0791f"/><text x="965" y="533" fill="#334155">78%</text>
+      <rect x="1010" y="512" width="116" height="28" rx="14" fill="#fae7e5"/><text x="1027" y="531" fill="#a52f2a" font-size="12" font-weight="700">3 en riesgo</text>
+      <text x="1260" y="533" fill="#003366" font-weight="700">Abrir →</text>
+
+      <line x1="82" y1="577" x2="1358" y2="577" stroke="#e2e8f0"/>
+      <rect x="64" y="578" width="5" height="90" fill="#CC9933"/>
+      <text x="88" y="612" fill="#0f172a" font-weight="700">Grupo C</text><text x="88" y="636" fill="#64748b">Pensamiento matemático · Vie 09:00</text>
+      <text x="440" y="624" fill="#334155">CN3</text><text x="580" y="624" fill="#0f172a" font-weight="700">24</text><text x="710" y="624" fill="#0f172a" font-weight="700">8.4</text>
+      <rect x="850" y="613" width="108" height="8" rx="4" fill="#e2e8f0"/><rect x="850" y="613" width="94" height="8" rx="4" fill="#2b5f9e"/><text x="965" y="624" fill="#334155">87%</text>
+      <rect x="1010" y="603" width="104" height="28" rx="14" fill="#fbeedb"/><text x="1029" y="622" fill="#8a5a10" font-size="12" font-weight="700">1 alerta</text>
+      <text x="1260" y="624" fill="#003366" font-weight="700">Abrir →</text>
+    </g>
+
+    <line x1="82" y1="668" x2="1358" y2="668" stroke="#e2e8f0"/>
+    <text x="88" y="720" fill="#64748b" font-size="13">Mostrar 10 por página</text>
+    <rect x="1172" y="695" width="36" height="36" rx="9" fill="#003366"/><text x="1187" y="718" fill="white" font-size="13">1</text>
+    <rect x="1218" y="695" width="36" height="36" rx="9" fill="white" stroke="#cbd5e1"/><text x="1233" y="718" fill="#334155" font-size="13">2</text>
+    <rect x="1264" y="695" width="36" height="36" rx="9" fill="white" stroke="#cbd5e1"/><text x="1279" y="718" fill="#334155" font-size="13">3</text>
+    <rect x="1310" y="695" width="48" height="36" rx="9" fill="white" stroke="#cbd5e1"/><text x="1328" y="718" fill="#334155" font-size="13">→</text>
+  </g>
+</svg>

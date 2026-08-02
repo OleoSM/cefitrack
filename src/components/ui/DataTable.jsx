@@ -63,8 +63,8 @@ export const DataTable = forwardRef(function DataTable(
             }}>
             {columns.map(col => (
               <div key={col.key}
-                className={`text-[10px] font-bold uppercase tracking-widest select-none items-center ${cellClass(col.className)}`}
-                style={{ color:'var(--t3)' }}>
+                className={`text-[11px] font-bold uppercase tracking-wider select-none items-center ${cellClass(col.className)}`}
+                style={{ color:'var(--t2)' }}>
                 {col.label}
               </div>
             ))}
@@ -101,16 +101,14 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
-      className={`flex items-center px-5 py-3 transition-all duration-200 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      data-fila=""
+      className={`flex items-center px-5 py-2.5 min-h-[46px] transition-colors duration-150 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
       style={{ borderBottom:'1px solid var(--divider)', ...rowStyle }}
-      onMouseEnter={e => {
-        if (claro) e.currentTarget.style.background = 'var(--soft-bg)'
-        else e.currentTarget.style.filter = 'brightness(1.3)'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.filter = ''
-        if (claro) e.currentTarget.style.background = ''
-      }}>
+      /* `filter: brightness()` está prohibido por la regla de color: sobre
+         fondo claro aclara la fila hasta el blanco. El realce es el fondo
+         suave del tema, que funciona igual en las tres identidades. */
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-bg)' }}
+      onMouseLeave={e => { e.currentTarget.style.background = '' }}>
       {cells.map((cell, i) => (
         <div key={i} className={cellClass(cell.className)}>
           {cell.content}

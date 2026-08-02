@@ -134,13 +134,15 @@ export default function MyGrades() {
           },
         ].map(({ icon: Icon, accent, value, label, bar }, i) => (
           <div key={i} className="stat-card relative overflow-hidden">
-            {/* halo de acento en la esquina */}
-            <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full pointer-events-none"
-              style={{ background: `radial-gradient(circle, ${accent}22, transparent 70%)` }}/>
+            {/* Franja de acento sólida. Antes era un halo radial que se
+                desvanecía a transparente: sobre el blanco de IPN/UNAM no se
+                percibe como color, sino como una mancha sucia. */}
+            <div className="absolute inset-y-0 left-0 w-1 pointer-events-none"
+              style={{ background: accent }}/>
             <div className="relative flex items-center gap-3.5">
               <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ background: `${accent}1a`, border: `1px solid ${accent}40` }}>
-                <Icon size={20} style={{ color: accent }}/>
+                style={{ background: accent }}>
+                <Icon size={20} style={{ color: '#fff' }}/>
               </div>
               <div className="min-w-0">
                 <p className="text-2xl sm:text-3xl font-bold tabular-nums leading-none" style={{ color: accent }}>{value}</p>
@@ -218,9 +220,9 @@ export default function MyGrades() {
                   <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
                     <tr>
                       <th className="table-header">Tipo</th>
-                      <th className="table-header">Calificación</th>
+                      <th className="table-header table-header--num">Calificación</th>
                       <th className="table-header hidden sm:table-cell">Periodo</th>
-                      <th className="table-header">Fecha</th>
+                      <th className="table-header table-header--num">Fecha</th>
                     </tr>
                   </thead>
                   <ProgressiveList as="tbody" colSpan={4} items={evs}
@@ -231,7 +233,7 @@ export default function MyGrades() {
                         <td className="table-cell">
                           <span className="badge text-[11px]" style={{ background: t.softBg, color: t.t2, border: `1px solid ${t.cardBorder}` }}>{e.tipo}</span>
                         </td>
-                        <td className="table-cell">
+                        <td className="table-cell table-cell--num">
                           <div className="flex items-center gap-1.5">
                             <span className="font-bold text-base sm:text-lg tabular-nums" style={{ color: gradeColor(e.calificacion) }}>{e.calificacion}</span>
                             {e.editedByAdmin && (
@@ -243,7 +245,7 @@ export default function MyGrades() {
                           </div>
                         </td>
                         <td className="table-cell hidden sm:table-cell" style={{ color: t.t2 }}>{e.periodo}</td>
-                        <td className="table-cell text-xs" style={{ color: t.t3 }}>{e.fecha}</td>
+                        <td className="table-cell table-cell--num text-xs" style={{ color: t.t3 }}>{e.fecha}</td>
                       </tr>
                     )}
                   </ProgressiveList>

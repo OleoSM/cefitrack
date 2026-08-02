@@ -263,9 +263,14 @@
   /* ── Table ── */
   .table-header {
     @apply text-left text-[11px] font-bold uppercase tracking-wider py-3 px-4;
-    color: var(--t3);
+    color: var(--t2);
   }
-  .table-cell { @apply py-3 px-4 text-sm; color: var(--t2); }
+  .table-cell { @apply py-2.5 px-4 text-sm; color: var(--t2); }
+
+  /* Las cifras se leen en columna: mismo ancho por dígito y alineadas a la
+     derecha, para poder comparar de un vistazo sin que bailen las unidades. */
+  .table-cell--num,
+  .table-header--num { @apply text-right tabular-nums; }
 
   /* ── Nav item (sidebar) ── */
   .nav-item {
@@ -444,6 +449,20 @@
 }
 .flip-front { position: relative; z-index: 2; display:flex; justify-content:center; }
 .flip-back  { position: absolute; inset: 0; transform: rotateY(180deg); display:flex; justify-content:center; align-items:flex-start; }
+
+/* Rayado alterno: sobre listas largas es lo que impide saltar de renglón al
+   recorrer una fila con la vista. Muy tenue a propósito — es una guía, no una
+   decoración, y debe leerse igual en las tres identidades. */
+[data-datatable] [data-fila]:nth-of-type(even) {
+  background: color-mix(in srgb, var(--soft-bg) 55%, transparent);
+}
+[data-datatable] [data-fila]:hover { background: var(--soft-bg) !important; }
+
+/* Mismo rayado para las tablas nativas (portal del alumno, hoja de registro). */
+table tbody tr:nth-of-type(even) {
+  background: color-mix(in srgb, var(--soft-bg) 55%, transparent);
+}
+table tbody tr:hover { background: var(--soft-bg); }
 
 /* ─────────────────────────────────────────────────────────────────
    TEMAS CLAROS DEL PORTAL ALUMNO (Identidad Politécnica / UNAM)

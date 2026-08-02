@@ -23,7 +23,7 @@ const COLUMNS = [
   { key:'name',    label:'Alumno',     className:'flex-grow min-w-[180px]' },
   { key:'group',   label:'Grupo',      className:'w-28' },
   { key:'att',     label:'Asistencia', className:'w-36 hidden sm:flex' },
-  { key:'grade',   label:'Promedio',   className:'w-24' },
+  { key:'grade',   label:'Promedio',   className:'w-24 justify-end text-right' },
   { key:'tasks',   label:'Tareas',     className:'w-32 hidden md:flex' },
   { key:'status',  label:'Estado',     className:'w-28' },
   { key:'contact', label:'Contacto',   className:'w-40 hidden xl:flex' },

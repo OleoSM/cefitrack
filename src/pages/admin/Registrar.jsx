@@ -526,18 +526,20 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
     <th colSpan={cols} style={{
       textAlign:'center', padding:'5px 6px', fontWeight:800, fontSize:10,
       letterSpacing:'0.07em',
-      color: hc ? (color ?? '#64748b') : (color ?? 'var(--t2)'),
+      color: color ? '#ffffff' : 'var(--t2)',
       borderLeft:  hc ? `2px solid ${c}70` : '1px solid rgba(255,255,255,.06)',
       borderRight: hc ? `2px solid ${c}70` : '1px solid rgba(255,255,255,.06)',
-      borderBottom: hc ? `3px solid ${c}` : (color ? `2px solid ${color}80` : 'none'),
-      boxShadow: (!hc && color) ? `0 2px 8px ${color}35` : 'none',
-      background: hc ? (color ? `${color}14` : '#f1f5f9') : (color ? `${color}12` : 'rgba(255,255,255,.02)'),
+      borderBottom: color ? `3px solid ${color}` : 'none',
+      // Cabecera de sección con el color pleno y texto blanco. El fondo al 7 %
+      // de alfa era invisible sobre blanco y la sección no se distinguía.
+      boxShadow: 'none',
+      background: color ?? (hc ? '#e2e8f0' : 'var(--soft-bg)'),
     }}>
       <span className="flex items-center justify-center gap-1.5">
         {/* Botón collapse / expand */}
         <button onClick={onToggle}
           className="flex items-center justify-center w-4 h-4 rounded transition-all hover:bg-white/15 active:scale-90 font-black"
-          style={{ fontSize:14, lineHeight:1, color: color ?? 'var(--t2)' }}
+          style={{ fontSize:14, lineHeight:1, color: color ? '#ffffff' : 'var(--t2)' }}
           title={collapsed ? 'Expandir sección' : 'Colapsar sección'}>
           {collapsed ? '+' : '−'}
         </button>

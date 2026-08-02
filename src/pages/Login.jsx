@@ -3,11 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Eye, EyeOff, Mail } from 'lucide-react'
 
-const demos = [
-  { role: 'Docente', email: 'admin@edutrack.mx', pass: '123456' },
-  { role: 'Alumno', email: 'ana.garcia@edutrack.mx', pass: '123456' },
-]
-
 /* ── Pupila simple (personajes sin ojo blanco: naranja y amarillo) ── */
 function Pupil({ size = 12, maxDistance = 5, pupilColor = 'black', forceLookX, forceLookY }) {
   const [mouseX, setMouseX] = useState(0)
@@ -202,7 +197,6 @@ export default function Login() {
     navigate(res.role === 'admin' ? '/admin' : '/student')
   }
 
-  const fillDemo = d => { setEmail(d.email); setPassword(d.pass); setError('') }
 
   return (
     <div className="min-h-screen grid xl:grid-cols-2">
@@ -392,18 +386,7 @@ export default function Login() {
           </div>
 
           <div className="mt-8 pt-6 border-t border-zinc-100">
-            <p className="text-center text-[11px] font-bold uppercase tracking-widest text-zinc-400 mb-2.5">
-              Acceso de demostración
-            </p>
-            <div className="flex items-center justify-center gap-2">
-              {demos.map(d => (
-                <button key={d.role} type="button" onClick={() => fillDemo(d)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-full border border-zinc-200 text-zinc-500 hover:border-navy-700 hover:text-navy-700 transition-colors">
-                  {d.role}
-                </button>
-              ))}
-            </div>
-            <p className="text-center text-sm text-zinc-500 mt-4">
+            <p className="text-center text-sm text-zinc-500">
               ¿Problemas para entrar? Contacta a tu administrador.
             </p>
           </div>

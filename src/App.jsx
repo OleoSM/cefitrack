@@ -19,7 +19,6 @@ const StudentProfile = lazy(() => import('./pages/admin/StudentProfile'))
 const Evaluations    = lazy(() => import('./pages/admin/Evaluations'))
 const Rankings       = lazy(() => import('./pages/admin/Rankings'))
 const AIInsights     = lazy(() => import('./pages/admin/AIInsights'))
-const ImportStudents = lazy(() => import('./pages/admin/ImportStudents'))
 
 /* ── Student pages (lazy) ────────────────────────────────── */
 const StudentDashboard = lazy(() => import('./pages/student/Dashboard'))
@@ -88,7 +87,6 @@ export default function App() {
               <Route path="evaluaciones"          element={<Evaluations />} />
               <Route path="rankings"              element={<Rankings />} />
               <Route path="ia"                    element={<AIInsights />} />
-              <Route path="importar"              element={<ImportStudents />} />
               <Route path="terminos"              element={<TermsManager />} />
               <Route path="registrar"             element={<Registrar />} />
               <Route path="configuracion"         element={<Settings />} />

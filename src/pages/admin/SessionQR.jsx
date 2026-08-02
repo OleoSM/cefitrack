@@ -117,7 +117,7 @@ export default function SessionQR() {
           <div className="relative w-20 h-20">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
               <circle cx="40" cy="40" r="34" fill="none" stroke="#1e3a8a" strokeWidth="6"/>
-              <circle cx="40" cy="40" r="34" fill="none" stroke="#f59e0b"
+              <circle cx="40" cy="40" r="34" fill="none" stroke="var(--warn)"
                 strokeWidth="6" strokeDasharray={`${2 * Math.PI * 34}`}
                 strokeDashoffset={`${2 * Math.PI * 34 * (1 - pct / 100)}`}
                 className="transition-all duration-1000"/>
@@ -153,7 +153,7 @@ export default function SessionQR() {
 
   /* ── Normal mode ───────────────────────────────────────────── */
   return (
-    <div className="max-w-4xl space-y-4">
+    <div className="space-y-4">
       <button onClick={() => navigate('/admin/asistencias')}
         className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors">
         <ArrowLeft size={15}/> Regresar a Asistencias
@@ -208,7 +208,7 @@ export default function SessionQR() {
               <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-1000"
-                  style={{ width:`${pct}%`, background: pct>40?'#10b981':pct>20?'#f59e0b':'#ef4444' }}
+                  style={{ width:`${pct}%`, background: pct>40?'var(--good)':pct>20?'var(--warn)':'var(--bad)' }}
                 />
               </div>
               <p className="text-[11px] text-slate-400 mt-2">

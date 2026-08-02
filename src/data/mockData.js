@@ -286,11 +286,24 @@ export const statusConfig = {
   warning:   { label:'Atención',  color:'text-amber-400',   bg:'bg-amber-500/15',    border:'border-amber-500/30',   dot:'bg-amber-400'   },
   'at-risk': { label:'En Riesgo', color:'text-orange-400',  bg:'bg-orange-500/15',   border:'border-orange-500/30',  dot:'bg-orange-400'  },
   critical:  { label:'Crítico',   color:'text-red-400',     bg:'bg-red-500/15',      border:'border-red-500/30',     dot:'bg-red-400'     },
+  /* Un alumno recién dado de alta no tiene calificaciones, así que el trigger
+     de la BD deja `status` en NULL. Necesita entrada propia: pintarlo de
+     "Bueno" sería inventar un juicio que nadie emitió. */
+  'sin-datos':{ label:'Sin datos', color:'text-slate-400',  bg:'bg-slate-500/15',    border:'border-slate-500/30',   dot:'bg-slate-400'   },
 }
+
+/** Resuelve el estado de un alumno tolerando NULL o valores desconocidos. */
+export const getStatusConfig = status =>
+  statusConfig[status] ?? statusConfig['sin-datos']
+
+/** Igual que el anterior, para el estado de un registro de asistencia. */
+export const getAttendanceColor = status =>
+  attendanceColors[status] ?? attendanceColors.sinRegistro
 
 export const attendanceColors = {
   presente:    { label:'Presente',    bg:'bg-emerald-500/15', text:'text-emerald-400', dot:'bg-emerald-400', border:'border-emerald-500/30' },
   ausente:     { label:'Ausente',     bg:'bg-red-500/15',     text:'text-red-400',     dot:'bg-red-400',     border:'border-red-500/30'     },
   tardanza:    { label:'Tardanza',    bg:'bg-amber-500/15',   text:'text-amber-400',   dot:'bg-amber-400',   border:'border-amber-500/30'   },
   justificado: { label:'Justificado', bg:'bg-blue-500/15',    text:'text-blue-400',    dot:'bg-blue-400',    border:'border-blue-500/30'    },
+  sinRegistro: { label:'Sin registro', bg:'bg-slate-500/15',  text:'text-slate-400',   dot:'bg-slate-400',   border:'border-slate-500/30'   },
 }

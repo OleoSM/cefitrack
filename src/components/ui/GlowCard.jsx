@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useAdminTheme } from '../../context/AdminThemeContext'
 
 const GLOW_COLORS = {
   red:    { base: 0,   spread: 180 },
@@ -69,6 +70,7 @@ const CSS = `
  */
 export function GlowCard({ children, color = 'blue', className = '' }) {
   const cardRef = useRef(null)
+  const { t } = useAdminTheme()
   const { base, spread } = GLOW_COLORS[color] ?? GLOW_COLORS.blue
 
   useEffect(() => {
@@ -83,6 +85,18 @@ export function GlowCard({ children, color = 'blue', className = '' }) {
     return () => document.removeEventListener('pointermove', sync)
   }, [])
 
+  // En identidad clara el spotlight queda fuera: usa hsl() muy saturado y
+  // filter:brightness(2) sobre un fondo casi negro. Eso es exactamente el
+  // resplandor neón que está prohibido en IPN/UNAM. Ahí se degrada a una
+  // tarjeta plana del sistema, sin efecto.
+  if (t?.light) {
+    return (
+      <div className={`card p-5 ${className}`}>
+        {children}
+      </div>
+    )
+  }
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
@@ -96,7 +110,7 @@ export function GlowCard({ children, color = 'blue', className = '' }) {
           '--radius':            '16',
           '--border':            '1.5',
           '--backdrop':          'rgba(5,5,10,.70)',
-          '--backup-border':     'rgba(255,255,255,.08)',
+          '--backup-border':     'var(--card-border)',
           '--size':              '220',
           '--outer':             '1',
           '--border-size':       'calc(var(--border, 2) * 1px)',

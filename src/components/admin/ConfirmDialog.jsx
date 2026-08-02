@@ -20,23 +20,23 @@ export default function ConfirmDialog({
   return (
     <ModalPortal onClose={onClose} maxWidth="max-w-sm">
         <div className="flex items-center justify-between px-5 py-3.5"
-          style={{ borderBottom:'1px solid rgba(255,255,255,.08)' }}>
+          style={{ borderBottom: '1px solid var(--card-border)' }}>
           <div className="flex items-center gap-2">
             <AlertTriangle size={15} className="text-red-400"/>
-            <h2 className="text-sm font-bold" style={{ color:'rgba(255,255,255,.85)' }}>{title}</h2>
+            <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>{title}</h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg" style={{ color:'rgba(255,255,255,.40)' }}>
+          <button onClick={onClose} className="p-1 rounded-lg" style={{ color: 'var(--t3)' }}>
             <X size={14}/>
           </button>
         </div>
 
         <div className="p-5 space-y-3">
-          <p className="text-sm" style={{ color:'rgba(255,255,255,.70)' }}>{message}</p>
-          {detail && <p className="text-xs" style={{ color:'rgba(255,255,255,.38)' }}>{detail}</p>}
+          <p className="text-sm" style={{ color: 'var(--t2)' }}>{message}</p>
+          {detail && <p className="text-xs" style={{ color: 'var(--t3)' }}>{detail}</p>}
 
           {error && (
             <div className="rounded-lg px-3 py-2"
-              style={{ background:'rgba(239,68,68,.10)', border:'1px solid rgba(239,68,68,.30)' }}>
+              style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
               <span className="text-xs text-red-400">{error}</span>
             </div>
           )}
@@ -45,7 +45,7 @@ export default function ConfirmDialog({
             <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
             <button onClick={handle} disabled={busy}
               className="flex-1 justify-center flex items-center gap-2 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95"
-              style={{ background:'rgba(239,68,68,.15)', border:'1px solid rgba(239,68,68,.35)', color:'#f87171' }}>
+              style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>
               {busy ? 'Eliminando…' : confirmLabel}
             </button>
           </div>

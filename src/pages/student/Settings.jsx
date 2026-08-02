@@ -8,7 +8,7 @@ export default function StudentSettings() {
   const { student: s, group: grp } = useStudentData()
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="space-y-5">
       <div>
         <h1 className="page-title">Configuración</h1>
         <p className="text-sm mt-1" style={{ color: t.t3 }}>
@@ -40,8 +40,18 @@ export default function StudentSettings() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-          {CARD_COLORS.map(c => {
+        {/* Dos bloques: los degradados y los de color plano. En IPN y UNAM los
+            degradados se desvanecen contra el fondo blanco y se leen como
+            transparentes, así que ahí se recomiendan los sólidos. */}
+        {[
+          { titulo: 'Degradados', items: CARD_COLORS.filter(c => !c.mate) },
+          { titulo: t.light ? 'Sólidos · recomendados' : 'Sólidos', items: CARD_COLORS.filter(c => c.mate) },
+        ].map(({ titulo, items }) => (
+        <div key={titulo}>
+        <p className="text-[10px] font-bold uppercase tracking-widest mb-2 mt-3"
+          style={{ color: t.light && titulo.includes('recomendados') ? t.accent : t.t3 }}>{titulo}</p>
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
+          {items.map(c => {
             const active = cardColor === c.id
             return (
               <button key={c.id} onClick={() => setCardColor(c.id)}
@@ -57,11 +67,13 @@ export default function StudentSettings() {
                     </span>
                   )}
                 </div>
-                <span className="text-[9.5px] font-semibold leading-none" style={{ color: t.t3 }}>{c.label}</span>
+                <span className="text-[9.5px] font-semibold leading-none text-center" style={{ color: t.t3 }}>{c.label}</span>
               </button>
             )
           })}
         </div>
+        </div>
+        ))}
       </div>
     </div>
   )

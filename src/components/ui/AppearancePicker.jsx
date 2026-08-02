@@ -2,7 +2,7 @@ import { Palette, Check } from 'lucide-react'
 import { APPEARANCES } from '../../context/StudentThemeContext'
 
 const PREVIEW = {
-  default: { side: '#0a0a14', main: '#070b16', bar: '#fbbf24' },
+  default: { side: '#0a0a14', main: '#070b16', bar: 'var(--warn)' },
   ipn:     { side: '#881126', main: '#ffffff', bar: '#ffffff' },
   unam:    { side: '#003366', main: '#ffffff', bar: '#CC9933' },
 }
@@ -38,13 +38,13 @@ export default function AppearancePicker({ appearance, setAppearance, t, title =
                 </div>
                 <div className="flex-1 p-1.5" style={{ background: preview.main }}>
                   <div className="w-full h-2 rounded"
-                    style={{ background: a.id === 'default' ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)' }}/>
+                    style={{ background: a.id === 'default' ? 'var(--card-border)' : 'rgba(0,0,0,.06)' }}/>
                   <div className="w-2/3 h-2 rounded mt-1"
-                    style={{ background: a.id === 'default' ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.04)' }}/>
+                    style={{ background: a.id === 'default' ? 'var(--soft-bg)' : 'rgba(0,0,0,.04)' }}/>
                 </div>
               </div>
               <div className="px-2 py-1.5 flex items-center justify-between"
-                style={{ background: t.light ? '#fff' : 'rgba(255,255,255,.04)' }}>
+                style={{ background: 'var(--card-bg)' }}>
                 <span className="text-[10px] font-bold truncate" style={{ color: t.t2 }}>{a.label}</span>
                 {active && <Check size={11} style={{ color: t.accent }}/>}
               </div>

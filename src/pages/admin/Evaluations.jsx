@@ -5,9 +5,12 @@ import {
   saveEvaluation, deleteEvaluation,
 } from '../../lib/supabaseData'
 import { DataTable, DataTableRow, DataTableAvatar } from '../../components/ui/DataTable'
+import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
 import ModalPortal from '../../components/ui/ModalPortal'
 
-const tipos = ['Examen Parcial','Tarea','Proyecto','Examen Final','Quíz','Práctica']
+// Las cuatro categorías autorizadas por CEFIMAT (requisito EVA-01).
+// Las anteriores (Examen Parcial, Proyecto, Examen Final, Quíz, Práctica) se retiran.
+const tipos = ['Tarea','Actividad en clase','Examen digital','Examen de simulación']
 
 const gradeColor = c =>
   c >= 8 ? { bg:'bg-emerald-500/15', text:'text-emerald-400', border:'border-emerald-500/30' }
@@ -47,12 +50,12 @@ function Modal({ students, onClose, onSaved }) {
   return (
     <ModalPortal onClose={onClose} scrollable>
         <div className="flex items-center justify-between px-6 py-4"
-          style={{ borderBottom:'1px solid rgba(255,255,255,.08)' }}>
-          <h2 className="text-sm font-bold" style={{ color:'rgba(255,255,255,.85)' }}>Agregar Evaluación</h2>
+          style={{ borderBottom:'1px solid var(--divider)' }}>
+          <h2 className="text-sm font-bold" style={{ color:'var(--t1)' }}>Agregar Evaluación</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg transition-colors"
-            style={{ color:'rgba(255,255,255,.40)' }}
-            onMouseEnter={e => e.currentTarget.style.color='white'}
-            onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,.40)'}>
+            style={{ color:'var(--t3)' }}
+            onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
+            onMouseLeave={e => e.currentTarget.style.color='var(--t3)'}>
             <X size={15}/>
           </button>
         </div>
@@ -65,7 +68,7 @@ function Modal({ students, onClose, onSaved }) {
           ].map(f => (
             <div key={f.key}>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'rgba(255,255,255,.35)' }}>{f.label}</label>
+                style={{ color:'var(--t3)' }}>{f.label}</label>
               {f.type === 'select' ? (
                 <select required={f.required} value={form[f.key]} onChange={e=>set(f.key,e.target.value)} className="input-field">
                   <option value="">Seleccionar…</option>
@@ -80,7 +83,7 @@ function Modal({ students, onClose, onSaved }) {
 
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-              style={{ color:'rgba(255,255,255,.35)' }}>Tipo</label>
+              style={{ color:'var(--t3)' }}>Tipo</label>
             <select value={form.tipo} onChange={e=>set('tipo',e.target.value)} className="input-field">
               {tipos.map(t=><option key={t}>{t}</option>)}
             </select>
@@ -89,14 +92,14 @@ function Modal({ students, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'rgba(255,255,255,.35)' }}>Calificación</label>
+                style={{ color:'var(--t3)' }}>Calificación</label>
               <input required type="number" min="0" step="0.1"
                 value={form.calificacion} onChange={e=>set('calificacion',e.target.value)}
                 placeholder="8.5" className="input-field"/>
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'rgba(255,255,255,.35)' }}>Sobre (máximo)</label>
+                style={{ color:'var(--t3)' }}>Sobre (máximo)</label>
               <input required type="number" min="1" step="0.1"
                 value={form.calMax} onChange={e=>set('calMax',e.target.value)}
                 placeholder="10" className="input-field"/>
@@ -106,12 +109,12 @@ function Modal({ students, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'rgba(255,255,255,.35)' }}>Fecha</label>
+                style={{ color:'var(--t3)' }}>Fecha</label>
               <input type="date" value={form.fecha} onChange={e=>set('fecha',e.target.value)} className="input-field"/>
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'rgba(255,255,255,.35)' }}>Periodo</label>
+                style={{ color:'var(--t3)' }}>Periodo</label>
               <input value={form.periodo} onChange={e=>set('periodo',e.target.value)}
                 placeholder="Ej. Jul–Ago" className="input-field"/>
             </div>
@@ -119,7 +122,7 @@ function Modal({ students, onClose, onSaved }) {
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg px-3 py-2"
-              style={{ background:'rgba(239,68,68,.10)', border:'1px solid rgba(239,68,68,.30)' }}>
+              style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
               <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-400"/>
               <span className="text-xs text-red-400">{error}</span>
             </div>
@@ -187,20 +190,26 @@ export default function Evaluations() {
     return (s.name.toLowerCase().includes(q) || e.materia.toLowerCase().includes(q))
       && (groupFilter === 'all' || s.groupId === groupFilter)
       && (typeFilter  === 'all' || e.tipo === typeFilter)
-  }).slice(0, 60)
+  })
 
   return (
-    <div className="max-w-6xl space-y-4">
+    <div className="space-y-4">
       {showModal && (
         <Modal students={students} onClose={() => setShowModal(false)} onSaved={load}/>
       )}
 
       {/* Toolbar */}
-      <div className="card p-4">
-        <div className="flex flex-wrap gap-3 items-end">
+      <FilterBar
+        activos={[groupFilter, typeFilter].filter(v => v !== 'all').length + (query ? 1 : 0)}
+        acciones={
+          <button onClick={() => setShowModal(true)} disabled={students.length === 0} className="btn-primary">
+            <Plus size={14}/> <span className="hidden sm:inline">Agregar evaluación</span>
+          </button>
+        }>
+        <>
           <div className="relative flex-1 min-w-[160px]">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2"
-              style={{ color:'rgba(255,255,255,.25)' }}/>
+              style={{ color:'var(--t4)' }}/>
             <input value={query} onChange={e => setQuery(e.target.value)}
               placeholder="Buscar alumno o materia…" className="input-field pl-9"/>
           </div>
@@ -213,22 +222,19 @@ export default function Evaluations() {
           ].map(({ label, value, setter, opts }) => (
             <div key={label}>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'rgba(255,255,255,.30)' }}>{label}</label>
+                style={{ color:'var(--t3)' }}>{label}</label>
               <select value={value} onChange={e => setter(e.target.value)} className="input-field text-sm">
                 {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
               </select>
             </div>
           ))}
 
-          <button onClick={() => setShowModal(true)} disabled={students.length === 0} className="btn-primary">
-            <Plus size={14}/> Agregar evaluación
-          </button>
-        </div>
+        </>
+      </FilterBar>
 
-        <p className="text-[11px] mt-3" style={{ color:'rgba(255,255,255,.28)' }}>
-          {loading ? 'Cargando…' : `${filtered.length} evaluaciones mostradas (máx. 60)`}
-        </p>
-      </div>
+      <p className="text-[11px] px-1" style={{ color:'var(--t3)' }}>
+        {loading ? 'Cargando…' : `${filtered.length} evaluaciones`}
+      </p>
 
       {loadError && (
         <div className="card p-4 flex items-center gap-2">
@@ -242,7 +248,8 @@ export default function Evaluations() {
         emptyText={evaluations.length === 0
           ? 'Aún no hay calificaciones capturadas. Usa “Agregar evaluación” para registrar la primera.'
           : 'No hay evaluaciones para los filtros seleccionados.'}>
-        {filtered.map(e => {
+        <ProgressiveList items={filtered} emptyLabel="Ninguna evaluación coincide con el filtro.">
+        {e => {
           const s  = students.find(st => st.id === e.studentId)
           const base10 = e.calMax ? (e.calificacion / e.calMax) * 10 : e.calificacion
           const gc = gradeColor(base10)
@@ -258,12 +265,12 @@ export default function Evaluations() {
               },
               {
                 className: 'w-36 hidden sm:flex',
-                content: <span className="text-sm font-medium truncate" style={{ color:'rgba(255,255,255,.72)' }}>{e.materia}</span>,
+                content: <span className="text-sm font-medium truncate" style={{ color:'var(--t1)' }}>{e.materia}</span>,
               },
               {
                 className: 'w-36 hidden md:flex',
                 content: (
-                  <span className="badge" style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.55)' }}>
+                  <span className="badge" style={{ background:'var(--soft-bg)', color:'var(--t2)' }}>
                     {e.tipo}
                   </span>
                 ),
@@ -278,27 +285,28 @@ export default function Evaluations() {
               },
               {
                 className: 'w-28 hidden lg:flex',
-                content: <span className="text-xs" style={{ color:'rgba(255,255,255,.40)' }}>{e.periodo ?? '—'}</span>,
+                content: <span className="text-xs" style={{ color:'var(--t3)' }}>{e.periodo ?? '—'}</span>,
               },
               {
                 className: 'w-24 hidden lg:flex',
-                content: <span className="text-xs font-mono" style={{ color:'rgba(255,255,255,.40)' }}>{e.fecha}</span>,
+                content: <span className="text-xs font-mono" style={{ color:'var(--t3)' }}>{e.fecha}</span>,
               },
               {
                 className: 'w-10',
                 content: (
                   <button onClick={() => handleDelete(e.id)} title="Eliminar evaluación"
                     className="p-1.5 rounded-lg transition-colors"
-                    style={{ color:'rgba(255,255,255,.25)' }}
+                    style={{ color:'var(--t4)' }}
                     onMouseEnter={ev => ev.currentTarget.style.color='rgb(248,113,113)'}
-                    onMouseLeave={ev => ev.currentTarget.style.color='rgba(255,255,255,.25)'}>
+                    onMouseLeave={ev => ev.currentTarget.style.color='var(--t4)'}>
                     <Trash2 size={13}/>
                   </button>
                 ),
               },
             ]}/>
           )
-        })}
+        }}
+        </ProgressiveList>
       </DataTable>
     </div>
   )

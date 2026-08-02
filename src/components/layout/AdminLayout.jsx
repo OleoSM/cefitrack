@@ -1,4 +1,4 @@
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import LoadingPage from '../LoadingPage'
 import { useAuth } from '../../context/AuthContext'
@@ -18,7 +18,6 @@ const nav = [
   { to:'/admin/alumnos',      label:'Alumnos',                icon:Users },
   { to:'/admin/evaluaciones', label:'Evaluaciones',           icon:ClipboardList },
   { to:'/admin/registrar',    label:'Registrar Calificaciones',icon:TableProperties },
-  { to:'/admin/importar',     label:'Importar',               icon:Upload },
   { to:'/admin/asistencias',  label:'Pasar Lista',            icon:CalendarCheck },
   { to:'/admin/ia',           label:'Análisis IA',            icon:BrainCircuit },
   { to:'/admin/rankings',     label:'Rankings',               icon:Trophy },
@@ -37,7 +36,6 @@ const pageTitles = {
   '/admin/alumnos':      'Alumnos',
   '/admin/evaluaciones': 'Evaluaciones',
   '/admin/registrar':    'Registrar Calificaciones',
-  '/admin/importar':     'Importar Alumnos',
   '/admin/asistencias':  'Pasar Lista',
   '/admin/ia':           'Análisis con IA',
   '/admin/rankings':     'Rankings',
@@ -50,9 +48,10 @@ const activityIcon = {
   mail: Mail, 'check-circle': CheckCircle2, 'file-text': FileText,
   'alert-triangle': AlertTriangle, 'file-check': FileCheck, upload: Upload,
 }
+// Tokens: el panel se ve en las tres identidades.
 const activityColor = {
-  correo:'#60a5fa', asistencia:'#34d399', evaluacion:'#a78bfa',
-  alerta:'#f87171', reporte:'#fbbf24', importacion:'rgba(255,255,255,.55)',
+  correo:'var(--info)', asistencia:'var(--good)', evaluacion:'var(--accent)',
+  alerta:'var(--bad)', reporte:'var(--warn)', importacion:'var(--t2)',
 }
 
 function LayoutInner() {
@@ -78,9 +77,54 @@ function LayoutInner() {
 
   const initials = currentUser?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'PS'
 
+  // Los tokens de la identidad activa se publican como variables CSS para todo
+  // el subárbol: así cualquier página o componente anidado hereda los colores
+  // correctos sin recibir el tema por props.
+  //
+  // Además se replican en <html>: los modales y el selector de paleta se
+  // renderizan por portal a document.body, fuera de este contenedor, y
+  // heredarían las variables oscuras de :root. Sin esto, en IPN/UNAM todo
+  // lo portado sale con panel oscuro sobre página blanca.
+  const themeVars = {
+    '--t1': t.t1, '--t2': t.t2, '--t3': t.t3, '--t4': t.t4,
+    '--card-bg': t.cardBg, '--card-border': t.cardBorder,
+    '--soft-bg': t.softBg, '--divider': t.divider,
+    '--grid': t.grid, '--axis': t.axis,
+    '--tooltip-bg': t.tooltipBg, '--tooltip-border': t.tooltipBorder, '--tooltip-text': t.tooltipText,
+    '--accent': t.accent,
+    '--panel-bg': t.panelBg, '--header-bg': t.headerBg,
+    '--good': t.good, '--info': t.info, '--warn': t.warn, '--bad': t.bad,
+    '--good-soft': t.goodSoft, '--info-soft': t.infoSoft,
+    '--warn-soft': t.warnSoft, '--bad-soft': t.badSoft,
+    '--good-line': t.goodLine, '--info-line': t.infoLine,
+    '--warn-line': t.warnLine, '--bad-line': t.badLine,
+    // Sombra con presencia: la anterior era tan tenue que las tarjetas se
+    // perdían contra el fondo blanco y parecían flotar sin definición.
+    '--card-shadow': t.light
+      ? '0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.08)'
+      : 'none',
+  }
+
+  useEffect(() => {
+    const root = document.documentElement
+    Object.entries(themeVars).forEach(([k, v]) => root.style.setProperty(k, v))
+    if (t.light) root.setAttribute('data-theme-light', '')
+    else root.removeAttribute('data-theme-light')
+    return () => {
+      Object.keys(themeVars).forEach(k => root.style.removeProperty(k))
+      root.removeAttribute('data-theme-light')
+    }
+  }, [appearance, t])
+
   return (
     <div className="flex h-screen overflow-hidden transition-[background] duration-500"
-      style={{ background: identity ? identity.mainBg : ORIGINAL_BG, backgroundImage: identity?.mainBgImage }}>
+      data-theme={appearance}
+      data-theme-light={t.light ? '' : undefined}
+      style={{
+        background: identity ? identity.mainBg : ORIGINAL_BG,
+        backgroundImage: identity?.mainBgImage,
+        ...themeVars,
+      }}>
 
       {/* ── Mobile overlay (fondo difuminado, se ve tras el sidebar) ── */}
       {sidebarOpen && (
@@ -116,16 +160,16 @@ function LayoutInner() {
               style={{ border:'1px solid rgba(255,255,255,.18)', boxShadow:'0 0 12px rgba(161,28,51,.25)' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm leading-none tracking-tight" style={{ color: identity ? identity.t1 : 'white' }}>
+            <p className="font-bold text-sm leading-none tracking-tight" style={{ color: t.sideT1 }}>
               SIGA <span style={{ color: accentSoft }}>CEFIMAT</span>
             </p>
-            <p className="text-[10px] mt-0.5 font-medium" style={{ color: identity ? identity.t3 : 'rgba(255,255,255,.28)' }}>Gestión Académica</p>
+            <p className="text-[10px] mt-0.5 font-medium" style={{ color: t.sideT3 }}>Gestión Académica</p>
           </div>
           <button onClick={closeSidebar} aria-label="Cerrar menú"
             className="lg:hidden p-1 rounded-lg transition-colors"
-            style={{ color:'rgba(255,255,255,.35)' }}
-            onMouseEnter={e => { e.currentTarget.style.color='rgba(255,255,255,.80)'; e.currentTarget.style.background='rgba(255,255,255,.07)' }}
-            onMouseLeave={e => { e.currentTarget.style.color='rgba(255,255,255,.35)'; e.currentTarget.style.background='transparent' }}>
+            style={{ color: t.sideT2 }}
+            onMouseEnter={e => { e.currentTarget.style.color='var(--t2)'; e.currentTarget.style.background='rgba(255,255,255,.07)' }}
+            onMouseLeave={e => { e.currentTarget.style.color='var(--t3)'; e.currentTarget.style.background='transparent' }}>
             <X size={17} />
           </button>
         </div>
@@ -136,7 +180,7 @@ function LayoutInner() {
         {/* Nav */}
         <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto" aria-label="Navegación principal">
           <p className="text-[10px] font-bold uppercase tracking-widest px-3 mb-2.5"
-            style={{ color: identity ? identity.t4 : 'rgba(255,255,255,.22)' }}>
+            style={{ color: t.sideT3 }}>
             Gestión
           </p>
           {nav.filter(n => !n.adminOnly || currentUser?.role === 'admin').map(({ to, label, icon: Icon, exact }) => (
@@ -150,7 +194,7 @@ function LayoutInner() {
                 !identity && (isActive ? 'text-white' : 'text-slate-400 hover:text-white')
               )}
               style={({ isActive }) => identity
-                ? { color: isActive ? identity.t1 : identity.t3 }
+                ? { color: isActive ? t.sideT1 : t.sideT2 }
                 : undefined}
             >
               {({ isActive }) => (
@@ -160,7 +204,7 @@ function LayoutInner() {
                     <span className="absolute inset-0 rounded-xl pointer-events-none"
                       style={identity
                         ? { background: `${accent}14`, border: `1px solid ${accent}33` }
-                        : { background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.1)' }} />
+                        : { background: 'var(--card-border)', border: '1px solid rgba(255,255,255,.1)' }} />
                   )}
                   {/* Left accent bar (marca institucional) */}
                   {isActive && (
@@ -187,14 +231,14 @@ function LayoutInner() {
         {/* User footer */}
         <div className="relative px-3 py-3">
           <div className="flex items-center gap-3 px-2 py-2 rounded-xl transition-colors"
-            onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.05)'}
+            onMouseEnter={e => e.currentTarget.style.background='var(--card-bg)'}
             onMouseLeave={e => e.currentTarget.style.background='transparent'}>
             <div className="relative flex-shrink-0">
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
                 style={{
-                  background: identity ? `${identity.t1}22` : 'rgba(255,255,255,.15)',
-                  border: `1px solid ${identity ? identity.t1 + '33' : 'rgba(255,255,255,.18)'}`,
-                  color: identity ? identity.t1 : 'white',
+                  background: `${t.sideT1}22`,
+                  border: `1px solid ${t.sideT1}33`,
+                  color: t.sideT1,
                 }}>
                 {initials}
               </div>
@@ -202,14 +246,14 @@ function LayoutInner() {
                 style={{ border: `2px solid ${identity ? identity.sideBg : ORIGINAL_BG}` }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold truncate leading-none" style={{ color: identity ? identity.t1 : 'white' }}>{currentUser?.name}</p>
-              <p className="text-[10px] mt-0.5 font-medium" style={{ color: identity ? identity.t3 : 'rgba(255,255,255,.28)' }}>Docente · Admin</p>
+              <p className="text-xs font-semibold truncate leading-none" style={{ color: t.sideT1 }}>{currentUser?.name}</p>
+              <p className="text-[10px] mt-0.5 font-medium" style={{ color: t.sideT3 }}>Docente · Admin</p>
             </div>
             <button onClick={handleLogout} title="Cerrar sesión" aria-label="Cerrar sesión"
               className="p-1.5 rounded-lg transition-colors"
-              style={{ color:'rgba(255,255,255,.30)' }}
+              style={{ color: t.sideT3 }}
               onMouseEnter={e => { e.currentTarget.style.color='rgba(248,113,113,.9)'; e.currentTarget.style.background='rgba(239,68,68,.10)' }}
-              onMouseLeave={e => { e.currentTarget.style.color='rgba(255,255,255,.30)'; e.currentTarget.style.background='transparent' }}>
+              onMouseLeave={e => { e.currentTarget.style.color='var(--t3)'; e.currentTarget.style.background='transparent' }}>
               <LogOut size={14} />
             </button>
           </div>
@@ -230,15 +274,15 @@ function LayoutInner() {
           <div className="flex items-center gap-3 min-w-0">
             <button onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"
               className="lg:hidden p-2 rounded-xl transition-colors active:scale-95"
-              style={{ color: identity ? identity.t2 : 'rgba(255,255,255,.55)' }}
+              style={{ color: t.sideT2 }}
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.07)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <Menu size={19} />
             </button>
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[11px] font-medium hidden sm:block" style={{ color: identity ? identity.t3 : 'rgba(255,255,255,.30)' }}>SIGA CEFIMAT</span>
-              <ChevronRight size={12} className="hidden sm:block flex-shrink-0" style={{ color: identity ? identity.t4 : 'rgba(255,255,255,.20)' }} />
-              <h1 className="text-sm font-bold truncate" style={{ color: identity ? identity.t1 : 'rgba(255,255,255,.85)' }}>{pageTitle}</h1>
+              <span className="text-[11px] font-medium hidden sm:block" style={{ color: t.sideT3 }}>SIGA CEFIMAT</span>
+              <ChevronRight size={12} className="hidden sm:block flex-shrink-0" style={{ color: t.sideT3 }} />
+              <h1 className="text-sm font-bold truncate" style={{ color: t.sideT1 }}>{pageTitle}</h1>
             </div>
           </div>
 
@@ -246,7 +290,7 @@ function LayoutInner() {
             <div className="relative">
               <button aria-label="Notificaciones" onClick={() => setNotifOpen(v => !v)}
                 className="relative p-2 rounded-xl transition-colors active:scale-95"
-                style={{ color: identity ? identity.t3 : 'rgba(255,255,255,.40)', background: notifOpen ? 'rgba(255,255,255,.07)' : 'transparent' }}
+                style={{ color: t.sideT3, background: notifOpen ? 'rgba(255,255,255,.07)' : 'transparent' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.07)'}
                 onMouseLeave={e => e.currentTarget.style.background = notifOpen ? 'rgba(255,255,255,.07)' : 'transparent'}>
                 <Bell size={17} />
@@ -257,26 +301,26 @@ function LayoutInner() {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
                   <div className="absolute right-0 top-full mt-2 w-80 max-w-[85vw] rounded-2xl z-50 overflow-hidden animate-scale-in"
-                    style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.60)' }}>
+                    style={{ background:'var(--panel-bg)', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.60)' }}>
                     <div className="px-4 py-3" style={{ borderBottom:'1px solid rgba(255,255,255,.08)' }}>
-                      <p className="text-sm font-bold" style={{ color:'rgba(255,255,255,.90)' }}>Notificaciones</p>
+                      <p className="text-sm font-bold" style={{ color:'var(--t1)' }}>Notificaciones</p>
                     </div>
                     <div className="max-h-80 overflow-y-auto">
                       {recentActivity.map(a => {
                         const Icon = activityIcon[a.icon] ?? Bell
-                        const color = activityColor[a.tipo] ?? 'rgba(255,255,255,.50)'
+                        const color = activityColor[a.tipo] ?? 'var(--t2)'
                         return (
                           <div key={a.id} className="flex items-start gap-3 px-4 py-3 transition-colors"
                             style={{ borderBottom:'1px solid rgba(255,255,255,.05)' }}
-                            onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.04)'}
+                            onMouseEnter={e => e.currentTarget.style.background='var(--card-bg)'}
                             onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                             <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
                               style={{ background:`${color}1f`, border:`1px solid ${color}44` }}>
                               <Icon size={13} style={{ color }} />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-xs font-medium leading-snug" style={{ color:'rgba(255,255,255,.80)' }}>{a.texto}</p>
-                              <p className="text-[10px] mt-0.5" style={{ color:'rgba(255,255,255,.35)' }}>{a.hora}</p>
+                              <p className="text-xs font-medium leading-snug" style={{ color:'var(--t2)' }}>{a.texto}</p>
+                              <p className="text-[10px] mt-0.5" style={{ color:'var(--t3)' }}>{a.hora}</p>
                             </div>
                           </div>
                         )
@@ -287,16 +331,16 @@ function LayoutInner() {
               )}
             </div>
 
-            <div className="flex items-center gap-2.5 pl-2" style={{ borderLeft: `1px solid ${identity ? identity.sideBorder : 'rgba(255,255,255,.08)'}` }}>
+            <div className="flex items-center gap-2.5 pl-2" style={{ borderLeft: `1px solid ${identity ? identity.sideBorder : 'var(--card-border)'}` }}>
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
                 style={{
-                  background: identity ? `${identity.t1}1f` : 'rgba(255,255,255,.12)',
-                  border: `1px solid ${identity ? identity.t1 + '26' : 'rgba(255,255,255,.15)'}`,
-                  color: identity ? identity.t1 : 'white',
+                  background: identity ? `${identity.t1}1f` : 'var(--t4)',
+                  border: `1px solid ${t.sideT1}26`,
+                  color: t.sideT1,
                 }}>
                 {initials}
               </div>
-              <span className="text-sm font-semibold hidden md:block" style={{ color: identity ? identity.t2 : 'rgba(255,255,255,.70)' }}>
+              <span className="text-sm font-semibold hidden md:block" style={{ color: t.sideT2 }}>
                 {currentUser?.name.split(' ').slice(0, 2).join(' ')}
               </span>
             </div>
@@ -318,7 +362,7 @@ function LayoutInner() {
             background: identity ? identity.bottomBg : 'rgba(5,5,10,.90)',
             backdropFilter: identity?.light ? 'none' : 'blur(16px)',
             WebkitBackdropFilter: identity?.light ? 'none' : 'blur(16px)',
-            borderTop: `1px solid ${identity ? identity.sideBorder : 'rgba(255,255,255,.08)'}`,
+            borderTop: `1px solid ${identity ? identity.sideBorder : 'var(--card-border)'}`,
           }}>
           {bottomNav.map(({ to, label, icon: Icon, exact }) => (
             <NavLink key={to} to={to} end={exact}
@@ -327,7 +371,7 @@ function LayoutInner() {
                 <>
                   <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8}
                     style={{ color: isActive ? (identity?.t1 ?? 'white') : (identity?.t3 ?? '#94a3b8') }} />
-                  <span style={{ color: isActive ? (identity?.t1 ?? 'rgba(255,255,255,.90)') : (identity?.t3 ?? '#94a3b8') }}>{label}</span>
+                  <span style={{ color: isActive ? (identity?.t1 ?? 'var(--t1)') : (identity?.t3 ?? '#94a3b8') }}>{label}</span>
                   {isActive && <span className="absolute bottom-0 w-6 h-0.5 rounded-t-full" style={{ background: accent }} />}
                 </>
               )}

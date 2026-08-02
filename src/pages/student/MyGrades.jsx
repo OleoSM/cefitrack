@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import MateriaBarChart from '../../components/ui/MateriaBarChart'
 import { useStudentData } from '../../hooks/useStudentData'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
@@ -53,7 +54,12 @@ export default function MyGrades() {
   if (!s) return <div style={{ color: t.t3 }}>Perfil no disponible.</div>
 
   const materias = Object.keys(byMateria)
-  const colorOf = mat => MATERIA_COLORS[materias.indexOf(mat) % MATERIA_COLORS.length]
+  // indexOf devuelve -1 para una materia desconocida, y MATERIA_COLORS[-1] es
+  // undefined: de ahí venía el color inválido que tumbaba la gráfica.
+  const colorOf = mat => {
+    const i = materias.indexOf(mat)
+    return MATERIA_COLORS[(i < 0 ? 0 : i) % MATERIA_COLORS.length]
+  }
 
   /* ── Alcance: general o una materia ── */
   const scopeEvals = scope === 'general' ? evals : (byMateria[scope] ?? [])
@@ -90,7 +96,7 @@ export default function MyGrades() {
   ]
 
   return (
-    <div className="max-w-4xl space-y-5">
+    <div className="space-y-5">
       {/* Header + selector General / materia */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -217,8 +223,10 @@ export default function MyGrades() {
                       <th className="table-header">Fecha</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {evs.map(e => (
+                  <ProgressiveList as="tbody" colSpan={4} items={evs}
+                    sizes={{ mobile: 5, tablet: 10, desktop: 15 }}
+                    emptyLabel="Sin evaluaciones en esta materia.">
+                    {e => (
                       <tr key={e.id} className="transition-colors" style={{ borderBottom: `1px solid ${t.divider}` }}>
                         <td className="table-cell">
                           <span className="badge text-[11px]" style={{ background: t.softBg, color: t.t2, border: `1px solid ${t.cardBorder}` }}>{e.tipo}</span>
@@ -237,8 +245,8 @@ export default function MyGrades() {
                         <td className="table-cell hidden sm:table-cell" style={{ color: t.t2 }}>{e.periodo}</td>
                         <td className="table-cell text-xs" style={{ color: t.t3 }}>{e.fecha}</td>
                       </tr>
-                    ))}
-                  </tbody>
+                    )}
+                  </ProgressiveList>
                 </table>
               </div>
             </div>

@@ -24,7 +24,7 @@ function SignaturePad({ onCapture, disabled }) {
       canvas.height = rect.height * dpr
       const ctx = canvas.getContext('2d')
       ctx.scale(dpr, dpr)
-      ctx.strokeStyle = 'rgba(255,255,255,.88)'
+      ctx.strokeStyle = 'var(--t1)'
       ctx.lineWidth   = 2.5
       ctx.lineCap     = 'round'
       ctx.lineJoin    = 'round'
@@ -72,11 +72,11 @@ function SignaturePad({ onCapture, disabled }) {
   return (
     <div>
       <div className="relative rounded-xl overflow-hidden" style={{
-        background: 'rgba(255,255,255,.025)',
-        border: '1.5px dashed rgba(255,255,255,.18)',
+        background: 'var(--soft-bg)',
+        border: '1.5px dashed var(--card-border)',
       }}>
         {!hasStrokes && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 pointer-events-none select-none" style={{ color:'rgba(255,255,255,.16)' }}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 pointer-events-none select-none" style={{ color:'var(--card-border)' }}>
             <PenLine size={22}/>
             <p className="text-xs">Dibuja tu firma aquí</p>
           </div>
@@ -95,7 +95,7 @@ function SignaturePad({ onCapture, disabled }) {
           onClick={clear}
           disabled={!hasStrokes || disabled}
           className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all disabled:opacity-35"
-          style={{ color:'rgba(255,255,255,.45)', background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.08)' }}>
+          style={{ color:'var(--t3)', background:'var(--card-bg)', border:'1px solid var(--card-border)' }}>
           <Trash2 size={12}/> Limpiar
         </button>
         <button
@@ -103,8 +103,8 @@ function SignaturePad({ onCapture, disabled }) {
           disabled={!hasStrokes || disabled}
           className="flex items-center gap-1.5 text-xs font-bold px-4 py-1.5 rounded-lg transition-all duration-150 disabled:opacity-35 active:scale-95"
           style={{
-            background: hasStrokes && !disabled ? 'white' : 'rgba(255,255,255,.08)',
-            color:      hasStrokes && !disabled ? '#000'  : 'rgba(255,255,255,.25)',
+            background: hasStrokes && !disabled ? 'white' : 'var(--card-bg)',
+            color:      hasStrokes && !disabled ? '#000'  : 'var(--t4)',
           }}>
           <Check size={12}/> Usar esta firma
         </button>
@@ -118,31 +118,31 @@ function DocUpload({ label, icon: Icon, file, onChange, disabled }) {
   const ref = useRef(null)
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color:'rgba(255,255,255,.35)' }}>{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color:'var(--t3)' }}>{label}</p>
       <button
         type="button"
         onClick={() => ref.current?.click()}
         disabled={disabled}
         className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all active:scale-[.98] disabled:opacity-50"
         style={{
-          background:  file ? 'rgba(52,211,153,.07)' : 'rgba(255,255,255,.04)',
-          border:     `1px solid ${file ? 'rgba(52,211,153,.22)' : 'rgba(255,255,255,.09)'}`,
+          background:  file ? 'var(--good-soft)' : 'var(--soft-bg)',
+          border:     `1px solid ${file ? 'var(--good-soft)' : 'var(--card-bg)'}`,
         }}>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{
-          background: file ? 'rgba(52,211,153,.14)' : 'rgba(255,255,255,.06)',
+          background: file ? 'var(--good-soft)' : 'var(--card-bg)',
         }}>
           {file
-            ? <CheckCircle2 size={16} style={{ color:'#34d399' }}/>
-            : <Icon         size={16} style={{ color:'rgba(255,255,255,.35)' }}/>
+            ? <CheckCircle2 size={16} style={{ color:'var(--good)' }}/>
+            : <Icon         size={16} style={{ color:'var(--t3)' }}/>
           }
         </div>
         <div className="flex-1 min-w-0">
           {file
-            ? <p className="text-xs font-semibold truncate" style={{ color:'#34d399' }}>{file}</p>
-            : <p className="text-xs"                        style={{ color:'rgba(255,255,255,.35)' }}>Subir archivo (PDF, JPG, PNG)</p>
+            ? <p className="text-xs font-semibold truncate" style={{ color:'var(--good)' }}>{file}</p>
+            : <p className="text-xs"                        style={{ color:'var(--t3)' }}>Subir archivo (PDF, JPG, PNG)</p>
           }
         </div>
-        {!file && <Upload size={13} style={{ color:'rgba(255,255,255,.22)', flexShrink:0 }}/>}
+        {!file && <Upload size={13} style={{ color:'var(--t4)', flexShrink:0 }}/>}
       </button>
       <input
         ref={ref} type="file" className="hidden"
@@ -161,9 +161,9 @@ function HandSignedUpload({ file, onChange }) {
       <button type="button" onClick={() => ref.current?.click()}
         className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all active:scale-95"
         style={{
-          background: file ? 'rgba(52,211,153,.10)' : 'rgba(255,255,255,.06)',
-          border: `1px solid ${file ? 'rgba(52,211,153,.28)' : 'rgba(255,255,255,.12)'}`,
-          color: file ? '#34d399' : 'rgba(255,255,255,.70)',
+          background: file ? 'var(--good-soft)' : 'var(--card-bg)',
+          border: `1px solid ${file ? 'var(--good-soft)' : 'var(--card-border)'}`,
+          color: file ? 'var(--good)' : 'var(--t2)',
         }}>
         {file ? <CheckCircle2 size={13}/> : <Upload size={13}/>}
         {file ? file.name : 'Subir PDF firmado'}
@@ -307,7 +307,7 @@ export default function Terms() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="page-title">Términos y Condiciones</h1>
-          <p className="text-sm mt-1" style={{ color:'rgba(255,255,255,.38)' }}>
+          <p className="text-sm mt-1" style={{ color:'var(--t3)' }}>
             Firma los documentos requeridos para activar tu acceso completo.
           </p>
         </div>
@@ -324,11 +324,11 @@ export default function Terms() {
 
       {/* Banner de estado */}
       {!signed && (
-        <div className="flex gap-3 p-4 rounded-xl" style={{ background:'rgba(251,191,36,.07)', border:'1px solid rgba(251,191,36,.20)' }}>
-          <AlertTriangle size={16} style={{ color:'#fbbf24', flexShrink:0, marginTop:2 }}/>
+        <div className="flex gap-3 p-4 rounded-xl" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-soft)' }}>
+          <AlertTriangle size={16} style={{ color:'var(--warn)', flexShrink:0, marginTop:2 }}/>
           <div>
-            <p className="text-sm font-semibold" style={{ color:'#fbbf24' }}>Acceso pendiente de activación</p>
-            <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,.42)' }}>
+            <p className="text-sm font-semibold" style={{ color:'var(--warn)' }}>Acceso pendiente de activación</p>
+            <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
               Lee los documentos, sube tu CURP e INE del tutor, y dibuja tu firma para completar el registro.
               La validez de la firma es responsabilidad enteramente del alumno.
             </p>
@@ -336,11 +336,11 @@ export default function Terms() {
         </div>
       )}
       {signed && (
-        <div className="flex gap-3 p-4 rounded-xl" style={{ background:'rgba(52,211,153,.07)', border:'1px solid rgba(52,211,153,.18)' }}>
-          <CheckCircle2 size={16} style={{ color:'#34d399', flexShrink:0, marginTop:2 }}/>
+        <div className="flex gap-3 p-4 rounded-xl" style={{ background:'var(--good-soft)', border:'1px solid var(--good-soft)' }}>
+          <CheckCircle2 size={16} style={{ color:'var(--good)', flexShrink:0, marginTop:2 }}/>
           <div>
-            <p className="text-sm font-semibold" style={{ color:'#34d399' }}>Documentos firmados</p>
-            <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,.42)' }}>
+            <p className="text-sm font-semibold" style={{ color:'var(--good)' }}>Documentos firmados</p>
+            <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
               Firmado el {signedAt}. Tu firma fue guardada en tu perfil.
             </p>
           </div>
@@ -348,7 +348,7 @@ export default function Terms() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl" style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)' }}>
+      <div className="flex gap-1 p-1 rounded-xl" style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
         {TABS.map(t => {
           const Icon = t.icon
           const active = tab === t.id
@@ -358,7 +358,7 @@ export default function Terms() {
                 'flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all',
                 active ? 'bg-white text-black' : 'hover:text-white/70'
               )}
-              style={{ color: active ? '#000' : 'rgba(255,255,255,.38)' }}>
+              style={{ color: active ? '#000' : 'var(--t3)' }}>
               <Icon size={13}/>
               <span className="hidden sm:inline">{t.label}</span>
               <span className="sm:hidden">{t.short}</span>
@@ -370,7 +370,7 @@ export default function Terms() {
       {/* ── Tab T&C ──────────────────────────────────────────────── */}
       {tab === 'tc' && (
         <div className="card p-5 space-y-4">
-          <div className="max-h-64 overflow-y-auto pr-1 text-xs leading-relaxed" style={{ color:'rgba(255,255,255,.50)', whiteSpace:'pre-line' }}>
+          <div className="max-h-64 overflow-y-auto pr-1 text-xs leading-relaxed" style={{ color:'var(--t2)', whiteSpace:'pre-line' }}>
             {TC_TEXT}
           </div>
           {!tcRead
@@ -380,9 +380,9 @@ export default function Terms() {
               </button>
             )
             : (
-              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background:'rgba(52,211,153,.07)', border:'1px solid rgba(52,211,153,.18)' }}>
-                <CheckCircle2 size={14} style={{ color:'#34d399' }}/>
-                <span className="text-xs font-semibold" style={{ color:'#34d399' }}>Leídos y aceptados</span>
+              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background:'var(--good-soft)', border:'1px solid var(--good-soft)' }}>
+                <CheckCircle2 size={14} style={{ color:'var(--good)' }}/>
+                <span className="text-xs font-semibold" style={{ color:'var(--good)' }}>Leídos y aceptados</span>
               </div>
             )
           }
@@ -392,7 +392,7 @@ export default function Terms() {
       {/* ── Tab Privacidad ───────────────────────────────────────── */}
       {tab === 'priv' && (
         <div className="card p-5 space-y-4">
-          <div className="max-h-64 overflow-y-auto pr-1 text-xs leading-relaxed" style={{ color:'rgba(255,255,255,.50)', whiteSpace:'pre-line' }}>
+          <div className="max-h-64 overflow-y-auto pr-1 text-xs leading-relaxed" style={{ color:'var(--t2)', whiteSpace:'pre-line' }}>
             {PRIV_TEXT}
           </div>
           {!privRead
@@ -402,9 +402,9 @@ export default function Terms() {
               </button>
             )
             : (
-              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background:'rgba(52,211,153,.07)', border:'1px solid rgba(52,211,153,.18)' }}>
-                <CheckCircle2 size={14} style={{ color:'#34d399' }}/>
-                <span className="text-xs font-semibold" style={{ color:'#34d399' }}>Leído y aceptado</span>
+              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background:'var(--good-soft)', border:'1px solid var(--good-soft)' }}>
+                <CheckCircle2 size={14} style={{ color:'var(--good)' }}/>
+                <span className="text-xs font-semibold" style={{ color:'var(--good)' }}>Leído y aceptado</span>
               </div>
             )
           }
@@ -427,7 +427,7 @@ export default function Terms() {
             <div className="flex items-center justify-between">
               <h2 className="section-title">Firma digital</h2>
               {signed && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background:'rgba(52,211,153,.12)', color:'#34d399', border:'1px solid rgba(52,211,153,.20)' }}>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-soft)' }}>
                   Guardada
                 </span>
               )}
@@ -436,16 +436,16 @@ export default function Terms() {
             {/* Firma existente */}
             {signed && signature && (
               <div className="space-y-2">
-                <div className="rounded-xl p-3" style={{ background:'rgba(255,255,255,.02)', border:'1px solid rgba(255,255,255,.07)' }}>
+                <div className="rounded-xl p-3" style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
                   <img src={signature} alt="Firma guardada" className="max-h-28 mx-auto block"/>
                 </div>
-                <p className="text-[11px]" style={{ color:'rgba(255,255,255,.22)' }}>
+                <p className="text-[11px]" style={{ color:'var(--t4)' }}>
                   Firmado el {signedAt}
                 </p>
               </div>
             )}
             {signed && !signature && (
-              <p className="text-xs" style={{ color:'rgba(255,255,255,.30)' }}>Firma registrada en el sistema.</p>
+              <p className="text-xs" style={{ color:'var(--t3)' }}>Firma registrada en el sistema.</p>
             )}
 
             {/* Canvas */}
@@ -453,10 +453,10 @@ export default function Terms() {
               <>
                 <SignaturePad onCapture={setSignature} disabled={signed}/>
                 {signature && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-xl" style={{ background:'rgba(52,211,153,.07)', border:'1px solid rgba(52,211,153,.18)' }}>
-                    <CheckCircle2 size={13} style={{ color:'#34d399' }}/>
-                    <span className="text-xs font-semibold flex-1" style={{ color:'#34d399' }}>Firma capturada</span>
-                    <button onClick={() => setSignature(null)} className="text-[11px]" style={{ color:'rgba(248,113,113,.60)' }}>
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl" style={{ background:'var(--good-soft)', border:'1px solid var(--good-soft)' }}>
+                    <CheckCircle2 size={13} style={{ color:'var(--good)' }}/>
+                    <span className="text-xs font-semibold flex-1" style={{ color:'var(--good)' }}>Firma capturada</span>
+                    <button onClick={() => setSignature(null)} className="text-[11px]" style={{ color:'var(--bad-line)' }}>
                       Volver a dibujar
                     </button>
                   </div>
@@ -464,23 +464,23 @@ export default function Terms() {
                 {signature && (
                   <button onClick={handleDownloadStamped}
                     className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all active:scale-95"
-                    style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}>
+                    style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
                     <Download size={13}/> Descargar PDF con firma digital
                   </button>
                 )}
 
                 {/* Alternativa: firmar a mano */}
-                <div className="pt-3 space-y-2.5" style={{ borderTop:'1px dashed rgba(255,255,255,.10)' }}>
-                  <p className="text-xs font-semibold" style={{ color:'rgba(255,255,255,.45)' }}>¿Prefieres firmar a mano?</p>
+                <div className="pt-3 space-y-2.5" style={{ borderTop:'1px dashed var(--card-border)' }}>
+                  <p className="text-xs font-semibold" style={{ color:'var(--t3)' }}>¿Prefieres firmar a mano?</p>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button onClick={handleDownloadBlank}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all active:scale-95"
-                      style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}>
+                      style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
                       <FileSignature size={13}/> Descargar PDF en blanco
                     </button>
                     <HandSignedUpload file={handSignedFile} onChange={setHandSignedFile}/>
                   </div>
-                  <p className="text-[10px]" style={{ color:'rgba(255,255,255,.22)' }}>
+                  <p className="text-[10px]" style={{ color:'var(--t4)' }}>
                     Descarga, fírmalo a mano y vuelve a subirlo aquí. El PDF que subas se adjunta a tu registro localmente por ahora —
                     la subida permanente a almacenamiento seguro está pendiente de habilitarse por el administrador.
                   </p>
@@ -493,18 +493,18 @@ export default function Terms() {
           {!signed && (
             <>
               <div className="card p-4 space-y-2.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color:'rgba(255,255,255,.28)' }}>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color:'var(--t4)' }}>
                   Requisitos para firmar
                 </p>
                 {checklist.map(({ ok, label }) => (
                   <div key={label} className="flex items-center gap-2.5 text-xs">
                     <span className={clsx('w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-all', ok ? 'bg-emerald-500/20' : 'bg-white/5')}>
                       {ok
-                        ? <Check size={10} style={{ color:'#34d399' }}/>
+                        ? <Check size={10} style={{ color:'var(--good)' }}/>
                         : <span className="w-1.5 h-1.5 rounded-full bg-white/15"/>
                       }
                     </span>
-                    <span style={{ color: ok ? 'rgba(255,255,255,.60)' : 'rgba(255,255,255,.25)' }}>{label}</span>
+                    <span style={{ color: ok ? 'var(--t2)' : 'var(--t4)' }}>{label}</span>
                   </div>
                 ))}
               </div>
@@ -521,7 +521,7 @@ export default function Terms() {
                 {submitting ? 'Guardando…' : 'Firmar y enviar'}
               </button>
 
-              <p className="text-[11px] text-center" style={{ color:'rgba(255,255,255,.18)' }}>
+              <p className="text-[11px] text-center" style={{ color:'var(--card-border)' }}>
                 La validez de la firma es responsabilidad enteramente del alumno.
               </p>
             </>

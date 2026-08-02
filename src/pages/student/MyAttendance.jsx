@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { attendanceColors } from '../../data/mockData'
+import { attendanceColors, getAttendanceColor } from '../../data/mockData'
 import { statsAsistencia } from '../../lib/studentMetrics'
 import { useStudentData } from '../../hooks/useStudentData'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
 import { CheckCircle2, Clock, XCircle, ShieldAlert, Calendar, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
@@ -55,7 +56,7 @@ function TodayCard({ record, tardanzasRestantes, tardanzasConvertidas, lastRecor
           {!record && lastRecord && (
             <p className="text-[11px] mt-1" style={{ color: t.t4 }}>
               Último registro: {new Date(lastRecord.date + 'T12:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
-              {' — '}{attendanceColors[lastRecord.status].label.toLowerCase()}{lastRecord.time ? ` a las ${lastRecord.time}` : ''}
+              {' — '}{getAttendanceColor(lastRecord.status).label.toLowerCase()}{lastRecord.time ? ` a las ${lastRecord.time}` : ''}
             </p>
           )}
         </div>
@@ -259,7 +260,7 @@ export default function MyAttendance() {
   const attColor = pct >= 90 ? '#34d399' : pct >= 75 ? '#f59e0b' : '#f87171'
 
   return (
-    <div className="max-w-4xl space-y-5">
+    <div className="space-y-5">
       <div>
         <h1 className="page-title">Mis Asistencias</h1>
         <p className="text-sm mt-1" style={{ color: t.t3 }}>Registro conectado al pase de lista de tu grupo.</p>
@@ -345,13 +346,13 @@ export default function MyAttendance() {
           <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
             {weekDays.map((d, i) => {
               const rec = byDate.get(iso(d))
-              const c = rec ? attendanceColors[rec.status] : null
+              const c = rec ? getAttendanceColor(rec.status) : null
               const isWeekend = i >= 5
               return (
                 <div key={i} className="flex flex-col items-center">
                   <span className="text-[9px] sm:text-[10px] font-bold uppercase mb-1.5" style={{ color: t.t4 }}>{DOW[i]}</span>
                   <div
-                    title={rec ? `${attendanceColors[rec.status].label}${rec.time ? ' — ' + rec.time : ''}` : isWeekend ? 'Fin de semana' : 'Sin registro'}
+                    title={rec ? `${getAttendanceColor(rec.status).label}${rec.time ? ' — ' + rec.time : ''}` : isWeekend ? 'Fin de semana' : 'Sin registro'}
                     className={`w-full aspect-square max-w-[52px] rounded-xl flex flex-col items-center justify-center ${rec ? `${c.bg} ${c.text}` : ''}`}
                     style={!rec ? { border: `1.5px dashed ${t.cardBorder}`, color: t.t4 } : {}}>
                     <span className="text-sm font-bold tabular-nums">{d.getDate()}</span>
@@ -364,7 +365,9 @@ export default function MyAttendance() {
           </div>
 
           <div className="flex flex-wrap gap-3 mt-4 pt-4" style={{ borderTop: `1px solid ${t.divider}` }}>
-            {Object.entries(attendanceColors).map(([k, v]) => (
+            {/* `sinRegistro` es sólo el respaldo del helper, no un estado que
+                el docente capture: fuera de la leyenda. */}
+            {Object.entries(attendanceColors).filter(([k]) => k !== 'sinRegistro').map(([k, v]) => (
               <div key={k} className="flex items-center gap-1.5 text-xs" style={{ color: t.t3 }}>
                 <span className={`w-2.5 h-2.5 rounded-full ${v.dot}`}/>{v.label}
               </div>
@@ -391,7 +394,14 @@ export default function MyAttendance() {
           {Object.keys(grouped).length === 0 && (
             <div className="card p-8 text-center text-sm" style={{ color: t.t4 }}>Sin registros para este filtro.</div>
           )}
-          {Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0])).map(([mKey, month]) => (
+          {/* Se pagina por mes, que es el agrupamiento natural del historial:
+              con el curso avanzado son decenas de días y en teléfono no cabe
+              volcarlos todos. */}
+          <ProgressiveList className="space-y-3"
+            items={Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]))}
+            sizes={{ mobile: 1, tablet: 2, desktop: 3 }}
+            emptyLabel="Todavía no hay asistencias registradas.">
+          {([mKey, month]) => (
             <div key={mKey} className="card overflow-hidden">
               <div className="px-4 py-2.5 capitalize font-bold text-sm"
                 style={{ background: t.softBg, borderBottom: `1px solid ${t.divider}`, color: t.t1 }}>
@@ -403,7 +413,7 @@ export default function MyAttendance() {
                     {week.label}
                   </p>
                   {week.records.map(a => {
-                    const c = attendanceColors[a.status]
+                    const c = getAttendanceColor(a.status)
                     const d = new Date(a.date + 'T12:00')
                     return (
                       <div key={a.date} className="px-4 py-2.5 flex items-center gap-3"
@@ -428,7 +438,8 @@ export default function MyAttendance() {
                 </div>
               ))}
             </div>
-          ))}
+          )}
+          </ProgressiveList>
         </div>
       </div>
     </div>

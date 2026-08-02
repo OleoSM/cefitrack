@@ -23,24 +23,24 @@ export default function ResetPasswordModal({ student, onClose, onDone }) {
   return (
     <ModalPortal onClose={onClose} maxWidth="max-w-sm">
         <div className="flex items-center justify-between px-5 py-3.5"
-          style={{ borderBottom:'1px solid rgba(255,255,255,.08)' }}>
+          style={{ borderBottom: '1px solid var(--card-border)' }}>
           <div className="flex items-center gap-2">
-            <KeyRound size={15} style={{ color:'#fbbf24' }}/>
-            <h2 className="text-sm font-bold" style={{ color:'rgba(255,255,255,.85)' }}>Restablecer contraseña</h2>
+            <KeyRound size={15} style={{ color:'var(--warn)' }}/>
+            <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Restablecer contraseña</h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg" style={{ color:'rgba(255,255,255,.40)' }}>
+          <button onClick={onClose} className="p-1 rounded-lg" style={{ color: 'var(--t3)' }}>
             <X size={14}/>
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
-          <p className="text-sm" style={{ color:'rgba(255,255,255,.62)' }}>
-            Se asignará una contraseña nueva a <span className="font-semibold" style={{ color:'rgba(255,255,255,.85)' }}>{student.name}</span>.
+          <p className="text-sm" style={{ color: 'var(--t2)' }}>
+            Se asignará una contraseña nueva a <span className="font-semibold" style={{ color: 'var(--t1)' }}>{student.name}</span>.
           </p>
 
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-              style={{ color:'rgba(255,255,255,.35)' }}>Nueva contraseña</label>
+              style={{ color: 'var(--t3)' }}>Nueva contraseña</label>
             <div className="flex gap-2">
               <input required value={password} onChange={e => setPassword(e.target.value)}
                 className="input-field flex-1 font-mono"/>
@@ -52,7 +52,7 @@ export default function ResetPasswordModal({ student, onClose, onDone }) {
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg px-3 py-2"
-              style={{ background:'rgba(239,68,68,.10)', border:'1px solid rgba(239,68,68,.30)' }}>
+              style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
               <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-400"/>
               <span className="text-xs text-red-400">{error}</span>
             </div>

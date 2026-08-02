@@ -122,7 +122,7 @@ export default function StudentDashboard() {
   const { desglose, pesos } = pond
 
   return (
-    <div className="max-w-6xl space-y-5">
+    <div className="space-y-5">
 
       {/* ══ Tarjeta de bienvenida (color personalizable en Configuración) ══ */}
       <div className="kw rounded-2xl p-5 sm:p-6 text-white"
@@ -142,7 +142,7 @@ export default function StudentDashboard() {
             <HoverInfo trigger={
               <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl bg-white/10 min-w-[96px]">
                 <p className="text-2xl font-bold tabular-nums text-white flex items-center justify-center gap-1">
-                  {pond.promedio}
+                  {pond.promedio ?? '—'}
                   <Info size={11} className="text-white/40"/>
                 </p>
                 <p className="text-[11px] text-white/45">Promedio</p>
@@ -152,9 +152,16 @@ export default function StudentDashboard() {
                 ¿Cómo se calcula tu promedio?
               </p>
               {[
-                { l: `Exámenes (${pesos.examenes}%)`,  v: desglose.examenes.valor.toFixed(1) },
-                { l: `Tareas (${pesos.tareas}%)`,      v: `${desglose.tareas.done}/${desglose.tareas.total} → ${desglose.tareas.valor.toFixed(1)}` },
-                { l: `Asistencia (${pesos.asistencia}%)`, v: `${desglose.asistencia.pct}% → ${desglose.asistencia.valor.toFixed(1)}` },
+                { l: `Exámenes (${pesos.examenes}%)`,
+                  v: desglose.examenes.valor === null ? 'Sin datos' : desglose.examenes.valor.toFixed(1) },
+                { l: `Tareas (${pesos.tareas}%)`,
+                  v: desglose.tareas.valor === null
+                    ? 'Sin asignar'
+                    : `${desglose.tareas.done}/${desglose.tareas.total} → ${desglose.tareas.valor.toFixed(1)}` },
+                { l: `Asistencia (${pesos.asistencia}%)`,
+                  v: desglose.asistencia.valor === null
+                    ? 'Sin datos'
+                    : `${desglose.asistencia.pct}% → ${desglose.asistencia.valor.toFixed(1)}` },
               ].map(row => (
                 <div key={row.l} className="flex items-center justify-between py-1 text-xs">
                   <span style={{ color: 'rgba(255,255,255,.55)' }}>{row.l}</span>
@@ -164,7 +171,7 @@ export default function StudentDashboard() {
               <div className="flex items-center justify-between pt-2 mt-1 text-xs"
                 style={{ borderTop: '1px solid rgba(255,255,255,.10)' }}>
                 <span className="font-bold" style={{ color: 'rgba(255,255,255,.70)' }}>Promedio ponderado</span>
-                <span className="font-bold text-sm" style={{ color: '#34d399' }}>{pond.promedio}</span>
+                <span className="font-bold text-sm" style={{ color: 'var(--good)' }}>{pond.promedio ?? '—'}</span>
               </div>
             </HoverInfo>
 
@@ -188,7 +195,7 @@ export default function StudentDashboard() {
               <p className="text-xs mt-2 font-semibold" style={{ color: '#fbbf24' }}>
                 Estás en el lugar #{myPos} de {ranking.length} alumnos.
               </p>
-              {myPos > 1 && (
+              {myPos > 1 && pond.promedio !== null && (
                 <p className="text-[11px] mt-1.5" style={{ color: 'rgba(255,255,255,.45)' }}>
                   El lugar #{myPos - 1} tiene promedio {ranking[myPos - 2].promedio} — te faltan{' '}
                   {(ranking[myPos - 2].promedio - pond.promedio).toFixed(1)} puntos.
@@ -205,10 +212,16 @@ export default function StudentDashboard() {
           { icon: Zap,           label: 'Último Simulacro',  value: lastSim ? `${lastSim.aciertos}/${lastSim.total}` : '—',
             sub: lastSim?.folio, color: 'bg-emerald-600',
             go: () => document.getElementById('prediccion')?.scrollIntoView({ behavior: 'smooth' }) },
-          { icon: CalendarCheck, label: 'Asistencia',        value: `${asis.pct}%`,
-            sub: `${asis.counts.presente} presentes`, color: 'bg-blue-600', go: () => navigate('/student/asistencias') },
-          { icon: BookOpen,      label: 'Tareas Entregadas', value: `${s.assignmentsDone ?? 0}/${s.assignmentsTotal ?? 0}`,
-            sub: `${s.assignmentsTotal > 0 ? Math.round(s.assignmentsDone / s.assignmentsTotal * 100) : 0}% completado`, color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
+          { icon: CalendarCheck, label: 'Asistencia',
+            value: asis.pct === null ? '—' : `${asis.pct}%`,
+            sub: asis.pct === null ? 'Sin listas aún' : `${asis.counts.presente} presentes`,
+            color: 'bg-blue-600', go: () => navigate('/student/asistencias') },
+          { icon: BookOpen,      label: 'Tareas Entregadas',
+            value: s.assignmentsTotal > 0 ? `${s.assignmentsDone ?? 0}/${s.assignmentsTotal}` : '—',
+            sub: s.assignmentsTotal > 0
+              ? `${Math.round(s.assignmentsDone / s.assignmentsTotal * 100)}% completado`
+              : 'Sin tareas asignadas',
+            color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
           { icon: BrainCircuit,  label: 'Reporte IA',        value: 'Ver',
             sub: 'Análisis personalizado', color: 'bg-purple-600', go: () => navigate('/student/reporte-ia') },
         ].map(({ icon: Icon, label, value, sub, color, go }) => (

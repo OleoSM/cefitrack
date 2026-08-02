@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -6,66 +6,89 @@ import {
 } from 'recharts'
 import {
   Users, TrendingUp, CalendarCheck, ClipboardList,
-  AlertTriangle, CheckCircle, ArrowUpRight, ArrowRight, Filter
+  AlertTriangle, CheckCircle, ArrowRight, Filter, Star
 } from 'lucide-react'
+import { getStatusConfig } from '../../data/mockData'
 import {
-  students, groups, monthlyTrend, subjectPerformance,
-  recentActivity, statusConfig
-} from '../../data/mockData'
+  fetchGroups, fetchStudents, fetchEvaluations,
+  fetchAttendanceStats, fetchAsistenciaHoy,
+} from '../../lib/supabaseData'
+import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useAuth } from '../../context/AuthContext'
-
-const AREA_KEYS = { g1: 'grupoA', g2: 'grupoB', g3: 'grupoC' }
+import KpiCard from '../../components/ui/KpiCard'
+import { useGroupColors } from '../../hooks/useGroupColors'
 
 function FilterSelect({ value, onChange, options, style }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
       className="text-xs font-semibold rounded-xl py-2 px-3 outline-none"
-      style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.85)', ...style }}>
+      style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t1)', ...style }}>
       {options.map(o => <option key={o.value} value={o.value} style={{ color:'#000', background:'#fff' }}>{o.label}</option>)}
     </select>
   )
 }
 
-const COLORS = ['#10b981','#f59e0b','#ef4444','#3b82f6']
-const AREA_COLORS = ['#3b82f6','#10b981','#f59e0b']
+// Por nombre, no por posición: al filtrar categorías vacías los índices se
+// recorrían y, por ejemplo, "Ausentes" acababa pintado de verde.
+const COLOR_ASISTENCIA = { Presentes:'var(--good)', Tardanzas:'var(--warn)', Ausentes:'var(--bad)' }
+// Las series son por grupo: se usa el acento del propio grupo, que ya trae
+// variante pastel en identidad clara. Una lista fija dejaba neones sueltos.
 
-const attendancePie = [
-  { name:'Presentes',    value:87 },
-  { name:'Tardanzas',    value:7  },
-  { name:'Ausentes',     value:4  },
-  { name:'Justificados', value:2  },
-]
+const MES_CORTO = m =>
+  new Date(m + '-15T12:00').toLocaleDateString('es-MX', { month:'short' }).replace('.', '')
 
-function StatCard({ icon: Icon, label, value, sub, color, onClick }) {
-  return (
-    <button onClick={onClick} className="stat-card text-left w-full group">
-      <div className="flex items-start justify-between">
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${color} opacity-90`}>
-          <Icon size={22} className="text-white" />
-        </div>
-        <ArrowUpRight size={16} className="transition-colors mt-1" style={{ color: 'rgba(255,255,255,.20)' }} />
-      </div>
-      <p className="text-3xl font-bold mt-3" style={{ color: 'rgba(255,255,255,.90)' }}>{value}</p>
-      <p className="text-sm font-medium mt-0.5" style={{ color: 'rgba(255,255,255,.55)' }}>{label}</p>
-      {sub && <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,.30)' }}>{sub}</p>}
-    </button>
-  )
+/** Evolución mensual del promedio, una serie por grupo, desde evaluaciones reales. */
+function construirTendencia(evaluations, students, grupos) {
+  const grupoDe = Object.fromEntries(students.map(s => [s.id, s.groupId]))
+  const buckets = {}                                  // mes -> grupoId -> [notas]
+  for (const e of evaluations) {
+    const gid = grupoDe[e.studentId]
+    if (!gid) continue
+    const mes = e.fecha.slice(0, 7)
+    ;((buckets[mes] ??= {})[gid] ??= []).push(calificacionBase10(e))
+  }
+  const data = Object.keys(buckets).sort().map(mes => {
+    const fila = { mes: MES_CORTO(mes) }
+    for (const g of grupos) {
+      const v = buckets[mes][g.id]
+      if (v?.length) fila[g.id] = +(v.reduce((a, b) => a + b, 0) / v.length).toFixed(1)
+    }
+    return fila
+  })
+  return data
+}
+
+/** Rendimiento por materia a partir de las evaluaciones capturadas. */
+function construirRendimiento(evaluations) {
+  const porMateria = {}
+  for (const e of evaluations) {
+    const n = calificacionBase10(e)
+    const m = (porMateria[e.materia] ??= { materia: e.materia, notas: [], aprobados: 0, reprobados: 0 })
+    m.notas.push(n)
+    if (n >= 6) m.aprobados += 1; else m.reprobados += 1
+  }
+  return Object.values(porMateria).map(m => ({
+    materia: m.materia,
+    promedio: +(m.notas.reduce((a, b) => a + b, 0) / m.notas.length).toFixed(1),
+    aprobados: m.aprobados,
+    reprobados: m.reprobados,
+  }))
 }
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-xl p-3 text-xs" style={{
-      background: 'rgba(10,10,20,.92)',
-      border: '1px solid rgba(255,255,255,.12)',
+      background: 'var(--tooltip-bg)',
+      border: '1px solid var(--tooltip-border)',
       backdropFilter: 'blur(12px)',
     }}>
-      <p className="font-semibold mb-2" style={{ color: 'rgba(255,255,255,.75)' }}>{label}</p>
+      <p className="font-semibold mb-2" style={{ color: 'var(--t2)' }}>{label}</p>
       {payload.map(p => (
         <div key={p.dataKey} className="flex items-center gap-2 mb-1">
           <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-          <span style={{ color: 'rgba(255,255,255,.45)' }}>{p.name}:</span>
-          <span className="font-bold" style={{ color: 'rgba(255,255,255,.85)' }}>{p.value}</span>
+          <span style={{ color: 'var(--t3)' }}>{p.name}:</span>
+          <span className="font-bold" style={{ color: 'var(--t1)' }}>{p.value}</span>
         </div>
       ))}
     </div>
@@ -75,14 +98,37 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function Dashboard() {
   const navigate = useNavigate()
   const { currentUser, allowedSucursales, canAccess } = useAuth()
+  const { getAccent } = useGroupColors()
   const isAdmin = currentUser?.role === 'admin'
+
+  const [groups, setGroups]           = useState([])
+  const [students, setStudents]       = useState([])
+  const [evaluations, setEvaluations] = useState([])
+  const [attByStudent, setAttByStudent] = useState({})
+  const [hoy, setHoy]                 = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const [gs, sts, evs] = await Promise.all([fetchGroups(), fetchStudents(), fetchEvaluations()])
+        const [stats, asisHoy] = await Promise.all([
+          fetchAttendanceStats(sts), fetchAsistenciaHoy(sts),
+        ])
+        if (!alive) return
+        setGroups(gs); setStudents(sts); setEvaluations(evs)
+        setAttByStudent(stats.byStudent); setHoy(asisHoy)
+      } catch { /* el dashboard queda en ceros */ }
+    })()
+    return () => { alive = false }
+  }, [])
 
   const visibleGroups = useMemo(
     () => isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id)),
-    [isAdmin, canAccess]
+    [isAdmin, canAccess, groups]
   )
   const sucursalOptions = isAdmin
-    ? [...new Set(groups.map(g => g.sucursal))]
+    ? [...new Set(groups.map(g => g.sucursal).filter(Boolean))]
     : allowedSucursales
 
   const [sucursal, setSucursal] = useState('todas')
@@ -103,28 +149,77 @@ export default function Dashboard() {
   const selectedGroupIds = new Set(selectedGroups.map(g => g.id))
 
   const filteredStudents = students.filter(s => selectedGroupIds.has(s.groupId))
-  const atRisk     = filteredStudents.filter(s => s.status === 'critical' || s.status === 'at-risk')
-  const top5       = [...filteredStudents].sort((a,b) => b.avgGrade - a.avgGrade).slice(0,5)
-  const presentHoy = filteredStudents.filter(s => s.attendanceRate >= 80).length
-  const trendKeys  = selectedGroups.map(g => AREA_KEYS[g.id]).filter(Boolean)
+  const evalsFiltradas   = evaluations.filter(e => filteredStudents.some(s => s.id === e.studentId))
+
+  const atRisk = filteredStudents.filter(s => s.status === 'critical' || s.status === 'at-risk')
+  const top5   = [...filteredStudents]
+    .filter(s => Number.isFinite(s.avgGrade))
+    .sort((a, b) => b.avgGrade - a.avgGrade)
+    .slice(0, 5)
+
+  const notas = filteredStudents.map(s => s.avgGrade).filter(Number.isFinite)
+  const promedioNum = notas.length ? notas.reduce((a, b) => a + b, 0) / notas.length : null
+  const promedioGeneral = promedioNum === null ? '—' : promedioNum.toFixed(1)
+
+  const monthlyTrend       = useMemo(() => construirTendencia(evalsFiltradas, students, selectedGroups),
+                                     [evalsFiltradas, students, selectedGroups])
+  const subjectPerformance = useMemo(() => construirRendimiento(evalsFiltradas), [evalsFiltradas])
+
+  // Asistencia de hoy: sin sesión registrada no se inventan porcentajes.
+  const attendancePie = useMemo(() => {
+    if (!hoy?.haySesion) return []
+    const total = hoy.counts.presente + hoy.counts.tardanza + hoy.counts.ausente
+    if (!total) return []
+    const pct = v => Math.round((v / total) * 100)
+    return [
+      { name:'Presentes', value: pct(hoy.counts.presente) },
+      { name:'Tardanzas', value: pct(hoy.counts.tardanza) },
+      { name:'Ausentes',  value: pct(hoy.counts.ausente)  },
+    ].filter(d => d.value > 0)
+  }, [hoy])
+
+  const presentHoy = hoy?.counts.presente ?? 0
+  const esperadosHoy = hoy?.esperados ?? 0
 
   return (
     <div className="space-y-6 max-w-7xl">
       {/* Filtro sucursal / grupo */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Filter size={14} style={{ color:'rgba(255,255,255,.35)' }} />
+        <Filter size={14} style={{ color: 'var(--t3)' }} />
         <FilterSelect value={sucursal} onChange={handleSucursalChange}
           options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:s }))]} />
         <FilterSelect value={grupoId} onChange={setGrupoId}
           options={[{ value:'todos', label:'Todos los grupos' }, ...groupsInSucursal.map(g => ({ value:g.id, label:g.name }))]} />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard icon={Users}         label="Total Alumnos"    value={filteredStudents.length} sub={`${selectedGroups.length} grupo(s) activo(s)`} color="bg-navy-900" onClick={()=>navigate('/admin/alumnos')} />
-        <StatCard icon={CalendarCheck} label="Asistencia Hoy"   value={`${presentHoy}/${filteredStudents.length}`} sub="Datos estimados" color="bg-emerald-600" onClick={()=>navigate('/admin/asistencias')} />
-        <StatCard icon={TrendingUp}    label="Promedio General"  value="8.1" sub="↑ +0.3 vs mes anterior" color="bg-blue-600" onClick={()=>navigate('/admin/rankings')} />
-        <StatCard icon={ClipboardList} label="Alumnos en Riesgo" value={atRisk.length} sub="Requieren atención" color="bg-red-500" onClick={()=>navigate('/admin/ia')} />
+      {/* Stats — el pill traduce el dato a un juicio rápido en vez de repetirlo */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+        <KpiCard icon={Users} label="Total Alumnos" tone="neutral"
+          value={filteredStudents.length}
+          sub={`${selectedGroups.length} grupo(s) activo(s)`}
+          onClick={() => navigate('/admin/alumnos')} />
+
+        <KpiCard icon={CalendarCheck} label="Asistencia Hoy" tone="good"
+          value={hoy?.haySesion ? `${presentHoy}/${esperadosHoy}` : '—'}
+          sub={hoy?.haySesion ? 'Sesiones de hoy' : 'Sin lista pasada hoy'}
+          pill={hoy?.haySesion
+            ? { icon: CheckCircle, text: `${Math.round((presentHoy / Math.max(esperadosHoy, 1)) * 100)}% presente` }
+            : null}
+          onClick={() => navigate('/admin/asistencias')} />
+
+        <KpiCard icon={TrendingUp} label="Promedio General" tone="info"
+          value={promedioGeneral}
+          sub={notas.length ? `${notas.length} alumno(s) con calificación` : 'Sin calificaciones aún'}
+          pill={notas.length
+            ? { icon: Star, text: promedioNum >= 8.5 ? '¡Muy bien!' : promedioNum >= 7 ? 'Aceptable' : 'Requiere atención' }
+            : null}
+          onClick={() => navigate('/admin/rankings')} />
+
+        <KpiCard icon={ClipboardList} label="Alumnos en Riesgo" tone="bad"
+          value={atRisk.length}
+          sub={atRisk.length ? 'Requieren atención' : 'Ninguno por ahora'}
+          pill={atRisk.length ? { icon: AlertTriangle, text: 'Dar seguimiento' } : null}
+          onClick={() => navigate('/admin/ia')} />
       </div>
 
       {/* Charts row 1 */}
@@ -134,57 +229,75 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="section-title">Evolución del Promedio</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Promedio mensual por grupo (Sep – Feb)</p>
+              <p className="text-xs text-slate-400 mt-0.5">Promedio mensual por grupo, según evaluaciones capturadas</p>
             </div>
-            <button onClick={()=>navigate('/admin/grupos')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color:'rgba(255,255,255,.40)' }}>
+            <button onClick={()=>navigate('/admin/grupos')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--t3)' }}>
               Ver grupos <ArrowRight size={12}/>
             </button>
           </div>
-          <ResponsiveContainer width="100%" height={230}>
-            <AreaChart data={monthlyTrend} margin={{ top:5, right:10, bottom:0, left:-15 }}>
-              <defs>
-                {['blue','green','amber'].map((c, i) => (
-                  <linearGradient key={c} id={`grad${c}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={AREA_COLORS[i]} stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor={AREA_COLORS[i]} stopOpacity={0}/>
-                  </linearGradient>
+          {monthlyTrend.length === 0 ? (
+            <p className="text-sm py-16 text-center" style={{ color: 'var(--t3)' }}>
+              Aún no hay calificaciones capturadas para graficar.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height={230}>
+              <AreaChart data={monthlyTrend} margin={{ top:5, right:10, bottom:0, left:-15 }}>
+                <defs>
+                  {selectedGroups.map((g, i) => (
+                    <linearGradient key={g.id} id={`grad-${g.id}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={getAccent(g.id)} stopOpacity={0.18}/>
+                      <stop offset="95%" stopColor={getAccent(g.id)} stopOpacity={0}/>
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
+                <XAxis dataKey="mes" tick={{ fontSize:11, fill: 'var(--axis)' }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0,10]} tick={{ fontSize:11, fill: 'var(--axis)' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ stroke: 'var(--grid)', strokeWidth:1 }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color: 'var(--t2)' }} />
+                {selectedGroups.map((g, i) => (
+                  <Area key={g.id} type="monotone" dataKey={g.id} name={g.name}
+                    stroke={getAccent(g.id)} fill={`url(#grad-${g.id})`}
+                    strokeWidth={2.5} connectNulls
+                    dot={{ r:3, fill:getAccent(g.id) }}
+                    activeDot={{ r:4, fill:getAccent(g.id), stroke:'none' }} />
                 ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" />
-              <XAxis dataKey="mes" tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
-              <YAxis domain={[6,10]} tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ stroke:'rgba(255,255,255,.10)', strokeWidth:1 }} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color:'rgba(255,255,255,.50)' }} />
-              {trendKeys.includes('grupoA') && <Area type="monotone" dataKey="grupoA" name="Grupo A" stroke={AREA_COLORS[0]} fill={`url(#gradblue)`}  strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[0] }} activeDot={{ r:4, fill:AREA_COLORS[0], stroke:'none' }} />}
-              {trendKeys.includes('grupoB') && <Area type="monotone" dataKey="grupoB" name="Grupo B" stroke={AREA_COLORS[1]} fill={`url(#gradgreen)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[1] }} activeDot={{ r:4, fill:AREA_COLORS[1], stroke:'none' }} />}
-              {trendKeys.includes('grupoC') && <Area type="monotone" dataKey="grupoC" name="Grupo C" stroke={AREA_COLORS[2]} fill={`url(#gradamber)`} strokeWidth={2.5} dot={{ r:3, fill:AREA_COLORS[2] }} activeDot={{ r:4, fill:AREA_COLORS[2], stroke:'none' }} />}
-            </AreaChart>
-          </ResponsiveContainer>
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         {/* Pie chart */}
         <div className="card p-5">
           <div className="mb-4">
             <h2 className="section-title">Asistencia Hoy</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Distribución del grupo completo</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {hoy?.haySesion ? 'Sesiones registradas hoy' : 'Sin lista pasada hoy'}
+            </p>
           </div>
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie data={attendancePie} cx="50%" cy="50%" innerRadius={45} outerRadius={70}
-                dataKey="value" stroke="none">
-                {attendancePie.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
-              </Pie>
-              <Tooltip formatter={(v) => [`${v}%`]} wrapperStyle={{ outline:'none' }} contentStyle={{ fontSize:11, borderRadius:10, background:'rgba(10,10,20,.92)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.80)' }} />
-            </PieChart>
-          </ResponsiveContainer>
+          {attendancePie.length === 0 ? (
+            <p className="text-sm py-12 text-center" style={{ color: 'var(--t3)' }}>
+              Todavía no se pasa lista hoy.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie data={attendancePie} cx="50%" cy="50%" innerRadius={45} outerRadius={70}
+                  dataKey="value" stroke="none" minAngle={2} isAnimationActive={false}>
+                  {attendancePie.map(d => <Cell key={d.name} fill={COLOR_ASISTENCIA[d.name]} />)}
+                </Pie>
+                <Tooltip formatter={(v) => [`${v}%`]} wrapperStyle={{ outline:'none' }} contentStyle={{ fontSize:11, borderRadius:10, background:'rgba(10,10,20,.92)', border: '1px solid var(--card-border)', color: 'var(--t2)' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
           <div className="space-y-2 mt-2">
             {attendancePie.map((d, i) => (
               <div key={d.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background:COLORS[i] }} />
-                  <span className="text-xs" style={{ color:'rgba(255,255,255,.50)' }}>{d.name}</span>
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background:COLOR_ASISTENCIA[d.name] }} />
+                  <span className="text-xs" style={{ color: 'var(--t2)' }}>{d.name}</span>
                 </div>
-                <span className="text-xs font-bold" style={{ color:'rgba(255,255,255,.80)' }}>{d.value}%</span>
+                <span className="text-xs font-bold" style={{ color: 'var(--t2)' }}>{d.value}%</span>
               </div>
             ))}
           </div>
@@ -201,39 +314,48 @@ export default function Dashboard() {
               <p className="text-xs text-slate-400 mt-0.5">Promedio del ciclo escolar</p>
             </div>
           </div>
+          {subjectPerformance.length === 0 ? (
+            <p className="text-sm py-16 text-center" style={{ color: 'var(--t3)' }}>
+              Sin evaluaciones capturadas todavía.
+            </p>
+          ) : (
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={subjectPerformance} margin={{ top:5, right:10, bottom:20, left:-15 }} barSize={14} barGap={4}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" vertical={false} />
-              <XAxis dataKey="materia" tick={{ fontSize:10, fill:'rgba(255,255,255,.35)' }} angle={-30} textAnchor="end" axisLine={false} tickLine={false} />
-              <YAxis domain={[0,10]} tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ fill:'rgba(255,255,255,.04)' }} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color:'rgba(255,255,255,.50)' }} />
-              <Bar dataKey="promedio"   name="Promedio"   fill="#3b82f6" radius={[4,4,0,0]} />
-              <Bar dataKey="aprobados"  name="Aprobados"  fill="#10b981" radius={[4,4,0,0]} />
-              <Bar dataKey="reprobados" name="Reprobados" fill="#f43f5e" radius={[4,4,0,0]} />
+            <BarChart data={subjectPerformance} margin={{ top:5, right:10, bottom:5, left:-15 }} barSize={14} barGap={4}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" vertical={false} />
+              {/* Etiqueta horizontal y recortada: rotada a -30° se desbordaba
+                  del contenedor con nombres largos o con una sola materia. */}
+              <XAxis dataKey="materia" tick={{ fontSize:10, fill:'var(--axis)' }}
+                interval={0} textAnchor="middle" axisLine={false} tickLine={false}
+                tickFormatter={v => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+              <YAxis domain={[0,10]} tick={{ fontSize:11, fill: 'var(--axis)' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ fill: 'var(--axis)' }} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color: 'var(--t2)' }} />
+              <Bar dataKey="promedio"   name="Promedio"   fill="var(--info)" radius={[4,4,0,0]} />
+              <Bar dataKey="aprobados"  name="Aprobados"  fill="var(--good)" radius={[4,4,0,0]} />
+              <Bar dataKey="reprobados" name="Reprobados" fill="var(--bad)" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         {/* Recent activity */}
         <div className="card p-5">
-          <h2 className="section-title mb-4">Actividad Reciente</h2>
-          <div className="space-y-3">
-            {recentActivity.map(a => (
-              <div key={a.id} className="flex gap-3">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                  a.tipo==='alerta' ? 'bg-red-500/15' : a.tipo==='importacion' ? 'bg-purple-500/15' : 'bg-blue-500/15'
-                }`}>
-                  {a.tipo==='alerta'
-                    ? <AlertTriangle size={13} className="text-red-400"/>
-                    : <CheckCircle size={13} className="text-blue-400"/>}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium leading-snug" style={{ color:'rgba(255,255,255,.70)' }}>{a.texto}</p>
-                  <p className="text-[10px] mt-0.5" style={{ color:'rgba(255,255,255,.30)' }}>{a.hora}</p>
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="section-title">Actividad Reciente</h2>
+            <span className="badge bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px]">
+              En progreso
+            </span>
+          </div>
+          {/* Requiere la bitácora de auditoría (altas, bajas, cambios). Antes se
+              mostraban entradas de ejemplo, que daban una falsa sensación de registro. */}
+          <div className="flex flex-col items-center justify-center py-10 gap-2 text-center">
+            <ClipboardList size={22} style={{ color: 'var(--t4)' }}/>
+            <p className="text-xs" style={{ color: 'var(--t3)' }}>
+              La bitácora de actividad aún no está conectada.
+            </p>
+            <p className="text-[10px]" style={{ color: 'var(--t4)' }}>
+              Registrará altas, bajas, asistencias, evaluaciones y cambios administrativos.
+            </p>
           </div>
         </div>
       </div>
@@ -244,7 +366,7 @@ export default function Dashboard() {
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title">Top 5 Alumnos</h2>
-            <button onClick={()=>navigate('/admin/rankings')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color:'rgba(255,255,255,.40)' }}>
+            <button onClick={()=>navigate('/admin/rankings')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--t3)' }}>
               Ver todos <ArrowRight size={12}/>
             </button>
           </div>
@@ -252,22 +374,22 @@ export default function Dashboard() {
             {top5.map((s, i) => (
               <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
                 className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
-                onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.05)'}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--card-bg)'}
                 onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                   i===0?'bg-gold-500 text-white':i===1?'bg-white/20 text-white/70':i===2?'bg-amber-700/70 text-white':'bg-white/8 text-white/45'
                 }`}>{i+1}</div>
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ background:'rgba(255,255,255,.10)', color:'rgba(255,255,255,.70)' }}>
+                  style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
                   {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color:'rgba(255,255,255,.82)' }}>{s.name}</p>
-                  <p className="text-[11px]" style={{ color:'rgba(255,255,255,.32)' }}>{s.groupId.toUpperCase()}</p>
+                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{s.name}</p>
+                  <p className="text-[11px]" style={{ color: 'var(--t3)' }}>{groups.find(g=>g.id===s.groupId)?.name ?? '—'}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold" style={{ color:'rgba(255,255,255,.82)' }}>{s.avgGrade}</p>
-                  <p className="text-[10px]" style={{ color:'rgba(255,255,255,.32)' }}>{s.attendanceRate}% asist.</p>
+                  <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>{s.avgGrade}</p>
+                  <p className="text-[10px]" style={{ color: 'var(--t3)' }}>{attByStudent[s.id] == null ? 'sin asist.' : `${attByStudent[s.id]}% asist.`}</p>
                 </div>
               </button>
             ))}
@@ -281,32 +403,32 @@ export default function Dashboard() {
               <AlertTriangle size={16} className="text-red-500" />
               Alumnos en Riesgo
             </h2>
-            <button onClick={()=>navigate('/admin/ia')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color:'rgba(255,255,255,.40)' }}>
+            <button onClick={()=>navigate('/admin/ia')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--t3)' }}>
               Ver análisis IA <ArrowRight size={12}/>
             </button>
           </div>
           <div className="space-y-2">
             {atRisk.map(s => {
-              const cfg = statusConfig[s.status]
+              const cfg = getStatusConfig(s.status)
               return (
                 <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
                   className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
-                  style={{ border:'1px solid rgba(255,255,255,.06)' }}
-                  onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.05)'}
+                  style={{ border: '1px solid var(--divider)' }}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--card-bg)'}
                   onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 text-xs font-bold flex-shrink-0">
                     {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color:'rgba(255,255,255,.82)' }}>{s.name}</p>
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{s.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[10px] font-semibold ${cfg.color}`}>{cfg.label}</span>
-                      <span className="text-[10px]" style={{ color:'rgba(255,255,255,.30)' }}>· Asist. {s.attendanceRate}%</span>
+                      <span className="text-[10px]" style={{ color: 'var(--t3)' }}>· Asist. {attByStudent[s.id] == null ? '—' : `${attByStudent[s.id]}%`}</span>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-red-400">{s.avgGrade}</p>
-                    <p className="text-[10px]" style={{ color:'rgba(255,255,255,.30)' }}>promedio</p>
+                    <p className="text-sm font-bold text-red-400">{s.avgGrade ?? '—'}</p>
+                    <p className="text-[10px]" style={{ color: 'var(--t3)' }}>promedio</p>
                   </div>
                 </button>
               )

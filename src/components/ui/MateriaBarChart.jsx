@@ -10,7 +10,10 @@ import { Bar } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 
+/* Chart.js pide el color de barras que aún no existen mientras anima, así que
+   `hex` llega undefined y la página entera se caía al hacer .slice sobre él. */
 function hexToRgba(hex, a) {
+  if (typeof hex !== 'string' || !/^#[0-9a-f]{6}$/i.test(hex)) return `rgba(148, 163, 184, ${a})`
   const n = parseInt(hex.slice(1), 16)
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
 }

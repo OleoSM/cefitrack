@@ -593,7 +593,16 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const [attendance,    setAttendance]    = useState({})
   const [cargandoHoja,  setCargandoHoja]  = useState(true)
   const [errorHoja,     setErrorHoja]     = useState(null)
-  const [collapsed,     setCollapsed]     = useState({})
+  /* Regla de despliegue: en pantalla chica la hoja arranca con las secciones
+     anchas plegadas. Cuarenta columnas no se navegan en 390 px, y desplegarlo
+     todo de golpe obliga a un scroll horizontal interminable antes de poder
+     elegir qué mirar. En escritorio arranca abierta, como siempre. */
+  // Se lee una sola vez al montar: si el usuario gira el dispositivo no tiene
+  // sentido replegarle secciones que acaba de abrir a mano.
+  const [collapsed, setCollapsed] = useState(() =>
+    (window.innerWidth < 1024)
+      ? { docs: true, sims: true, online: true }
+      : {})
   const [isFullscreen,  setIsFullscreen]  = useState(false)
   const [attModal,      setAttModal]      = useState(null)
   const [addColModal,   setAddColModal]   = useState(null)
@@ -719,6 +728,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const toggleAtt = () => {}
   const toggleSection = id => setCollapsed(p=>({...p,[id]:!p[id]}))
   const resetCollapsed = () => setCollapsed({})
+  const plegarTodo = () => setCollapsed({ docs: true, sims: true, online: true,
+    ...Object.fromEntries(subjects.map(x => [x.id, true])) })
 
   /* El padrón es el del grupo. Antes se podían agregar alumnos aquí con un id
      inventado (`r<timestamp>`), y quedaban sólo en la hoja: no tenían cuenta,
@@ -880,6 +891,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       </button>
       <button onClick={() => setAddSubjModal(true)} className="btn-secondary text-xs py-2 gap-1.5">
         <Plus size={13}/> Materia
+      </button>
+      <button onClick={plegarTodo} className="btn-secondary text-xs py-2 gap-1.5 sm:hidden" title="Plegar todas las secciones">
+        <ChevronRight size={13}/> Plegar
       </button>
       <button onClick={resetCollapsed} className="btn-secondary text-xs py-2 gap-1.5" title="Reiniciar vistas">
         <RotateCcw size={12}/> Reiniciar vistas

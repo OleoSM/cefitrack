@@ -18,6 +18,19 @@
       nada de #34d399 / #fbbf24 / #f87171 / #60a5fa y compañía.
       Los semánticos ahí son PASTEL SÓLIDOS, definidos en los tokens.
 
+   2-bis. EL COLOR IDENTIFICADOR VA SÓLIDO. Ni degradados, ni alfa, ni
+      halos que se desvanecen. Sobre página blanca, un `${accent}14` o un
+      `radial-gradient(..., transparent)` no se lee como color tenue: se
+      lee como algo roto, y el equipo lo reportó literalmente como "se ve
+      transparente". Si un elemento lleva el color de un grupo, materia o
+      estado, píntalo con el color PLENO y pon el texto en blanco encima.
+      La paleta de referencia son los sólidos institucionales de
+      useGroupColors (registro de #4d0b1d).
+
+      Corolario: una barra de gráfica representa una cantidad, así que su
+      color no debe variar dentro de sí misma — nada de degradar de opaco
+      a transparente de arriba abajo.
+
    3. La barra lateral y la superior tienen fondo oscuro en TODAS las
       identidades: usan sideT1/sideT2/sideT3, no --t1…--t4.
 

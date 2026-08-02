@@ -233,7 +233,7 @@ export default function GroupDetail() {
                   {
                     className: 'w-16 flex justify-end',
                     content: (
-                      <span className="text-xs font-semibold" style={{ color:`${accent}cc` }}>
+                      <span className="text-xs font-semibold" style={{ color: accent }}>
                         Ver perfil →
                       </span>
                     ),

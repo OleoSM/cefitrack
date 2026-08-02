@@ -354,9 +354,12 @@ export default function StudentDashboard() {
                 <button key={m} onClick={() => toggleMateria(m)}
                   className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
                   style={{
-                    background: hidden ? 'transparent' : (t.light ? `${color}14` : 'rgba(255,255,255,.05)'),
-                    border: `1px solid ${hidden ? t.cardBorder : color}55`,
-                    color: hidden ? t.t4 : (t.light ? t.t2 : t.t2),
+                    /* Activo: color pleno con texto blanco. El 8 % de alfa
+                       anterior no se distinguía del fondo y no se sabía qué
+                       materia estaba encendida. */
+                    background: hidden ? 'transparent' : color,
+                    border: `1px solid ${hidden ? t.cardBorder : color}`,
+                    color: hidden ? t.t4 : '#ffffff',
                     textDecoration: hidden ? 'line-through' : 'none',
                   }}>
                   <span className="w-3 h-3 rounded flex items-center justify-center flex-shrink-0"

@@ -27,25 +27,28 @@ function Birrete({ color }) {
  * lectura la da el icono, el dato y el pill. Reemplaza a las tarjetas planas
  * anteriores, que solo tenían borde y número.
  */
-/* Colores del tema oscuro por tipo de métrica. En IPN/UNAM se ignoran: ahí
-   las cuatro tarjetas van en el color institucional, por decisión del equipo. */
+/* Un color por tipo de métrica, de la paleta institucional sólida.
+   Antes las cuatro tarjetas iban en el color institucional en IPN/UNAM y
+   competían entre sí: cuatro bloques guinda idénticos en fila no dicen nada,
+   y hay que leer el rótulo de cada uno para saber qué se está mirando.
+   El color aquí es información, no decoración.
+
+   Los tonos profundos son para las identidades claras; sobre el fondo oscuro
+   se sirve el mismo matiz más luminoso o la tarjeta se funde con la página. */
 const TONOS = {
-  neutral: '#1e3a6e',   // navy SIGA
-  good:    '#0f766e',
-  info:    '#1d4ed8',
-  warn:    '#b45309',
-  bad:     '#b91c1c',
+  neutral: { claro:'#12345A', oscuro:'#2C6BA8' },   // marino
+  good:    { claro:'#17502D', oscuro:'#2E8A50' },   // bosque
+  info:    { claro:'#064B60', oscuro:'#1286A0' },   // petróleo
+  warn:    { claro:'#633515', oscuro:'#A85F2A' },   // café
+  bad:     { claro:'#681126', oscuro:'#B02546' },   // granate
 }
 
 export default function KpiCard({
   icon: Icon, value, label, sub, pill, tone = 'neutral', onClick, className = '',
 }) {
-  const { t, appearance } = useAdminTheme()
-  // En identidad clara manda el color institucional; en el tema original cada
-  // tarjeta conserva el color de su métrica, como antes de unificarlas.
-  const accent = appearance !== 'default'
-    ? t.accent
-    : (TONOS[tone] ?? TONOS.neutral)
+  const { t } = useAdminTheme()
+  const par = TONOS[tone] ?? TONOS.neutral
+  const accent = t?.light ? par.claro : par.oscuro
 
   const Root = onClick ? 'button' : 'div'
 
@@ -55,10 +58,10 @@ export default function KpiCard({
       className={`relative overflow-hidden rounded-2xl p-5 text-left w-full
                   transition-transform duration-200 ${onClick ? 'active:scale-[.99] hover:-translate-y-0.5' : ''} ${className}`}
       style={{
+        // Color plano: el degradado diagonal aclaraba una esquina y oscurecía
+        // la otra, que es justo lo que se leía como "no es un color sólido".
         background: accent,
-        backgroundImage:
-          'linear-gradient(135deg, rgba(255,255,255,.12) 0%, transparent 42%, rgba(0,0,0,.28) 100%)',
-        boxShadow: '0 2px 6px rgba(15,23,42,.10), 0 10px 28px rgba(15,23,42,.14)',
+        boxShadow: '0 1px 3px rgba(15,23,42,.14), 0 6px 16px rgba(15,23,42,.12)',
       }}>
 
       <Birrete color="rgba(255,255,255,.16)" />

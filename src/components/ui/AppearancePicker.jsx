@@ -1,10 +1,12 @@
 import { Palette, Check } from 'lucide-react'
 import { APPEARANCES } from '../../context/StudentThemeContext'
 
+/* El logo oficial identifica la identidad mucho antes que un rectángulo de
+   color. Se muestran sin recolorear ni deformar, como pide su ficha. */
 const PREVIEW = {
-  default: { side: '#0a0a14', main: '#070b16', bar: 'var(--warn)' },
-  ipn:     { side: '#881126', main: '#ffffff', bar: '#ffffff' },
-  unam:    { side: '#003366', main: '#ffffff', bar: '#CC9933' },
+  default: { side: '#0a0a14', main: '#070b16', bar: 'var(--warn)', logo: null },
+  ipn:     { side: '#881126', main: '#ffffff', bar: '#ffffff', logo: '/logos/instituciones/ipn.webp', alt: 'IPN' },
+  unam:    { side: '#003366', main: '#ffffff', bar: '#CC9933', logo: '/logos/instituciones/unam.svg', alt: 'UNAM' },
 }
 
 const APPEARANCE_DESC = {
@@ -36,11 +38,16 @@ export default function AppearancePicker({ appearance, setAppearance, t, title =
                   <div className="w-5 h-0.5 mt-1 ml-1.5 rounded-full bg-white/30"/>
                   <div className="w-4 h-0.5 mt-1 ml-1.5 rounded-full bg-white/20"/>
                 </div>
-                <div className="flex-1 p-1.5" style={{ background: preview.main }}>
-                  <div className="w-full h-2 rounded"
-                    style={{ background: a.id === 'default' ? 'var(--card-border)' : 'rgba(0,0,0,.06)' }}/>
-                  <div className="w-2/3 h-2 rounded mt-1"
-                    style={{ background: a.id === 'default' ? 'var(--soft-bg)' : 'rgba(0,0,0,.04)' }}/>
+                <div className="flex-1 p-1.5 flex items-center justify-center" style={{ background: preview.main }}>
+                  {preview.logo ? (
+                    <img src={preview.logo} alt={preview.alt}
+                      className="max-h-8 w-auto object-contain" />
+                  ) : (
+                    <div className="w-full">
+                      <div className="w-full h-2 rounded" style={{ background:'var(--card-border)' }}/>
+                      <div className="w-2/3 h-2 rounded mt-1" style={{ background:'var(--soft-bg)' }}/>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="px-2 py-1.5 flex items-center justify-between"

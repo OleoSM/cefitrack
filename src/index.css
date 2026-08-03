@@ -614,6 +614,34 @@ table tbody tr:hover { background: var(--soft-bg); }
 [data-theme-light] .text-red-500     { color: #a52f2a !important; }
 [data-theme-light] .text-slate-400   { color: var(--t3) !important; }
 
+/* ── Etiquetas de estado en identidad clara ──
+   El fondo pastel con texto de color se lee como algo a medio pintar sobre
+   página blanca. La etiqueta va en color PLENO con texto blanco: es una marca
+   de estado, tiene que verse de un golpe al recorrer una columna.
+   Sólo dentro de .badge — `.text-emerald-400` también viste cifras sueltas,
+   y ahí el color sí es el texto. */
+[data-theme-light] .badge.bg-emerald-500\/15 { background-color: #17502D !important; border-color: #17502D !important; }
+[data-theme-light] .badge.bg-blue-500\/15    { background-color: #12345A !important; border-color: #12345A !important; }
+[data-theme-light] .badge.bg-amber-500\/15   { background-color: #633515 !important; border-color: #633515 !important; }
+[data-theme-light] .badge.bg-orange-500\/15  { background-color: #6B3410 !important; border-color: #6B3410 !important; }
+[data-theme-light] .badge.bg-red-500\/15     { background-color: #78182B !important; border-color: #78182B !important; }
+[data-theme-light] .badge.bg-slate-500\/15   { background-color: #3A3F47 !important; border-color: #3A3F47 !important; }
+
+[data-theme-light] .badge.text-emerald-400,
+[data-theme-light] .badge.text-blue-400,
+[data-theme-light] .badge.text-amber-400,
+[data-theme-light] .badge.text-orange-400,
+[data-theme-light] .badge.text-red-400,
+[data-theme-light] .badge.text-slate-400 { color: #ffffff !important; }
+
+/* El punto del badge también, o queda un lunar de color sobre el sólido. */
+[data-theme-light] .badge .bg-emerald-400,
+[data-theme-light] .badge .bg-blue-400,
+[data-theme-light] .badge .bg-amber-400,
+[data-theme-light] .badge .bg-orange-400,
+[data-theme-light] .badge .bg-red-400,
+[data-theme-light] .badge .bg-slate-400 { background-color: rgba(255,255,255,.85) !important; }
+
 [data-theme-light] .bg-emerald-500\/15 { background-color: #e2f1ea !important; }
 [data-theme-light] .bg-blue-500\/15    { background-color: #e4ecf8 !important; }
 [data-theme-light] .bg-amber-500\/15   { background-color: #fbeedb !important; }

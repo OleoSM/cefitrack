@@ -12,19 +12,32 @@ import clsx from 'clsx'
 import { recentActivity } from '../../data/mockData'
 import { AdminThemeProvider, useAdminTheme } from '../../context/AdminThemeContext'
 
-const nav = [
-  { to:'/admin',              label:'Dashboard',              icon:LayoutDashboard, exact:true },
-  { to:'/admin/grupos',       label:'Grupos',                 icon:BookOpen },
-  { to:'/admin/alumnos',      label:'Alumnos',                icon:Users },
-  { to:'/admin/evaluaciones', label:'Evaluaciones',           icon:ClipboardList },
-  { to:'/admin/registrar',    label:'Registrar Calificaciones',icon:TableProperties },
-  { to:'/admin/asistencias',  label:'Pasar Lista',            icon:CalendarCheck },
-  { to:'/admin/ia',           label:'Análisis IA',            icon:BrainCircuit },
-  { to:'/admin/rankings',     label:'Rankings',               icon:Trophy },
-  { to:'/admin/terminos',     label:'T&C / Firmas',           icon:ScrollText },
-  { to:'/admin/configuracion',label:'Configuración',          icon:SlidersHorizontal },
-  { to:'/admin/configuracion/acceso', label:'Acceso y Disposición', icon:ShieldCheck, adminOnly:true },
+/* Once entradas planas mezclaban entidades, tareas, análisis y administración
+   al mismo nivel: había que leer la lista entera para orientarse. Agrupadas en
+   cuatro bloques con encabezado, cada una se busca en el bloque que le toca. */
+const SECCIONES = [
+  { titulo: null, items: [
+    { to:'/admin',              label:'Dashboard',              icon:LayoutDashboard, exact:true },
+  ]},
+  { titulo: 'Operación académica', items: [
+    { to:'/admin/grupos',       label:'Grupos',                 icon:BookOpen },
+    { to:'/admin/alumnos',      label:'Alumnos',                icon:Users },
+    { to:'/admin/registrar',    label:'Calificaciones',         icon:TableProperties },
+    { to:'/admin/evaluaciones', label:'Captura rápida',         icon:ClipboardList },
+    { to:'/admin/asistencias',  label:'Pasar Lista',            icon:CalendarCheck },
+  ]},
+  { titulo: 'Resultados', items: [
+    { to:'/admin/rankings',     label:'Rankings',               icon:Trophy },
+    { to:'/admin/ia',           label:'Análisis IA',            icon:BrainCircuit },
+  ]},
+  { titulo: 'Administración', items: [
+    { to:'/admin/terminos',     label:'T&C / Firmas',           icon:ScrollText },
+    { to:'/admin/configuracion',label:'Configuración',          icon:SlidersHorizontal },
+    { to:'/admin/configuracion/acceso', label:'Acceso y Disposición', icon:ShieldCheck, adminOnly:true },
+  ]},
 ]
+
+const nav = SECCIONES.flatMap(s => s.items)
 
 const bottomNav = [nav[0], nav[1], nav[2], nav[6]]
 
@@ -34,8 +47,8 @@ const pageTitles = {
   '/admin':              'Dashboard General',
   '/admin/grupos':       'Grupos',
   '/admin/alumnos':      'Alumnos',
-  '/admin/evaluaciones': 'Evaluaciones',
-  '/admin/registrar':    'Registrar Calificaciones',
+  '/admin/evaluaciones': 'Captura rápida de calificaciones',
+  '/admin/registrar':    'Calificaciones',
   '/admin/asistencias':  'Pasar Lista',
   '/admin/ia':           'Análisis con IA',
   '/admin/rankings':     'Rankings',
@@ -178,12 +191,19 @@ function LayoutInner() {
         <div className="mx-5 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto" aria-label="Navegación principal">
-          <p className="text-[10px] font-bold uppercase tracking-widest px-3 mb-2.5"
-            style={{ color: t.sideT3 }}>
-            Gestión
-          </p>
-          {nav.filter(n => !n.adminOnly || currentUser?.role === 'admin').map(({ to, label, icon: Icon, exact }) => (
+        <nav className="flex-1 px-3 py-3 overflow-y-auto" aria-label="Navegación principal">
+          {SECCIONES.map(({ titulo, items }) => {
+          const visibles = items.filter(n => !n.adminOnly || currentUser?.role === 'admin')
+          if (visibles.length === 0) return null
+          return (
+          <div key={titulo ?? 'inicio'} className="space-y-0.5 mb-1">
+          {titulo && (
+            <p className="text-[10px] font-bold uppercase tracking-widest px-3 mt-4 mb-2"
+              style={{ color: t.sideT3 }}>
+              {titulo}
+            </p>
+          )}
+          {visibles.map(({ to, label, icon: Icon, exact }) => (
             <NavLink
               key={to}
               to={to}
@@ -223,6 +243,8 @@ function LayoutInner() {
               )}
             </NavLink>
           ))}
+          </div>
+          )})}
         </nav>
 
         {/* Divider */}

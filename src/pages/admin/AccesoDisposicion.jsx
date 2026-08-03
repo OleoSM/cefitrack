@@ -30,6 +30,7 @@ export default function AccesoDisposicion() {
   const [creating, setCreating] = useState(false)
   const [createdCreds, setCreatedCreds] = useState(null)
   const [formError, setFormError] = useState(null)
+  const [errorAcceso, setErrorAcceso] = useState(null)
 
   const refreshAccess = useCallback(async (userId) => {
     const rows = await fetchSubAdminAccess(userId)
@@ -65,27 +66,37 @@ export default function AccesoDisposicion() {
   const toggleWholeBranch = async (userId, sucursal) => {
     const rows = accessByUser[userId] ?? []
     const wholeRow = rows.find(r => r.sucursal === sucursal && r.groupId == null)
-    if (wholeRow) {
-      await revokeSubAdminAccess(wholeRow.id)
-    } else {
-      const perGroupRows = rows.filter(r => r.sucursal === sucursal && r.groupId != null)
-      await Promise.all(perGroupRows.map(r => revokeSubAdminAccess(r.id)))
-      await grantSubAdminAccess(userId, sucursal, null)
+    setErrorAcceso(null)
+    try {
+      if (wholeRow) {
+        await revokeSubAdminAccess(wholeRow.id)
+      } else {
+        const perGroupRows = rows.filter(r => r.sucursal === sucursal && r.groupId != null)
+        await Promise.all(perGroupRows.map(r => revokeSubAdminAccess(r.id)))
+        await grantSubAdminAccess(userId, sucursal, null)
+      }
+      await refreshAccess(userId)
+    } catch (err) {
+      setErrorAcceso(`No se pudo cambiar el acceso a ${sucursal}. ${err?.message ?? ''}`)
     }
-    await refreshAccess(userId)
   }
 
   const toggleGroup = async (userId, sucursal, groupId) => {
     const rows = accessByUser[userId] ?? []
     const wholeRow = rows.find(r => r.sucursal === sucursal && r.groupId == null)
     const groupRow = rows.find(r => r.sucursal === sucursal && r.groupId === groupId)
-    if (groupRow) {
-      await revokeSubAdminAccess(groupRow.id)
-    } else {
-      if (wholeRow) await revokeSubAdminAccess(wholeRow.id)
-      await grantSubAdminAccess(userId, sucursal, groupId)
+    setErrorAcceso(null)
+    try {
+      if (groupRow) {
+        await revokeSubAdminAccess(groupRow.id)
+      } else {
+        if (wholeRow) await revokeSubAdminAccess(wholeRow.id)
+        await grantSubAdminAccess(userId, sucursal, groupId)
+      }
+      await refreshAccess(userId)
+    } catch (err) {
+      setErrorAcceso(`No se pudo cambiar el acceso al grupo. ${err?.message ?? ''}`)
     }
-    await refreshAccess(userId)
   }
 
   const handleCreate = async (e) => {
@@ -152,6 +163,12 @@ export default function AccesoDisposicion() {
       <div className="card p-5 space-y-3">
         <h2 className="section-title flex items-center gap-2"><Building2 size={16}/> Personal y sus accesos</h2>
 
+        {errorAcceso && (
+          <div className="flex items-start gap-2 rounded-lg px-3 py-2"
+            style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
+            <span className="text-xs" style={{ color:'var(--bad)' }}>{errorAcceso}</span>
+          </div>
+        )}
         {loading && <p className="text-sm" style={{ color: 'var(--t3)' }}>Cargando…</p>}
         {!loading && staff.length === 0 && (
           <p className="text-sm" style={{ color: 'var(--t3)' }}>Todavía no hay personal registrado.</p>

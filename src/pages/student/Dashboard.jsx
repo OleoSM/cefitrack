@@ -8,6 +8,7 @@ import {
   BookOpen, CalendarCheck, BrainCircuit, ArrowRight, Target, Zap, Trophy, Info,
 } from 'lucide-react'
 import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
+import { logoInstitucion, tipoDesdeNombre } from '../../lib/instituciones'
 import { useStudentData } from '../../hooks/useStudentData'
 import { promedioPonderado, rankingGrupo, statsAsistencia, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
 import { fetchGroupMetrics } from '../../lib/supabaseData'
@@ -259,12 +260,21 @@ export default function StudentDashboard() {
         return (
           <div id="prediccion" className="card p-5 relative overflow-hidden">
             <div className="relative flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{
-                background: reached ? 'rgba(52,211,153,.15)' : 'rgba(96,165,250,.12)',
-                border: reached ? '1px solid rgba(52,211,153,.25)' : '1px solid rgba(96,165,250,.20)',
-              }}>
-                {reached ? <Trophy size={20} style={{ color: '#34d399' }}/> : <Target size={20} style={{ color: '#60a5fa' }}/>}
-              </div>
+              {(() => {
+                const logo = logoInstitucion(targetSchool?.tipo ?? tipoDesdeNombre(targetSchool?.nombre))
+                return logo ? (
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 p-1.5"
+                    style={{ background:'#ffffff', border:`1px solid ${t.cardBorder}` }}>
+                    <img src={logo.src} alt={logo.alt} className="max-w-full max-h-full object-contain"/>
+                  </div>
+                ) : (
+                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: reached ? 'var(--good-soft)' : 'var(--info-soft)',
+                             border: `1px solid ${reached ? 'var(--good-line)' : 'var(--info-line)'}` }}>
+                    {reached ? <Trophy size={20} style={{ color:'var(--good)' }}/> : <Target size={20} style={{ color:'var(--info)' }}/>}
+                  </div>
+                )
+              })()}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-xs font-bold uppercase tracking-wider" style={{ color: t.t3 }}>
@@ -278,7 +288,7 @@ export default function StudentDashboard() {
                   )}
                 </div>
                 {reached ? (
-                  <p className="text-sm font-semibold mt-1" style={{ color: '#34d399' }}>
+                  <p className="text-sm font-semibold mt-1" style={{ color:'var(--good)' }}>
                     ¡Alcanzaste el puntaje de corte de {targetSchool?.nombre}!
                   </p>
                 ) : gap !== null ? (

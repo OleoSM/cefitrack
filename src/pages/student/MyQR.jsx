@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { getTargetSchool } from '../../data/mockData'
+import { logoInstitucion, tipoDesdeNombre } from '../../lib/instituciones'
 import { useStudentData } from '../../hooks/useStudentData'
 import { Download, Shield, Printer, Info, AlertTriangle, Pencil, Maximize2, RotateCw, X, ChevronDown } from 'lucide-react'
 import FlipCard from '../../components/ui/FlipCard'
@@ -376,12 +377,23 @@ function BackCard({ student, grp, theme, avatar, targetSchool }) {
       <div style={{ height: 3, background: theme.accent }}/>
       {/* Info fields */}
       <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6, background: theme.cardBg }}>
-        {fields.map(([label, value]) => (
-          <div key={label} style={{ paddingBottom: 6, borderBottom: `1px dashed ${theme.accent}28` }}>
-            <p style={{ color: theme.labelColor, fontSize: 7.5, fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p>
-            <p style={{ color: theme.valueColor, fontSize: 12.5, fontWeight: 600, margin: '2px 0 0', lineHeight: 1.2 }}>{value}</p>
-          </div>
-        ))}
+        {fields.map(([label, value]) => {
+          const logo = label === 'ESCUELA OBJETIVO'
+            ? logoInstitucion(targetSchool?.tipo ?? tipoDesdeNombre(targetSchool?.nombre))
+            : null
+          return (
+            <div key={label} style={{ paddingBottom: 6, borderBottom: `1px dashed ${theme.accent}28` }}>
+              <p style={{ color: theme.labelColor, fontSize: 7.5, fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p>
+              <div style={{ display:'flex', alignItems:'center', gap: 6, marginTop: 2 }}>
+                {logo && (
+                  <img src={logo.src} alt={logo.alt} crossOrigin="anonymous"
+                    style={{ height: 18, width: 'auto', objectFit:'contain', flexShrink: 0 }}/>
+                )}
+                <p style={{ color: theme.valueColor, fontSize: 12.5, fontWeight: 600, margin: 0, lineHeight: 1.2 }}>{value}</p>
+              </div>
+            </div>
+          )
+        })}
       </div>
       {/* Footer */}
       <div style={{ background: theme.footerBg, padding: '7px 11px', borderTop: `1px solid ${theme.accent}28` }}>

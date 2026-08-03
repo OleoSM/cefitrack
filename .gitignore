@@ -7,6 +7,6 @@ dist/
 .vercel
 .env*
 
-# Avatares de terceros: obra con copyright y fotos de personas reales.
-# Los archivos siguen en disco, pero el repositorio no debe distribuirlos.
-public/avatars/
+# Los avatares de la carpeta netflix incluyen fotografías de personas reales:
+# no es copyright sino derecho de imagen, y se resuelve distinto.
+public/avatars/netflix/

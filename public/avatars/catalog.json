@@ -1,0 +1,182 @@
+[
+  {
+    "id": "goku",
+    "name": "Goku",
+    "category": "anime",
+    "src": "/avatars/anime/goku.webp"
+  },
+  {
+    "id": "vegeta",
+    "name": "Vegeta",
+    "category": "anime",
+    "src": "/avatars/anime/vegeta.webp"
+  },
+  {
+    "id": "naruto",
+    "name": "Naruto",
+    "category": "anime",
+    "src": "/avatars/anime/naruto.webp"
+  },
+  {
+    "id": "sasuke",
+    "name": "Sasuke",
+    "category": "anime",
+    "src": "/avatars/anime/sasuke.webp"
+  },
+  {
+    "id": "luffy",
+    "name": "Luffy",
+    "category": "anime",
+    "src": "/avatars/anime/luffy.webp"
+  },
+  {
+    "id": "zoro",
+    "name": "Zoro",
+    "category": "anime",
+    "src": "/avatars/anime/zoro.webp"
+  },
+  {
+    "id": "saitama",
+    "name": "Saitama",
+    "category": "anime",
+    "src": "/avatars/anime/saitama.webp"
+  },
+  {
+    "id": "tanjiro",
+    "name": "Tanjiro",
+    "category": "anime",
+    "src": "/avatars/anime/tanjiro.webp"
+  },
+  {
+    "id": "mario",
+    "name": "Mario",
+    "category": "videojuegos",
+    "src": "/avatars/videojuegos/mario.webp"
+  },
+  {
+    "id": "link",
+    "name": "Link",
+    "category": "videojuegos",
+    "src": "/avatars/videojuegos/link.webp"
+  },
+  {
+    "id": "kirby",
+    "name": "Kirby",
+    "category": "videojuegos",
+    "src": "/avatars/videojuegos/kirby.webp"
+  },
+  {
+    "id": "pikachu",
+    "name": "Pikachu",
+    "category": "videojuegos",
+    "src": "/avatars/videojuegos/pikachu.webp"
+  },
+  {
+    "id": "sonic",
+    "name": "Sonic",
+    "category": "videojuegos",
+    "src": "/avatars/videojuegos/sonic.webp"
+  },
+  {
+    "id": "samus",
+    "name": "Samus",
+    "category": "videojuegos",
+    "src": "/avatars/videojuegos/samus.webp"
+  },
+  {
+    "id": "yoshi",
+    "name": "Yoshi",
+    "category": "videojuegos",
+    "src": "/avatars/videojuegos/yoshi.webp"
+  },
+  {
+    "id": "donkey-kong",
+    "name": "Donkey Kong",
+    "category": "videojuegos",
+    "src": "/avatars/videojuegos/donkey-kong.webp"
+  },
+  {
+    "id": "spiderman",
+    "name": "Spider-Man",
+    "category": "superheroes",
+    "src": "/avatars/superheroes/spiderman.webp"
+  },
+  {
+    "id": "iron-man",
+    "name": "Iron Man",
+    "category": "superheroes",
+    "src": "/avatars/superheroes/iron-man.webp"
+  },
+  {
+    "id": "deadpool",
+    "name": "Deadpool",
+    "category": "superheroes",
+    "src": "/avatars/superheroes/deadpool.webp"
+  },
+  {
+    "id": "batman",
+    "name": "Batman",
+    "category": "superheroes",
+    "src": "/avatars/superheroes/batman.webp"
+  },
+  {
+    "id": "netflix-01",
+    "name": "Netflix 01",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-01.webp"
+  },
+  {
+    "id": "netflix-02",
+    "name": "Netflix 02",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-02.webp"
+  },
+  {
+    "id": "netflix-03",
+    "name": "Netflix 03",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-03.webp"
+  },
+  {
+    "id": "netflix-04",
+    "name": "Netflix 04",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-04.webp"
+  },
+  {
+    "id": "netflix-05",
+    "name": "Netflix 05",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-05.webp"
+  },
+  {
+    "id": "netflix-06",
+    "name": "Netflix 06",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-06.webp"
+  },
+  {
+    "id": "netflix-07",
+    "name": "Netflix 07",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-07.webp"
+  },
+  {
+    "id": "netflix-08",
+    "name": "Netflix 08",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-08.webp"
+  },
+  {
+    "id": "netflix-09",
+    "name": "Netflix 09",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-09.webp"
+  },
+  {
+    "id": "netflix-10",
+    "name": "Netflix 10",
+    "category": "netflix",
+    "src": "/avatars/netflix/netflix-10.webp"
+  }
+]

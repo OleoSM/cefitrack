@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -379,10 +380,8 @@ export default function Dashboard() {
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                   i===0?'bg-gold-500 text-white':i===1?'bg-white/20 text-white/70':i===2?'bg-amber-700/70 text-white':'bg-white/8 text-white/45'
                 }`}>{i+1}</div>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
-                  {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                </div>
+                <AvatarAlumno student={s} size={32}
+                  style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}/>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{s.name}</p>
                   <p className="text-[11px]" style={{ color: 'var(--t3)' }}>{groups.find(g=>g.id===s.groupId)?.name ?? '—'}</p>
@@ -416,9 +415,7 @@ export default function Dashboard() {
                   style={{ border: '1px solid var(--divider)' }}
                   onMouseEnter={e=>e.currentTarget.style.background='var(--card-bg)'}
                   onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 text-xs font-bold flex-shrink-0">
-                    {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                  </div>
+                  <AvatarAlumno student={s} size={32} className="bg-red-500/20 text-red-400"/>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{s.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { createPortal } from 'react-dom'
 import { fetchStudents, resetTerms } from '../../lib/supabaseData'
 import {
@@ -157,10 +158,8 @@ export default function TermsManager() {
 
               {/* Nombre */}
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ background:'var(--soft-bg)', color:'var(--t2)' }}>
-                  {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                </div>
+                <AvatarAlumno student={s} size={28}
+                  style={{ background:'var(--soft-bg)', color:'var(--t2)' }}/>
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate" style={{ color:'var(--t1)' }}>{s.name}</p>
                   {isSigned && (

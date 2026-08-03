@@ -119,11 +119,18 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
 }
 
 /* ── Avatar cell helper (member-list pattern) ──────────────── */
-export function DataTableAvatar({ initials, statusColor, name, sub, accentColor }) {
+export function DataTableAvatar({ initials, statusColor, name, sub, accentColor, avatarSrc }) {
   return (
     <div className="flex items-center gap-2.5 overflow-hidden">
-      {/* Avatar with status dot */}
+      {/* Avatar con punto de estado. Si el alumno eligió una imagen se muestra
+          ésa: es como se reconoce a sí mismo en su portal, y verla aquí ayuda
+          a asociar rápido a la persona. Las iniciales quedan de respaldo. */}
       <div className="relative flex-shrink-0">
+        {avatarSrc ? (
+          <img src={avatarSrc} alt="" loading="lazy"
+            className="w-8 h-8 rounded-full object-cover"
+            style={{ border:'1px solid var(--card-border)' }}/>
+        ) : (
         <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-300"
           style={accentColor
             ? { background:`${accentColor}30`, color: accentColor, border:`1px solid ${accentColor}60`, boxShadow:`0 0 10px ${accentColor}30` }
@@ -131,6 +138,7 @@ export function DataTableAvatar({ initials, statusColor, name, sub, accentColor 
           }>
           {initials}
         </div>
+        )}
         {statusColor && (
           <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
             style={{ background: statusColor, borderColor:'var(--card-bg)' }} />

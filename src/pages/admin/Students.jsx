@@ -20,14 +20,14 @@ const attColor   = r => r >= 90 ? 'var(--good)' : r >= 75 ? 'var(--info)' : 'var
 const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
 const COLUMNS = [
-  { key:'name',    label:'Alumno',     className:'flex-grow min-w-[180px]' },
-  { key:'group',   label:'Grupo',      className:'w-28' },
-  { key:'att',     label:'Asistencia', className:'w-36 hidden sm:flex' },
-  { key:'grade',   label:'Promedio',   className:'w-24' },
-  { key:'tasks',   label:'Tareas',     className:'w-32 hidden md:flex' },
-  { key:'status',  label:'Estado',     className:'w-28' },
+  { key:'name',    label:'Alumno',     className:'flex-grow min-w-[140px]' },
+  { key:'group',   label:'Grupo',      className:'w-28 hidden sm:flex' },
+  { key:'att',     label:'Asistencia', className:'w-36 hidden lg:flex' },
+  { key:'grade',   label:'Promedio',   className:'w-16 sm:w-24' },
+  { key:'tasks',   label:'Tareas',     className:'w-32 hidden xl:flex' },
+  { key:'status',  label:'Estado',     className:'w-28 hidden sm:flex' },
   { key:'contact', label:'Contacto',   className:'w-40 hidden xl:flex' },
-  { key:'action',  label:'',           className:'w-28 flex justify-end' },
+  { key:'action',  label:'',           className:'w-20 sm:w-28 flex justify-end' },
 ]
 
 export default function Students() {
@@ -221,20 +221,24 @@ export default function Students() {
               cells={[
                 /* Alumno */
                 {
-                  className: 'flex-grow min-w-[180px]',
+                  className: 'flex-grow min-w-[140px]',
                   content: (
                     <DataTableAvatar
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                       statusColor={avatarColor}
+                      avatarSrc={s.avatarSrc}
                       name={s.name}
-                      sub={s.email}
+                      sub={<>
+                        <span className="sm:hidden">{grp?.name}</span>
+                        <span className="hidden sm:inline">{s.email}</span>
+                      </>}
                       accentColor={groupAccent}
                     />
                   ),
                 },
                 /* Grupo */
                 {
-                  className: 'w-28',
+                  className: 'w-28 hidden sm:flex',
                   content: (
                     <span
                       className="text-[11px] font-semibold px-2 py-0.5 rounded-full transition-all duration-300"
@@ -248,7 +252,7 @@ export default function Students() {
                 },
                 /* Asistencia */
                 {
-                  className: 'w-36 hidden sm:flex',
+                  className: 'w-36 hidden lg:flex',
                   content: s.attendanceRate === null
                     ? <span className="text-xs" style={{ color:'var(--t4)' }}>Sin datos</span>
                     : (
@@ -261,7 +265,7 @@ export default function Students() {
                 },
                 /* Promedio */
                 {
-                  className: 'w-24',
+                  className: 'w-16 sm:w-24',
                   content: s.avgGrade === null
                     ? <span className="text-sm" style={{ color:'var(--t4)' }}>—</span>
                     : (
@@ -272,7 +276,7 @@ export default function Students() {
                 },
                 /* Tareas */
                 {
-                  className: 'w-32 hidden md:flex',
+                  className: 'w-32 hidden xl:flex',
                   content: s.assignmentsTotal > 0
                     ? (
                       <DataTableBar
@@ -286,7 +290,7 @@ export default function Students() {
                 },
                 /* Estado */
                 {
-                  className: 'w-28',
+                  className: 'w-28 hidden sm:flex',
                   content: (
                     <DataTableBadge
                       label={cfg.label}
@@ -315,7 +319,7 @@ export default function Students() {
                 },
                 /* Acciones */
                 {
-                  className: 'w-28 flex justify-end',
+                  className: 'w-20 sm:w-28 flex justify-end',
                   content: (
                     <div className="flex items-center gap-0.5">
                       {[

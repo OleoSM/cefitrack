@@ -259,6 +259,7 @@ export default function Evaluations() {
                 className: 'flex-grow min-w-[180px]',
                 content: <DataTableAvatar
                   initials={s?.name.split(' ').slice(0,2).map(n=>n[0]).join('') ?? '?'}
+                  avatarSrc={s?.avatarSrc}
                   name={s?.name ?? '—'}
                   sub={groups.find(g => g.id === s?.groupId)?.name}
                 />,

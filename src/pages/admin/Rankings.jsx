@@ -8,6 +8,7 @@ import {
 import { getStatusConfig } from '../../data/mockData'
 import { fetchStudents, fetchGroups, fetchAttendanceStats } from '../../lib/supabaseData'
 import { DataTable, DataTableRow, DataTableAvatar } from '../../components/ui/DataTable'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 import { loadSettings, calcularScore } from '../../lib/settings'
 
 const trendIcons = {
@@ -86,10 +87,9 @@ export default function Rankings() {
           {/* 2nd */}
           {top3[1] && (
             <div className="flex flex-col items-center gap-1.5 sm:gap-2 flex-1 max-w-[120px] sm:max-w-40">
-              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-bold text-base sm:text-xl"
-                style={{ background:'var(--soft-bg)', color:'var(--t1)' }}>
-                {top3[1].name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-              </div>
+              <AvatarAlumno student={top3[1]} size={null} redondez="rounded-2xl"
+                className="w-11 h-11 sm:w-14 sm:h-14 font-bold text-base sm:text-xl"
+                style={{ background:'var(--soft-bg)', color:'var(--t1)' }}/>
               <div className="text-center">
                 <p className="text-xs sm:text-sm font-bold leading-tight" style={{ color:'var(--t1)' }}>{top3[1].name.split(' ')[0]}</p>
                 <p className="text-[10px] sm:text-xs hidden sm:block" style={{ color:'var(--t3)' }}>{top3[1].name.split(' ')[1]}</p>
@@ -107,9 +107,8 @@ export default function Rankings() {
           {top3[0] && (
             <div className="flex flex-col items-center gap-1.5 sm:gap-2 flex-1 max-w-[140px] sm:max-w-44">
               <div className="w-2 h-2 rounded-full bg-gold-500"/>
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gold-500 flex items-center justify-center text-white font-bold text-base sm:text-xl ring-4 ring-gold-400/20">
-                {top3[0].name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-              </div>
+              <AvatarAlumno student={top3[0]} size={null} redondez="rounded-2xl"
+                className="w-12 h-12 sm:w-16 sm:h-16 bg-gold-500 text-white text-base sm:text-xl ring-4 ring-gold-400/20"/>
               <div className="text-center">
                 <p className="text-xs sm:text-sm font-bold" style={{ color:'var(--t1)' }}>{top3[0].name.split(' ')[0]}</p>
                 <p className="text-[10px] sm:text-xs hidden sm:block" style={{ color:'var(--t3)' }}>{top3[0].name.split(' ')[1]}</p>
@@ -127,9 +126,8 @@ export default function Rankings() {
           {/* 3rd */}
           {top3[2] && (
             <div className="flex flex-col items-center gap-1.5 sm:gap-2 flex-1 max-w-[120px] sm:max-w-40">
-              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-bold text-base sm:text-xl bg-amber-500/20 text-amber-300">
-                {top3[2].name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-              </div>
+              <AvatarAlumno student={top3[2]} size={null} redondez="rounded-2xl"
+                className="w-11 h-11 sm:w-14 sm:h-14 bg-amber-500/20 text-amber-300 text-base sm:text-xl"/>
               <div className="text-center">
                 <p className="text-xs sm:text-sm font-bold" style={{ color:'var(--t1)' }}>{top3[2].name.split(' ')[0]}</p>
                 <p className="text-[10px] sm:text-xs hidden sm:block" style={{ color:'var(--t3)' }}>{top3[2].name.split(' ')[1]}</p>
@@ -174,7 +172,8 @@ export default function Rankings() {
         ]}
         isEmpty={!loading && sorted.length === 0}
         emptyText="Aún no hay alumnos con datos para rankear.">
-        {sorted.map((s, i) => {
+        <ProgressiveList items={sorted} emptyLabel="Aún no hay alumnos con datos para rankear.">
+        {(s, i) => {
           const cfg        = getStatusConfig(s.status)
           const trend      = trendIcons[trends[i % trends.length]]
           const gradeColor = (s.avgGrade ?? 0)>=8.5?'text-emerald-400':(s.avgGrade ?? 0)>=7?'text-blue-400':'text-red-400'
@@ -187,6 +186,7 @@ export default function Rankings() {
                   content:(
                     <DataTableAvatar
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
+                      avatarSrc={s.avatarSrc}
                       name={s.name}
                       sub={
                         <span className="flex items-center gap-2">
@@ -239,7 +239,8 @@ export default function Rankings() {
               ]}
             />
           )
-        })}
+        }}
+        </ProgressiveList>
       </DataTable>
     </div>
   )

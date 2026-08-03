@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -224,9 +225,8 @@ export default function QRScanner() {
                     {groups.find(g=>g.id===lastScanned.student.groupId)?.name} · Registrado a las {lastScanned.time}
                   </p>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-800 font-bold text-sm flex-shrink-0">
-                  {lastScanned.student.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                </div>
+                <AvatarAlumno student={lastScanned.student} size={48} redondez="rounded-xl"
+                  className="bg-emerald-100 text-emerald-800"/>
               </div>
             </div>
           )}
@@ -265,9 +265,8 @@ export default function QRScanner() {
                       <div key={entry.student.id}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors animate-fade-in">
                         <div className="relative">
-                          <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-800 text-xs font-bold flex-shrink-0">
-                            {entry.student.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                          </div>
+                          <AvatarAlumno student={entry.student} size={36}
+                            className="bg-emerald-100 text-emerald-800"/>
                           {i === 0 && (
                             <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"/>
                           )}

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback, createContext, useContext } from 'react'
+import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { createPortal } from 'react-dom'
 import {
   Plus, Minus, Trash2, Check, ChevronDown, ChevronRight,
@@ -1058,9 +1059,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                   {/* Alumno — sticky */}
                   <td style={{ position:'sticky', left:L.name, zIndex:2, background:solidBg, minWidth:W.name, width:W.name, padding:'0 10px', verticalAlign:'middle', borderRight: hcMode ? '2px solid #1e293b40' : '1px solid rgba(255,255,255,.06)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <div style={{ width:24, height:24, borderRadius:'50%', background: hcMode ? 'rgba(0,0,0,.08)' : 'var(--card-border)', color: hcMode ? '#1e293b' : 'var(--t2)', fontSize:10, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                        {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                      </div>
+                      <AvatarAlumno student={s} size={24}
+                        style={{ background: hcMode ? 'rgba(0,0,0,.08)' : 'var(--card-border)', color: hcMode ? '#1e293b' : 'var(--t2)', border:'none' }}/>
                       <span style={{ fontSize:12, fontWeight:500, color: hcMode ? '#0f172a' : 'rgba(255,255,255,.78)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
                         {s.name}
                       </span>

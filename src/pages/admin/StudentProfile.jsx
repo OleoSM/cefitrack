@@ -184,14 +184,21 @@ export default function StudentProfile() {
       <div className="card p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row gap-5">
 
-          {/* Avatar */}
-          <div className="w-18 h-18 w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-xl font-bold flex-shrink-0"
-            /* Fondo pleno con inicial blanca. Antes era el acento al 16 % de
-               alfa con un glow de color: sobre página blanca el bloque casi no
-               existía y la inicial quedaba flotando. */
-            style={{ background: accent, color:'#ffffff', boxShadow:'0 1px 3px rgba(15,23,42,.22)' }}>
-            {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
-          </div>
+          {/* Avatar: el que el alumno eligió en su portal, o sus iniciales
+              sobre el color del grupo si aún no ha elegido ninguno. */}
+          {s.avatarSrc ? (
+            <img src={s.avatarSrc} alt=""
+              className="w-[72px] h-[72px] rounded-2xl object-cover flex-shrink-0"
+              style={{ border:'1px solid var(--card-border)' }}/>
+          ) : (
+            <div className="w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-xl font-bold flex-shrink-0"
+              /* Fondo pleno con inicial blanca. Antes era el acento al 16 % de
+                 alfa con un glow de color: sobre página blanca el bloque casi
+                 no existía y la inicial quedaba flotando. */
+              style={{ background: accent, color:'#ffffff', boxShadow:'0 1px 3px rgba(15,23,42,.22)' }}>
+              {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+            </div>
+          )}
 
           {/* Info */}
           <div className="flex-1 min-w-0">

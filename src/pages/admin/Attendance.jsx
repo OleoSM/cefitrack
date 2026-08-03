@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { Html5Qrcode } from 'html5-qrcode'
 import * as XLSX from 'xlsx'
 import { getLastSimulacro } from '../../data/mockData'
@@ -1001,10 +1002,8 @@ export default function Attendance() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                            style={{ background:'var(--good-soft)', color:'var(--good)' }}>
-                            {entry.student.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
-                          </div>
+                          <AvatarAlumno student={entry.student} size={28}
+                            style={{ background:'var(--good-soft)', color:'var(--good)' }}/>
                           <span className="text-sm font-medium truncate" style={{ color: 'var(--t1)' }}>
                             {entry.student.name}
                           </span>

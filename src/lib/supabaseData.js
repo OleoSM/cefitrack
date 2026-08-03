@@ -100,7 +100,11 @@ export async function fetchGroups() {
 const num = v => (v === null || v === undefined ? null : Number(v))
 
 export async function fetchStudents() {
-  const { data, error } = await supabase.from('students').select('*').order('name')
+  // Se trae también la ruta del avatar: el panel muestra la imagen que el
+  // alumno eligió, y resolverla en el cliente obligaría a mantener una copia
+  // del catálogo allí.
+  const { data, error } = await supabase.from('students')
+    .select('*, avatar_catalogo(src)').order('name')
   if (error) throw error
   return data.map(s => ({
     id: s.id,
@@ -123,6 +127,7 @@ export async function fetchStudents() {
     firmaGarantia: s.firma_garantia,
     examenGeneral: s.examen_general,
     avatar: s.avatar,
+    avatarSrc: s.avatar_catalogo?.src ?? null,
   }))
 }
 

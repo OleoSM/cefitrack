@@ -19,11 +19,11 @@ import CredentialsPanel from '../../components/admin/CredentialsPanel'
 
 const COLUMNS = [
   { key:'rank',   label:'#',          className:'w-8' },
-  { key:'name',   label:'Alumno',     className:'flex-grow min-w-[160px]' },
+  { key:'name',   label:'Alumno',     className:'flex-grow min-w-[140px]' },
   { key:'att',    label:'Asistencia', className:'w-32 hidden sm:flex' },
-  { key:'grade',  label:'Promedio',   className:'w-20' },
+  { key:'grade',  label:'Promedio',   className:'w-16 sm:w-20' },
   { key:'tasks',  label:'Tareas',     className:'w-28 hidden md:flex' },
-  { key:'status', label:'Estado',     className:'w-28' },
+  { key:'status', label:'Estado',     className:'w-28 hidden sm:flex' },
   { key:'action', label:'',           className:'w-16 flex justify-end' },
 ]
 
@@ -200,9 +200,10 @@ export default function GroupDetail() {
                     content: <span className="text-xs font-mono" style={{ color:'var(--t3)' }}>{i+1}</span>,
                   },
                   {
-                    className: 'flex-grow min-w-[160px]',
+                    className: 'flex-grow min-w-[140px]',
                     content: <DataTableAvatar
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
+                      avatarSrc={s.avatarSrc}
                       statusColor={ac}
                       name={s.name}
                       sub={s.email}
@@ -215,7 +216,7 @@ export default function GroupDetail() {
                       : <DataTableBar value={rate} color={ac} label={`${rate}%`} />,
                   },
                   {
-                    className: 'w-20',
+                    className: 'w-16 sm:w-20',
                     content: Number.isFinite(s.avgGrade)
                       ? <span className={`text-base font-bold ${gradeClass(s.avgGrade)}`}>{s.avgGrade}</span>
                       : <span className="text-sm" style={{ color:'var(--t3)' }}>—</span>,
@@ -227,7 +228,7 @@ export default function GroupDetail() {
                       : <span className="text-xs" style={{ color:'var(--t3)' }}>—</span>,
                   },
                   {
-                    className: 'w-28',
+                    className: 'w-28 hidden sm:flex',
                     content: <DataTableBadge label={cfg.label} dot={cfg.dot} bg={cfg.bg} color={cfg.color} border={cfg.border} />,
                   },
                   {

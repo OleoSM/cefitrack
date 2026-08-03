@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { BrainCircuit, AlertTriangle, CheckCircle, ArrowRight, Zap } from 'lucide-react'
 import { aiInsights, getStudentById, students, statusConfig } from '../../data/mockData'
 import { GlowCard } from '../../components/ui/GlowCard'
@@ -94,10 +95,7 @@ export default function AIInsights() {
                 <div className="flex items-start gap-4">
 
                   {/* Avatar */}
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
-                    style={{ background:`${rc.accent}20`, color: rc.accent, border:`1px solid ${rc.accent}40` }}>
-                    {s?.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                  </div>
+                  <AvatarAlumno student={s} size={40} accent={rc.accent} redondez="rounded-xl"/>
 
                   <div className="flex-1 min-w-0">
                     {/* Nombre + badge */}
@@ -186,10 +184,8 @@ export default function AIInsights() {
               className="cursor-pointer hover:-translate-y-0.5 transition-transform duration-200 group"
               onClick={() => navigate(`/admin/alumnos/${s.id}`)}>
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
-                  style={{ background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }}>
-                  {s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
-                </div>
+                <AvatarAlumno student={s} size={36} redondez="rounded-xl"
+                  style={{ background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }}/>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold truncate" style={{ color:'var(--t1)' }}>{s.name}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">

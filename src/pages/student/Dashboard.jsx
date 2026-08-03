@@ -12,7 +12,7 @@ import { logoInstitucion, tipoDesdeNombre } from '../../lib/instituciones'
 import { useStudentData } from '../../hooks/useStudentData'
 import { promedioPonderado, rankingGrupo, statsAsistencia, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
 import { fetchGroupMetrics } from '../../lib/supabaseData'
-import { useStudentTheme } from '../../context/StudentThemeContext'
+import { useStudentTheme, esColorClaro } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
 
 const PIE_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6']
@@ -58,6 +58,8 @@ function HoverInfo({ trigger, children }) {
 export default function StudentDashboard() {
   const navigate = useNavigate()
   const { t, card } = useStudentTheme()
+  const tarjetaClara = esColorClaro(card.grad)
+  const tintaTarjeta = tarjetaClara ? '#0f172a' : '#ffffff'
 
   const { student: s, group: grp, attendance, evaluations } = useStudentData({
     withAttendance: true, withEvaluations: true,
@@ -126,36 +128,43 @@ export default function StudentDashboard() {
     <div className="space-y-5">
 
       {/* ══ Tarjeta de bienvenida (color personalizable en Configuración) ══ */}
-      <div className="kw rounded-2xl p-5 sm:p-6 text-white"
-        style={{ background: card.grad, border: '1px solid rgba(255,255,255,.10)' }}>
+      {/* La tinta se decide por la luminancia del color elegido: con los
+          claros y con la rueda libre, el blanco de siempre sería ilegible. */}
+      <div className="kw rounded-2xl p-5 sm:p-6"
+        style={{
+          background: card.grad,
+          color: tintaTarjeta,
+          border: `1px solid ${tarjetaClara ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.10)'}`,
+        }}>
         <div className="flex flex-wrap items-center gap-4">
           {s.avatarSrc ? (
             <img src={s.avatarSrc} alt=""
               className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover flex-shrink-0"
-              style={{ background:'rgba(255,255,255,.10)' }}/>
+              style={{ background: tarjetaClara ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.10)' }}/>
           ) : (
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/10 flex items-center justify-center text-lg sm:text-xl font-bold flex-shrink-0">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-lg sm:text-xl font-bold flex-shrink-0"
+              style={{ background: tarjetaClara ? 'rgba(15,23,42,.10)' : 'rgba(255,255,255,.10)' }}>
               {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-white/45">Bienvenido de vuelta</p>
+            <p className="text-sm " style={{ opacity:.45 }}>Bienvenido de vuelta</p>
             <h1 className="text-lg sm:text-xl font-bold truncate">{s.name}</h1>
-            <p className="text-xs sm:text-sm mt-0.5 text-white/40 truncate">{grp?.name} — {grp?.subject}</p>
+            <p className="text-xs sm:text-sm mt-0.5  truncate" style={{ opacity:.40 }}>{grp?.name} — {grp?.subject}</p>
           </div>
 
           <div className="flex gap-3 w-full sm:w-auto sm:ml-auto">
             {/* Promedio ponderado + tooltip de desglose */}
             <HoverInfo trigger={
-              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl bg-white/10 min-w-[96px]">
-                <p className="text-2xl font-bold tabular-nums text-white flex items-center justify-center gap-1">
+              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl min-w-[96px]" style={{ background: tarjetaClara ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.10)' }}>
+                <p className="text-2xl font-bold tabular-nums flex items-center justify-center gap-1">
                   {pond.promedio ?? '—'}
-                  <Info size={11} className="text-white/40"/>
+                  <Info size={11} className="" style={{ opacity:.40 }}/>
                 </p>
-                <p className="text-[11px] text-white/45">Promedio</p>
+                <p className="text-[11px] " style={{ opacity:.45 }}>Promedio</p>
               </div>
             }>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(255,255,255,.40)' }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ opacity:.4 }}>
                 ¿Cómo se calcula tu promedio?
               </p>
               {[
@@ -171,32 +180,32 @@ export default function StudentDashboard() {
                     : `${desglose.asistencia.pct}% → ${desglose.asistencia.valor.toFixed(1)}` },
               ].map(row => (
                 <div key={row.l} className="flex items-center justify-between py-1 text-xs">
-                  <span style={{ color: 'rgba(255,255,255,.55)' }}>{row.l}</span>
-                  <span className="font-bold tabular-nums" style={{ color: 'rgba(255,255,255,.85)' }}>{row.v}</span>
+                  <span style={{ opacity:.55 }}>{row.l}</span>
+                  <span className="font-bold tabular-nums" style={{ opacity:.85 }}>{row.v}</span>
                 </div>
               ))}
               <div className="flex items-center justify-between pt-2 mt-1 text-xs"
-                style={{ borderTop: '1px solid rgba(255,255,255,.10)' }}>
-                <span className="font-bold" style={{ color: 'rgba(255,255,255,.70)' }}>Promedio ponderado</span>
+                style={{ borderTop: `1px solid ${tarjetaClara ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.10)'}` }}>
+                <span className="font-bold" style={{ opacity:.7 }}>Promedio ponderado</span>
                 <span className="font-bold text-sm" style={{ color: 'var(--good)' }}>{pond.promedio ?? '—'}</span>
               </div>
             </HoverInfo>
 
             {/* Lugar en grupo + tooltip */}
             <HoverInfo trigger={
-              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl bg-white/10 min-w-[96px]">
+              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl min-w-[96px]" style={{ background: tarjetaClara ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.10)' }}>
                 <p className="text-2xl font-bold tabular-nums text-amber-300 flex items-center justify-center gap-1">
                   #{myPos}
-                  <Info size={11} className="text-white/40"/>
+                  <Info size={11} className="" style={{ opacity:.40 }}/>
                 </p>
-                <p className="text-[11px] text-white/45">Lugar en grupo</p>
+                <p className="text-[11px] " style={{ opacity:.45 }}>Lugar en grupo</p>
               </div>
             }>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(255,255,255,.40)' }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ opacity:.4 }}>
                 Lugar en el grupo
               </p>
               <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,.60)' }}>
-                Es el orden del grupo según el <strong style={{ color: 'rgba(255,255,255,.85)' }}>promedio ponderado</strong>{' '}
+                Es el orden del grupo según el <strong style={{ opacity:.85 }}>promedio ponderado</strong>{' '}
                 (Exámenes {pesos.examenes}% · Tareas {pesos.tareas}% · Asistencia {pesos.asistencia}%).
               </p>
               <p className="text-xs mt-2 font-semibold" style={{ color: '#fbbf24' }}>

@@ -71,29 +71,72 @@ export const TOKENS = {
   },
 }
 
-/* Colores de la tarjeta de presentación de "Mi Panel" */
+/* Colores de la tarjeta de presentación de "Mi Panel".
+   `grad` puede ser un color plano o un degradado; `grupo` ordena el selector.
+   Además del catálogo, el alumno puede elegir cualquier color con la rueda:
+   en ese caso `cardColor` guarda el hex y no un id. */
 export const CARD_COLORS = [
-  { id: 'siga',      label: 'SIGA Navy',  grad: 'linear-gradient(135deg, rgba(30,58,110,.95) 0%, rgba(24,46,87,.85) 70%, rgba(161,28,51,.45) 100%)' },
-  { id: 'guinda',    label: 'Guinda',     grad: 'linear-gradient(135deg, #881126 0%, #5a0b19 100%)' },
-  { id: 'unam',      label: 'Azul UNAM',  grad: 'linear-gradient(135deg, #003366 0%, #00284f 72%, rgba(204,153,51,.55) 100%)' },
-  { id: 'esmeralda', label: 'Esmeralda',  grad: 'linear-gradient(135deg, #065f46 0%, #064e3b 100%)' },
-  { id: 'atardecer', label: 'Atardecer',  grad: 'linear-gradient(135deg, #7c2d12 0%, #b45309 100%)' },
-  { id: 'violeta',   label: 'Violeta',    grad: 'linear-gradient(135deg, #4c1d95 0%, #2e1065 100%)' },
+  /* ── Institucional ── */
+  { id: 'siga',      label: 'SIGA Navy',  grupo: 'Institucional', grad: 'linear-gradient(135deg, rgba(30,58,110,.95) 0%, rgba(24,46,87,.85) 70%, rgba(161,28,51,.45) 100%)' },
+  { id: 'guinda',    label: 'Guinda IPN', grupo: 'Institucional', grad: 'linear-gradient(135deg, #881126 0%, #5a0b19 100%)' },
+  { id: 'unam',      label: 'Azul UNAM',  grupo: 'Institucional', grad: 'linear-gradient(135deg, #003366 0%, #00284f 72%, rgba(204,153,51,.55) 100%)' },
 
-  /* Sólidos institucionales: un color pleno, sin degradado ni alfa. La tarjeta
-     lleva texto blanco sobre su propio fondo, así que aquí van los tonos
-     profundos tal cual, sin variante por tema. */
-  { id: 'guinda-solido', label: 'Guinda',    mate: true, grad: '#4D0B1D' },
-  { id: 'granate',       label: 'Granate',   mate: true, grad: '#681126' },
-  { id: 'rojo',          label: 'Rojo',      mate: true, grad: '#78182B' },
-  { id: 'marino',        label: 'Marino',    mate: true, grad: '#12345A' },
-  { id: 'petroleo',      label: 'Petróleo',  mate: true, grad: '#064B60' },
-  { id: 'bosque',        label: 'Bosque',    mate: true, grad: '#17502D' },
-  { id: 'verdemar',      label: 'Verde mar', mate: true, grad: '#075348' },
-  { id: 'morado',        label: 'Morado',    mate: true, grad: '#48245F' },
-  { id: 'ciruela',       label: 'Ciruela',   mate: true, grad: '#5E1948' },
-  { id: 'cafe',          label: 'Café',      mate: true, grad: '#633515' },
+  /* ── Oscuros ── */
+  { id: 'guinda-solido', label: 'Guinda',    grupo: 'Oscuros', grad: '#4D0B1D' },
+  { id: 'granate',       label: 'Granate',   grupo: 'Oscuros', grad: '#681126' },
+  { id: 'rojo',          label: 'Rojo',      grupo: 'Oscuros', grad: '#78182B' },
+  { id: 'marino',        label: 'Marino',    grupo: 'Oscuros', grad: '#12345A' },
+  { id: 'petroleo',      label: 'Petróleo',  grupo: 'Oscuros', grad: '#064B60' },
+  { id: 'bosque',        label: 'Bosque',    grupo: 'Oscuros', grad: '#17502D' },
+  { id: 'verdemar',      label: 'Verde mar', grupo: 'Oscuros', grad: '#075348' },
+  { id: 'morado',        label: 'Morado',    grupo: 'Oscuros', grad: '#48245F' },
+  { id: 'ciruela',       label: 'Ciruela',   grupo: 'Oscuros', grad: '#5E1948' },
+  { id: 'cafe',          label: 'Café',      grupo: 'Oscuros', grad: '#633515' },
+  { id: 'grafito',       label: 'Grafito',   grupo: 'Oscuros', grad: '#2A2D33' },
+  { id: 'medianoche',    label: 'Medianoche',grupo: 'Oscuros', grad: '#0F1B2E' },
+
+  /* ── Claros ──
+     El texto de la tarjeta se calcula por luminancia, así que sobre estos
+     sale oscuro automáticamente. */
+  { id: 'arena',     label: 'Arena',    grupo: 'Claros', grad: '#E8D9BE' },
+  { id: 'menta',     label: 'Menta',    grupo: 'Claros', grad: '#CFE8DA' },
+  { id: 'cielo',     label: 'Cielo',    grupo: 'Claros', grad: '#CFE0F2' },
+  { id: 'lavanda',   label: 'Lavanda',  grupo: 'Claros', grad: '#DED3EE' },
+  { id: 'durazno',   label: 'Durazno',  grupo: 'Claros', grad: '#F5D9C8' },
+  { id: 'perla',     label: 'Perla',    grupo: 'Claros', grad: '#E9E9EC' },
+
+  /* ── Temáticos ──
+     Combinaciones con carácter. Los nombres evocan un registro, no una obra:
+     son paletas de color, no reproducciones de nada. */
+  { id: 'guerra',    label: 'Colores de guerra', grupo: 'Temáticos', grad: 'linear-gradient(135deg, #1A0505 0%, #7A1010 55%, #C6A03C 100%)' },
+  { id: 'militar',   label: 'Militar',           grupo: 'Temáticos', grad: 'linear-gradient(135deg, #3B4526 0%, #5A6B35 50%, #2B331C 100%)' },
+  { id: 'saiyajin',  label: 'Saiyajin',          grupo: 'Temáticos', grad: 'linear-gradient(135deg, #E8641A 0%, #1D4FA8 100%)' },
+  { id: 'ninja',     label: 'Ninja',             grupo: 'Temáticos', grad: 'linear-gradient(135deg, #14161A 0%, #E2661B 100%)' },
+  { id: 'arachnido', label: 'Arácnido',          grupo: 'Temáticos', grad: 'linear-gradient(135deg, #B3122A 0%, #123A8C 100%)' },
+  { id: 'aztec',     label: 'Azteca',            grupo: 'Temáticos', grad: 'linear-gradient(135deg, #0E5C55 0%, #C6A03C 60%, #7A1010 100%)' },
+  { id: 'volcan',    label: 'Volcán',            grupo: 'Temáticos', grad: 'linear-gradient(135deg, #1A1A1A 0%, #6B1B0E 55%, #F07316 100%)' },
+  { id: 'oceano',    label: 'Océano',            grupo: 'Temáticos', grad: 'linear-gradient(135deg, #04223A 0%, #0B6E8C 60%, #35C3D6 100%)' },
+  { id: 'galaxia',   label: 'Galaxia',           grupo: 'Temáticos', grad: 'linear-gradient(135deg, #17103A 0%, #4A2472 55%, #A93380 100%)' },
+  { id: 'oro',       label: 'Oro',               grupo: 'Temáticos', grad: 'linear-gradient(135deg, #3B2A08 0%, #A6820F 55%, #E6B33D 100%)' },
 ]
+
+/**
+ * ¿El color de fondo es claro? Se usa para decidir si el texto de la tarjeta
+ * va oscuro o blanco. Con degradados se toma el primer color que aparezca:
+ * es una aproximación, pero los degradados del catálogo arrancan oscuros.
+ */
+export function esColorClaro(valor = '') {
+  const hex = (valor.match(/#([0-9a-f]{6}|[0-9a-f]{3})/i) ?? [])[0]
+  if (!hex) return false
+  const h = hex.length === 4
+    ? '#' + [...hex.slice(1)].map(c => c + c).join('')
+    : hex
+  const r = parseInt(h.slice(1, 3), 16)
+  const g = parseInt(h.slice(3, 5), 16)
+  const b = parseInt(h.slice(5, 7), 16)
+  // Luminancia relativa ponderada por la sensibilidad del ojo a cada canal.
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.6
+}
 
 const APP_KEY  = 'siga_student_appearance'
 const CARD_KEY = 'siga_student_card'
@@ -108,7 +151,9 @@ export function StudentThemeProvider({ children }) {
   const setCardColor  = id => { setCardColorState(id);  localStorage.setItem(CARD_KEY, id) }
 
   const t    = TOKENS[appearance] ?? TOKENS.default
-  const card = CARD_COLORS.find(c => c.id === cardColor) ?? CARD_COLORS[0]
+  const card = cardColor?.startsWith('#')
+    ? { id: cardColor, label: 'Personalizado', grad: cardColor, grupo: 'Personalizado' }
+    : (CARD_COLORS.find(c => c.id === cardColor) ?? CARD_COLORS[0])
 
   return (
     <Ctx.Provider value={{ appearance, setAppearance, cardColor, setCardColor, t, card }}>

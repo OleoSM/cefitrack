@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Brush, Check, Sparkles, UserRound } from 'lucide-react'
-import { useStudentTheme, CARD_COLORS } from '../../context/StudentThemeContext'
+import { Brush, Check, Sparkles, UserRound, Palette } from 'lucide-react'
+import { useStudentTheme, CARD_COLORS, esColorClaro } from '../../context/StudentThemeContext'
 import AppearancePicker from '../../components/ui/AppearancePicker'
 import { useStudentData } from '../../hooks/useStudentData'
 import { setStudentAvatar, fetchAvatares } from '../../lib/supabaseData'
@@ -8,6 +8,12 @@ import ProgressiveList from '../../components/ui/ProgressiveList'
 
 export default function StudentSettings() {
   const { appearance, setAppearance, cardColor, setCardColor, t, card } = useStudentTheme()
+
+  const esPersonalizado = cardColor?.startsWith('#')
+  const [colorLibre, setColorLibre] = useState(esPersonalizado ? cardColor : '#4D0B1D')
+  const esClaro = esColorClaro(card.grad)
+  const tintaTarjeta = esClaro ? '#0f172a' : '#ffffff'
+  const GRUPOS_COLOR = ['Institucional', 'Oscuros', 'Claros', 'Temáticos']
   const { student: s, group: grp, setStudent } = useStudentData()
 
   /* El catálogo viene de la BD: añadir avatares es insertar filas, sin tocar
@@ -113,55 +119,77 @@ export default function StudentSettings() {
           Elige el color de la tarjeta con tu nombre que aparece en “Mi Panel”.
         </p>
 
-        {/* Vista previa en vivo */}
-        <div className="rounded-2xl p-5 text-white kw" style={{ background: card.grad, border: '1px solid rgba(255,255,255,.10)' }}>
+        {/* Vista previa en vivo. El texto se decide por luminancia: sobre un
+            color claro, el blanco de siempre sería ilegible. */}
+        <div className="rounded-2xl p-5 kw" style={{
+          background: card.grad,
+          color: tintaTarjeta,
+          border: `1px solid ${esClaro ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.10)'}` }}>
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center text-base font-bold flex-shrink-0">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-base font-bold flex-shrink-0"
+              style={{ background: esClaro ? 'rgba(15,23,42,.10)' : 'rgba(255,255,255,.15)' }}>
               {s?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'AL'}
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-white/50">Vista previa</p>
+              <p className="text-xs" style={{ opacity:.55 }}>Vista previa</p>
               <p className="font-bold truncate">{s?.name ?? 'Alumno'}</p>
-              <p className="text-xs text-white/40 truncate">{grp?.name} — {grp?.subject}</p>
+              <p className="text-xs truncate" style={{ opacity:.45 }}>{grp?.name} — {grp?.subject}</p>
             </div>
-            <Sparkles size={16} className="ml-auto text-white/30 flex-shrink-0"/>
+            <Sparkles size={16} className="ml-auto flex-shrink-0" style={{ opacity:.35 }}/>
           </div>
         </div>
 
-        {/* Dos bloques: los degradados y los de color plano. En IPN y UNAM los
-            degradados se desvanecen contra el fondo blanco y se leen como
-            transparentes, así que ahí se recomiendan los sólidos. */}
-        {[
-          { titulo: 'Degradados', items: CARD_COLORS.filter(c => !c.mate) },
-          { titulo: t.light ? 'Sólidos · recomendados' : 'Sólidos', items: CARD_COLORS.filter(c => c.mate) },
-        ].map(({ titulo, items }) => (
-        <div key={titulo}>
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-2 mt-3"
-          style={{ color: t.light && titulo.includes('recomendados') ? t.accent : t.t3 }}>{titulo}</p>
-        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
-          {items.map(c => {
-            const active = cardColor === c.id
-            return (
-              <button key={c.id} onClick={() => setCardColor(c.id)}
-                className="flex flex-col items-center gap-1.5 rounded-xl p-2 transition-all active:scale-95"
-                style={{
-                  background: active ? (t.light ? `${t.accent}0d` : 'rgba(255,255,255,.08)') : 'transparent',
-                  border: active ? `1.5px solid ${t.accent}` : `1.5px solid ${t.cardBorder}`,
-                }}>
-                <div className="w-full h-9 rounded-lg relative overflow-hidden" style={{ background: c.grad }}>
-                  {active && (
-                    <span className="absolute inset-0 flex items-center justify-center">
-                      <Check size={14} className="text-white drop-shadow"/>
-                    </span>
-                  )}
-                </div>
-                <span className="text-[9.5px] font-semibold leading-none text-center" style={{ color: t.t3 }}>{c.label}</span>
-              </button>
-            )
-          })}
+        {/* Color libre. `input type=color` abre la rueda del sistema, que en
+            teléfono es la nativa y ya sabe usar todo el mundo. */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+            style={{ background: t.softBg, border: `1px solid ${t.cardBorder}`, color: t.t2 }}>
+            <Palette size={14}/>
+            Personalizar color
+            <input type="color" value={colorLibre}
+              onChange={e => { setColorLibre(e.target.value); setCardColor(e.target.value) }}
+              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"/>
+          </label>
+          {esPersonalizado && (
+            <span className="text-xs font-mono px-2.5 py-1.5 rounded-lg"
+              style={{ background: t.softBg, color: t.t2 }}>{cardColor}</span>
+          )}
         </div>
-        </div>
-        ))}
+
+        {/* Un bloque por familia: institucional, oscuros, claros y temáticos.
+            Con más de treinta opciones, una sola rejilla no se recorre. */}
+        {GRUPOS_COLOR.map(grupo => {
+          const items = CARD_COLORS.filter(c => c.grupo === grupo)
+          if (items.length === 0) return null
+          return (
+            <div key={grupo}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2 mt-3"
+                style={{ color: t.t3 }}>{grupo}</p>
+              <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
+                {items.map(c => {
+                  const active = cardColor === c.id
+                  return (
+                    <button key={c.id} onClick={() => setCardColor(c.id)}
+                      className="flex flex-col items-center gap-1.5 rounded-xl p-2 transition-all active:scale-95"
+                      style={{
+                        background: active ? (t.light ? `${t.accent}0d` : 'rgba(255,255,255,.08)') : 'transparent',
+                        border: active ? `1.5px solid ${t.accent}` : `1.5px solid ${t.cardBorder}`,
+                      }}>
+                      <div className="w-full h-9 rounded-lg relative overflow-hidden" style={{ background: c.grad }}>
+                        {active && (
+                          <span className="absolute inset-0 flex items-center justify-center">
+                            <Check size={14} style={{ color: esColorClaro(c.grad) ? '#0f172a' : '#ffffff' }}/>
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9.5px] font-semibold leading-none text-center" style={{ color: t.t3 }}>{c.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

@@ -1,5 +1,71 @@
 import { supabase } from './supabaseClient'
 
+/**
+ * Inicio de sesión con Supabase Auth.
+ *
+ * Sustituye a la RPC `login_user`, que devolvía el usuario pero no dejaba
+ * rastro: la base no sabía quién estaba llamando y toda política de acceso era
+ * decorativa. Ahora la sesión la emite Supabase con un JWT firmado, `auth.uid()`
+ * identifica al llamador y el rol viaja dentro del token, de modo que las
+ * políticas RLS pueden leerlo sin consultar tablas —evitando la recursión— y
+ * sin que el cliente pueda falsificarlo.
+ *
+ * Las contraseñas son las mismas: los hashes bcrypt se copiaron tal cual.
+ */
+export async function loginConAuth(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  })
+  if (error) {
+    const msg = (error.message ?? '').toLowerCase()
+    if (msg.includes('invalid login')) {
+      return { ok: false, message: 'Correo o contraseña incorrectos.' }
+    }
+    return { ok: false, message: 'No se pudo conectar con el servidor.' }
+  }
+
+  const { data: perfil, error: e2 } = await supabase
+    .from('profiles').select('*').eq('id', data.user.id).maybeSingle()
+
+  if (e2 || !perfil) {
+    await supabase.auth.signOut()
+    return { ok: false, message: 'Tu cuenta no tiene un perfil asociado. Avisa a coordinación.' }
+  }
+  if (perfil.activo === false) {
+    await supabase.auth.signOut()
+    return { ok: false, message: 'Esta cuenta está desactivada.' }
+  }
+
+  return {
+    ok: true,
+    user: {
+      id: perfil.id, name: perfil.name, email: perfil.email,
+      role: perfil.role, studentId: perfil.student_id,
+    },
+  }
+}
+
+/** Sesión vigente según Supabase, para restaurarla al recargar. */
+export async function sesionActual() {
+  const { data } = await supabase.auth.getSession()
+  if (!data?.session) return null
+  const { data: perfil } = await supabase
+    .from('profiles').select('*').eq('id', data.session.user.id).maybeSingle()
+  if (!perfil || perfil.activo === false) return null
+  return {
+    id: perfil.id, name: perfil.name, email: perfil.email,
+    role: perfil.role, studentId: perfil.student_id,
+  }
+}
+
+export async function cerrarSesion() {
+  await supabase.auth.signOut()
+}
+
+/* Login anterior, contra la tabla `users`. Se conserva mientras el interruptor
+   de AuthContext permita volver atrás; se retira cuando la migración se dé por
+   asentada. */
 export async function loginWithDb(email, password) {
   const { data, error } = await supabase.rpc('login_user', {
     p_email: email,

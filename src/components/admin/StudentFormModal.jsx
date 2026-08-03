@@ -55,7 +55,7 @@ export default function StudentFormModal({
   const campo = (label, key, props = {}) => (
     <div>
       <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-        style={{ color:'rgba(255,255,255,.35)' }}>{label}</label>
+        style={{ color: 'var(--t3)' }}>{label}</label>
       <input value={form[key]} onChange={e => set(key, e.target.value)} className="input-field" {...props}/>
     </div>
   )
@@ -63,14 +63,14 @@ export default function StudentFormModal({
   return (
     <ModalPortal onClose={onClose} maxWidth="max-w-lg" scrollable>
         <div className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
-          style={{ borderBottom:'1px solid rgba(255,255,255,.08)', background:'rgba(8,8,15,.98)' }}>
-          <h2 className="text-sm font-bold" style={{ color:'rgba(255,255,255,.85)' }}>
+          style={{ borderBottom: '1px solid var(--card-border)', background:'var(--card-bg)' }}>
+          <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
             {editing ? `Editar alumno — ${student.name}` : 'Nuevo Alumno'}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg transition-colors"
-            style={{ color:'rgba(255,255,255,.40)' }}
-            onMouseEnter={e => e.currentTarget.style.color='white'}
-            onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,.40)'}>
+            style={{ color: 'var(--t3)' }}
+            onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
+            onMouseLeave={e => e.currentTarget.style.color='var(--t3)'}>
             <X size={15}/>
           </button>
         </div>
@@ -80,10 +80,10 @@ export default function StudentFormModal({
 
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-              style={{ color:'rgba(255,255,255,.35)' }}>Usuario (correo de acceso)</label>
+              style={{ color: 'var(--t3)' }}>Usuario (correo de acceso)</label>
             <input required type="email" value={form.email} onChange={e => set('email', e.target.value)}
               placeholder="ana.garcia@edutrack.mx" className="input-field"/>
-            <p className="text-[10px] mt-1" style={{ color:'rgba(255,255,255,.28)' }}>
+            <p className="text-[10px] mt-1" style={{ color: 'var(--t4)' }}>
               Con este correo inicia sesión el alumno.
             </p>
           </div>
@@ -91,7 +91,7 @@ export default function StudentFormModal({
           {!editing && (
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'rgba(255,255,255,.35)' }}>Contraseña</label>
+                style={{ color: 'var(--t3)' }}>Contraseña</label>
               <div className="flex gap-2">
                 <input required type={showPass ? 'text' : 'password'} value={form.password}
                   onChange={e => set('password', e.target.value)} className="input-field flex-1 font-mono"/>
@@ -104,7 +104,7 @@ export default function StudentFormModal({
                   <RefreshCw size={14}/>
                 </button>
               </div>
-              <p className="text-[10px] mt-1" style={{ color:'rgba(255,255,255,.28)' }}>
+              <p className="text-[10px] mt-1" style={{ color: 'var(--t4)' }}>
                 Anótala antes de guardar: después se almacena cifrada y ya no puede consultarse.
               </p>
             </div>
@@ -112,7 +112,7 @@ export default function StudentFormModal({
 
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-              style={{ color:'rgba(255,255,255,.35)' }}>Grupo</label>
+              style={{ color: 'var(--t3)' }}>Grupo</label>
             {/* Sin grupo el alumno no aparecería en ninguna lista filtrada, así que es obligatorio. */}
             <select required value={form.groupId} onChange={e => set('groupId', e.target.value)} className="input-field">
               <option value="">Seleccionar grupo…</option>
@@ -120,9 +120,9 @@ export default function StudentFormModal({
             </select>
           </div>
 
-          <div className="pt-2" style={{ borderTop:'1px solid rgba(255,255,255,.07)' }}>
+          <div className="pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-3 mt-2"
-              style={{ color:'rgba(255,255,255,.28)' }}>Contacto del tutor (opcional)</p>
+              style={{ color: 'var(--t4)' }}>Contacto del tutor (opcional)</p>
             <div className="space-y-3">
               {campo('Nombre del tutor', 'tutorName', { placeholder:'Ej. Carmen López' })}
               <div className="grid grid-cols-2 gap-3">
@@ -134,7 +134,7 @@ export default function StudentFormModal({
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg px-3 py-2"
-              style={{ background:'rgba(239,68,68,.10)', border:'1px solid rgba(239,68,68,.30)' }}>
+              style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
               <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-400"/>
               <span className="text-xs text-red-400">{error}</span>
             </div>

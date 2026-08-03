@@ -1,5 +1,71 @@
 import { supabase } from './supabaseClient'
 
+/**
+ * Inicio de sesión con Supabase Auth.
+ *
+ * Sustituye a la RPC `login_user`, que devolvía el usuario pero no dejaba
+ * rastro: la base no sabía quién estaba llamando y toda política de acceso era
+ * decorativa. Ahora la sesión la emite Supabase con un JWT firmado, `auth.uid()`
+ * identifica al llamador y el rol viaja dentro del token, de modo que las
+ * políticas RLS pueden leerlo sin consultar tablas —evitando la recursión— y
+ * sin que el cliente pueda falsificarlo.
+ *
+ * Las contraseñas son las mismas: los hashes bcrypt se copiaron tal cual.
+ */
+export async function loginConAuth(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  })
+  if (error) {
+    const msg = (error.message ?? '').toLowerCase()
+    if (msg.includes('invalid login')) {
+      return { ok: false, message: 'Correo o contraseña incorrectos.' }
+    }
+    return { ok: false, message: 'No se pudo conectar con el servidor.' }
+  }
+
+  const { data: perfil, error: e2 } = await supabase
+    .from('profiles').select('*').eq('id', data.user.id).maybeSingle()
+
+  if (e2 || !perfil) {
+    await supabase.auth.signOut()
+    return { ok: false, message: 'Tu cuenta no tiene un perfil asociado. Avisa a coordinación.' }
+  }
+  if (perfil.activo === false) {
+    await supabase.auth.signOut()
+    return { ok: false, message: 'Esta cuenta está desactivada.' }
+  }
+
+  return {
+    ok: true,
+    user: {
+      id: perfil.id, name: perfil.name, email: perfil.email,
+      role: perfil.role, studentId: perfil.student_id,
+    },
+  }
+}
+
+/** Sesión vigente según Supabase, para restaurarla al recargar. */
+export async function sesionActual() {
+  const { data } = await supabase.auth.getSession()
+  if (!data?.session) return null
+  const { data: perfil } = await supabase
+    .from('profiles').select('*').eq('id', data.session.user.id).maybeSingle()
+  if (!perfil || perfil.activo === false) return null
+  return {
+    id: perfil.id, name: perfil.name, email: perfil.email,
+    role: perfil.role, studentId: perfil.student_id,
+  }
+}
+
+export async function cerrarSesion() {
+  await supabase.auth.signOut()
+}
+
+/* Login anterior, contra la tabla `users`. Se conserva mientras el interruptor
+   de AuthContext permita volver atrás; se retira cuando la migración se dé por
+   asentada. */
 export async function loginWithDb(email, password) {
   const { data, error } = await supabase.rpc('login_user', {
     p_email: email,
@@ -25,6 +91,7 @@ export async function fetchGroups() {
     room: g.room,
     color: g.color,
     sucursal: g.sucursal,
+    institucion: g.institucion,
   }))
 }
 
@@ -51,12 +118,18 @@ export async function fetchStudents() {
     signedAt: s.signed_at,
     waAdded: s.wa_added,
     sucursal: s.sucursal,
+    pagoEstado: s.pago_estado,
+    garantia: s.garantia,
+    firmaGarantia: s.firma_garantia,
+    examenGeneral: s.examen_general,
+    avatar: s.avatar,
   }))
 }
 
 export async function fetchStudentById(id) {
   if (!id) return null
-  const { data, error } = await supabase.from('students').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await supabase.from('students')
+    .select('*, avatar_catalogo(src)').eq('id', id).maybeSingle()
   if (error) throw error
   if (!data) return null
   return {
@@ -75,6 +148,12 @@ export async function fetchStudentById(id) {
     signedAt: data.signed_at,
     waAdded: data.wa_added,
     sucursal: data.sucursal,
+    pagoEstado: data.pago_estado,
+    garantia: data.garantia,
+    firmaGarantia: data.firma_garantia,
+    examenGeneral: data.examen_general,
+    avatar: data.avatar,
+    avatarSrc: data.avatar_catalogo?.src ?? null,
   }
 }
 
@@ -83,7 +162,7 @@ export async function fetchGroupById(id) {
   const { data, error } = await supabase.from('groups').select('*').eq('id', id).maybeSingle()
   if (error) throw error
   return data
-    ? { id: data.id, name: data.name, subject: data.subject, schedule: data.schedule, room: data.room, color: data.color, sucursal: data.sucursal }
+    ? { id: data.id, name: data.name, subject: data.subject, schedule: data.schedule, room: data.room, color: data.color, sucursal: data.sucursal, institucion: data.institucion }
     : null
 }
 
@@ -121,8 +200,15 @@ export async function registerAttendance(token, studentId) {
 }
 
 /**
- * Historial de asistencia del alumno: una entrada por sesión de su grupo
- * (ausente si la sesión existe y no tiene registro).
+ * Una sesión sin ningún registro es una lista que se abrió y nunca se guardó,
+ * no una clase a la que faltó el grupo entero. Contarla produciría ausencias
+ * inventadas, así que se descarta antes de cualquier cálculo.
+ */
+const sesionCapturada = s => (s.attendance_records ?? []).length > 0
+
+/**
+ * Historial de asistencia del alumno: una entrada por sesión capturada de su
+ * grupo (ausente si el docente pasó lista y no lo marcó).
  */
 export async function fetchStudentAttendance(studentId, groupId) {
   if (!studentId || !groupId) return []
@@ -132,8 +218,8 @@ export async function fetchStudentAttendance(studentId, groupId) {
     .eq('group_id', groupId)
     .order('session_date', { ascending: true })
   if (error) throw error
-  return data.map(s => {
-    const rec = (s.attendance_records ?? []).find(r => r.student_id === studentId)
+  return data.filter(sesionCapturada).map(s => {
+    const rec = s.attendance_records.find(r => r.student_id === studentId)
     return { date: s.session_date, status: rec ? rec.status : 'ausente', time: rec?.arrival_label ?? null, studentId }
   })
 }
@@ -151,9 +237,9 @@ export async function fetchAttendanceStats(students) {
 
   const sessionsByGroup = {}
   const attendedByStudent = {}
-  for (const s of data) {
+  for (const s of data.filter(sesionCapturada)) {
     sessionsByGroup[s.group_id] = (sessionsByGroup[s.group_id] ?? 0) + 1
-    for (const r of s.attendance_records ?? []) {
+    for (const r of s.attendance_records) {
       if (r.status === 'presente' || r.status === 'tardanza')
         attendedByStudent[r.student_id] = (attendedByStudent[r.student_id] ?? 0) + 1
     }
@@ -199,10 +285,11 @@ export async function fetchGroupMetrics(groupId) {
   const evalsByStudent = {}
   for (const e of evs) (evalsByStudent[e.student_id] ??= []).push(mapEvaluation(e))
 
+  const sesiones = sessions.filter(sesionCapturada)
   const attendanceByStudent = {}
   for (const id of ids) {
-    attendanceByStudent[id] = sessions.map(s => {
-      const rec = (s.attendance_records ?? []).find(r => r.student_id === id)
+    attendanceByStudent[id] = sesiones.map(s => {
+      const rec = s.attendance_records.find(r => r.student_id === id)
       return { date: s.session_date, status: rec ? rec.status : 'ausente', time: rec?.arrival_label ?? null, studentId: id }
     })
   }
@@ -216,6 +303,38 @@ export async function fetchGroupMetrics(groupId) {
   }))
 
   return { members, evalsByStudent, attendanceByStudent }
+}
+
+/**
+ * Conteo de asistencia de las sesiones de hoy, por estatus.
+ * `esperados` son los alumnos de los grupos con sesión hoy: quien no tiene
+ * registro cuenta como ausente.
+ */
+export async function fetchAsistenciaHoy(students) {
+  const hoy = new Date().toISOString().slice(0, 10)
+  const { data, error } = await supabase
+    .from('attendance_sessions')
+    .select('group_id, session_date, attendance_records(student_id, status)')
+    .eq('session_date', hoy)
+  if (error) throw error
+
+  const counts = { presente: 0, tardanza: 0, ausente: 0 }
+  // Sólo cuentan las listas ya capturadas: una abierta sin guardar marcaría
+  // ausente a todo el grupo en el tablero del día.
+  const sesiones = data.filter(sesionCapturada)
+  const gruposConSesion = new Set(sesiones.map(s => s.group_id))
+  const registrados = new Set()
+
+  for (const s of sesiones) {
+    for (const r of s.attendance_records) {
+      if (counts[r.status] !== undefined) counts[r.status] += 1
+      registrados.add(r.student_id)
+    }
+  }
+  const esperados = students.filter(s => gruposConSesion.has(s.groupId))
+  counts.ausente += esperados.filter(s => !registrados.has(s.id)).length
+
+  return { counts, esperados: esperados.length, haySesion: gruposConSesion.size > 0 }
 }
 
 /** Métricas derivadas por grupo: alumnos, promedio y asistencia reales. */
@@ -294,7 +413,7 @@ export async function deleteEvaluation(id) {
 
 /* ── Grupos (escritura) ── */
 
-export async function createGroup({ name, subject, schedule = null, room = null, color = '#3b82f6', sucursal = null }) {
+export async function createGroup({ name, subject, schedule = null, room = null, color = '#3b82f6', sucursal = null, institucion = null }) {
   const { data, error } = await supabase.rpc('create_group', {
     p_name: name,
     p_subject: subject,
@@ -302,13 +421,14 @@ export async function createGroup({ name, subject, schedule = null, room = null,
     p_room: room,
     p_color: color,
     p_sucursal: sucursal,
+    p_institucion: institucion,
   })
   if (error) return { ok: false, message: 'No se pudo crear el grupo.' }
   const row = data?.[0]
   return { ok: true, group: row ? { ...row, id: row.id } : null }
 }
 
-export async function updateGroup({ id, name, subject, schedule = null, room = null, color = null, sucursal = null }) {
+export async function updateGroup({ id, name, subject, schedule = null, room = null, color = null, sucursal = null, institucion = null }) {
   const { error } = await supabase.rpc('update_group', {
     p_id: id,
     p_name: name,
@@ -317,6 +437,7 @@ export async function updateGroup({ id, name, subject, schedule = null, room = n
     p_room: room,
     p_color: color,
     p_sucursal: sucursal,
+    p_institucion: institucion,
   })
   if (error) return { ok: false, message: 'No se pudo actualizar el grupo.' }
   return { ok: true }
@@ -387,10 +508,30 @@ export async function resetStudentPassword(studentId, password) {
   return { ok: true }
 }
 
-export async function fetchSubAdmins() {
-  const { data, error } = await supabase.rpc('list_sub_admins')
+/**
+ * Personal con acceso al panel: administradores y sub-administradores.
+ * Antes se llamaba a `list_sub_admins`, que filtraba role='sub_admin' — los
+ * administradores no aparecían nunca y la lista se veía incompleta sin avisar.
+ */
+export async function fetchStaff() {
+  const { data, error } = await supabase.rpc('list_staff')
   if (error) throw error
   return data
+}
+
+/**
+ * Todas las cuentas con acceso: personal y alumnos.
+ * El personal sale de `profiles` —donde vive su identidad y a donde apunta la
+ * tabla de permisos— y los alumnos de `students`, que es el padrón real y el
+ * único sitio donde consta su grupo.
+ */
+export async function fetchCuentas() {
+  const { data, error } = await supabase.rpc('list_cuentas')
+  if (error) throw error
+  return data.map(c => ({
+    id: c.id, name: c.name, email: c.email, role: c.role,
+    grupoId: c.grupo_id, grupoNombre: c.grupo_nombre, sucursal: c.sucursal,
+  }))
 }
 
 export async function createSubAdmin({ name, email, password }) {
@@ -424,4 +565,122 @@ export async function grantSubAdminAccess(userId, sucursal, groupId = null) {
 export async function revokeSubAdminAccess(id) {
   const { error } = await supabase.rpc('revoke_sub_admin_access', { p_id: id })
   if (error) throw error
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOJA MAESTRA — Registrar Calificaciones
+   Sus columnas y celdas viven en la BD, no en localStorage. Cada celda ES una
+   fila de `evaluations`, así que escribir aquí actualiza el promedio del alumno
+   y se ve al instante en su perfil, en Evaluaciones, en Rankings y en el portal
+   del alumno — sin ningún proceso de sincronización que pueda desfasarse.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Columnas de la hoja de un grupo, agrupadas por materia y en orden. */
+export async function fetchColumnasRegistro(groupId) {
+  if (!groupId) return []
+  const { data, error } = await supabase
+    .from('registro_columnas')
+    .select('*')
+    .eq('group_id', groupId)
+    .order('materia_orden').order('orden')
+  if (error) throw error
+  return data.map(c => ({
+    id: c.id, materia: c.materia, materiaOrden: c.materia_orden,
+    materiaColor: c.materia_color, nombre: c.nombre, tipo: c.tipo,
+    calMax: Number(c.cal_max), orden: c.orden,
+  }))
+}
+
+/** Calificaciones de la hoja: { [studentId]: { [columnaId]: calificacion } } */
+export async function fetchCeldasRegistro(groupId) {
+  if (!groupId) return {}
+  const { data, error } = await supabase
+    .from('evaluations')
+    .select('student_id, calificacion, columna_id, registro_columnas!inner(group_id)')
+    .eq('registro_columnas.group_id', groupId)
+  if (error) throw error
+  const celdas = {}
+  for (const e of data) {
+    ;(celdas[e.student_id] ??= {})[e.columna_id] = Number(e.calificacion)
+  }
+  return celdas
+}
+
+/** Escribe una celda. `calificacion` en null vacía la celda y borra la nota. */
+export async function setCeldaRegistro(studentId, columnaId, calificacion) {
+  const { error } = await supabase.rpc('set_celda_registro', {
+    p_student_id: studentId,
+    p_columna_id: columnaId,
+    p_calificacion: calificacion === '' || calificacion === undefined ? null : calificacion,
+  })
+  if (error) throw error
+}
+
+export async function crearColumnaRegistro({ groupId, materia, nombre, tipo = 'actividad', calMax = 10, color = null }) {
+  const { data, error } = await supabase.rpc('crear_columna_registro', {
+    p_group_id: groupId, p_materia: materia, p_nombre: nombre,
+    p_tipo: tipo, p_cal_max: calMax, p_materia_color: color,
+  })
+  if (error) throw error
+  return data
+}
+
+export async function borrarColumnaRegistro(columnaId) {
+  const { error } = await supabase.rpc('borrar_columna_registro', { p_columna_id: columnaId })
+  if (error) throw error
+}
+
+/** Pago, garantía y firmas: campos administrativos de la hoja. */
+export async function setRegistroAdmin(studentId, campo, valor) {
+  const { error } = await supabase.rpc('set_registro_admin', {
+    p_student_id: studentId, p_campo: campo, p_valor: String(valor),
+  })
+  if (error) throw error
+}
+
+/**
+ * Asistencia del grupo para la rejilla de la hoja, en solo lectura.
+ * La captura vive en Pasar Lista: tener dos lugares donde marcar asistencia
+ * garantizaba que tarde o temprano dijeran cosas distintas.
+ * Devuelve { [studentId]: { [fecha]: 'presente' | 'tardanza' | ... } }.
+ */
+export async function fetchAsistenciaRegistro(groupId) {
+  if (!groupId) return { porAlumno: {}, fechas: [] }
+  const { data, error } = await supabase
+    .from('attendance_sessions')
+    .select('session_date, attendance_records(student_id, status)')
+    .eq('group_id', groupId)
+    .order('session_date')
+  if (error) throw error
+
+  const sesiones = data.filter(sesionCapturada)
+  const porAlumno = {}
+  for (const s of sesiones) {
+    for (const r of s.attendance_records) {
+      ;(porAlumno[r.student_id] ??= {})[s.session_date] = r.status
+    }
+  }
+  return { porAlumno, fechas: sesiones.map(s => s.session_date) }
+}
+
+/** Avatar del alumno. El catálogo válido se valida también en la BD. */
+export async function setStudentAvatar(studentId, avatar) {
+  const { error } = await supabase.rpc('set_student_avatar', {
+    p_student_id: studentId,
+    p_avatar: avatar,
+  })
+  if (error) throw error
+}
+
+/**
+ * Catálogo de avatares. Vive en la tabla `avatar_catalogo`, no en el código:
+ * añadir uno es insertar una fila, y la validación del RPC mira esa misma
+ * tabla, así que no hay una lista que mantener en dos sitios.
+ */
+export async function fetchAvatares() {
+  const { data, error } = await supabase.rpc('list_avatares')
+  if (error) throw error
+  return data.map(a => ({
+    id: a.id, nombre: a.nombre, categoria: a.categoria, src: a.src, orden: a.orden,
+  }))
 }

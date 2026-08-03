@@ -105,7 +105,7 @@ export default function QRScanner() {
   const clearLog = () => { setScannedLog([]); setLastScanned(null) }
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="space-y-4">
       {/* Back */}
       <button onClick={() => navigate('/admin/asistencias')}
         className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors">

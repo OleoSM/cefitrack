@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { LayoutDashboard, BookOpen, CalendarCheck, BrainCircuit, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
 import { StudentThemeProvider, useStudentTheme } from '../../context/StudentThemeContext'
@@ -34,6 +34,44 @@ function LayoutInner() {
   const handleLogout = () => { logout(); navigate('/login') }
   const closeSidebar  = () => setSidebarOpen(false)
 
+  /* El portal usaba var(--t1), var(--card-border)… sin publicarlas nunca: sólo
+     ponía data-stheme. Esas variables caían a los valores de :root, que son los
+     del tema OSCURO, así que en IPN y UNAM el texto salía claro sobre página
+     blanca. Se publican igual que en AdminLayout, y también en <html> para que
+     los modales renderizados por portal las hereden.
+
+     Se emite además `data-theme-light`, el mismo atributo que usa el panel de
+     administración: así los overrides de index.css (badges, tablas, paleta
+     pastel) valen para las dos mitades de la aplicación en vez de sólo una. */
+  const themeVars = {
+    '--t1': t.t1, '--t2': t.t2, '--t3': t.t3, '--t4': t.t4,
+    '--card-bg': t.cardBg, '--card-border': t.cardBorder,
+    '--soft-bg': t.softBg, '--divider': t.divider,
+    '--grid': t.grid, '--axis': t.axis,
+    '--tooltip-bg': t.tooltipBg, '--tooltip-border': t.tooltipBorder, '--tooltip-text': t.tooltipText,
+    '--accent': t.accent,
+    '--panel-bg': t.panelBg, '--header-bg': t.headerBg,
+    '--good': t.good, '--info': t.info, '--warn': t.warn, '--bad': t.bad,
+    '--good-soft': t.goodSoft, '--info-soft': t.infoSoft,
+    '--warn-soft': t.warnSoft, '--bad-soft': t.badSoft,
+    '--good-line': t.goodLine, '--info-line': t.infoLine,
+    '--warn-line': t.warnLine, '--bad-line': t.badLine,
+    '--card-shadow': t.light
+      ? '0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.08)'
+      : 'none',
+  }
+
+  useEffect(() => {
+    const root = document.documentElement
+    Object.entries(themeVars).forEach(([k, v]) => root.style.setProperty(k, v))
+    if (t.light) root.setAttribute('data-theme-light', '')
+    else root.removeAttribute('data-theme-light')
+    return () => {
+      Object.keys(themeVars).forEach(k => root.style.removeProperty(k))
+      root.removeAttribute('data-theme-light')
+    }
+  }, [appearance, t])
+
   // El sidebar siempre tiene fondo de color (oscuro/guinda/azul) → texto blanco
   const sideStyle = {
     background: t.sideBg,
@@ -45,8 +83,9 @@ function LayoutInner() {
   return (
     <div className="flex h-screen overflow-hidden transition-[background] duration-500"
       data-stheme={appearance}
-      {...(t.light ? { 'data-stheme-light': '' } : {})}
-      style={{ background: t.mainBg, backgroundImage: t.mainBgImage }}>
+      data-theme={appearance}
+      {...(t.light ? { 'data-stheme-light': '', 'data-theme-light': '' } : {})}
+      style={{ background: t.mainBg, backgroundImage: t.mainBgImage, ...themeVars }}>
 
       {/* Mobile overlay (fondo difuminado, se ve tras el sidebar) */}
       {sidebarOpen && (
@@ -72,7 +111,7 @@ function LayoutInner() {
             <p className="text-white font-bold text-base leading-none tracking-tight">
               SIGA <span style={{ color: appearance === 'unam' ? '#CC9933' : appearance === 'ipn' ? '#f3c9d1' : '#c95f72' }}>CEFIMAT</span>
             </p>
-            <p className="text-[10px] mt-0.5 font-medium" style={{ color: 'rgba(255,255,255,.45)' }}>Vista Alumno</p>
+            <p className="text-[10px] mt-0.5 font-medium" style={{ color: t.sideT3 }}>Vista Alumno</p>
           </div>
           <button onClick={closeSidebar} aria-label="Cerrar menú"
             className="lg:hidden p-1 rounded-lg transition-colors text-white/40 hover:text-white/80">
@@ -83,7 +122,7 @@ function LayoutInner() {
         {/* Student info card */}
         {student && (
           <div className="relative mx-3 mb-1 p-3 rounded-xl"
-            style={{ background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }}>
+            style={{ background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.12)' }}>
             <p className="text-[9px] font-bold uppercase tracking-widest mb-1 text-white/40">Alumno</p>
             <p className="text-white text-sm font-semibold leading-tight">{student.name}</p>
             <p className="text-xs mt-0.5 text-white/50">{grp?.name} — {grp?.subject}</p>
@@ -100,12 +139,12 @@ function LayoutInner() {
             return (
               <NavLink key={to} to={to} end={exact} onClick={closeSidebar}
                 className="nav-item group relative"
-                style={({ isActive }) => ({ color: isActive ? 'white' : 'rgba(255,255,255,.55)' })}>
+                style={({ isActive }) => ({ color: isActive ? 'white' : t.sideT2 })}>
                 {({ isActive }) => (
                   <>
                     {isActive && (
                       <span className="absolute inset-0 rounded-xl pointer-events-none"
-                        style={{ background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.14)' }} />
+                        style={{ background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.14)' }} />
                     )}
                     {isActive && (
                       <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
@@ -136,10 +175,18 @@ function LayoutInner() {
         <div className="relative px-3 py-4">
           <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl transition-colors group hover:bg-white/5">
             <div className="relative flex-shrink-0">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                style={{ background: t.light ? 'rgba(255,255,255,.20)' : '#f59e0b', border: '2px solid rgba(255,255,255,.25)' }}>
-                {initials}
-              </div>
+              {/* El avatar elegido sustituye a las iniciales; si no hay, se
+                  mantienen como respaldo. */}
+              {student?.avatarSrc ? (
+                <img src={student.avatarSrc} alt=""
+                  className="w-8 h-8 rounded-full object-cover"
+                  style={{ border: '2px solid rgba(255,255,255,.25)' }}/>
+              ) : (
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                  style={{ background: t.light ? 'rgba(255,255,255,.30)' : '#f59e0b', border: '2px solid rgba(255,255,255,.25)' }}>
+                  {initials}
+                </div>
+              )}
               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full"
                 style={{ border: `2px solid ${t.light ? t.sideBg : '#0d1630'}` }} />
             </div>
@@ -163,7 +210,7 @@ function LayoutInner() {
           style={{
             background: t.topBg,
             backdropFilter: t.light ? 'none' : 'blur(12px)',
-            borderBottom: `1px solid ${t.light ? 'rgba(255,255,255,.15)' : 'rgba(255,255,255,.07)'}`,
+            borderBottom: `1px solid ${t.light ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.07)'}`,
           }}>
           <div className="flex items-center gap-3 min-w-0">
             <button onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"
@@ -180,7 +227,7 @@ function LayoutInner() {
 
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
-              style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.20)' }}>
+              style={{ background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.20)' }}>
               {initials}
             </div>
             <button onClick={handleLogout} className="p-1.5 rounded-xl transition-colors text-white/45 hover:text-red-300">

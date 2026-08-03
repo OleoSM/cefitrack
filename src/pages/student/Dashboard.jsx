@@ -8,10 +8,11 @@ import {
   BookOpen, CalendarCheck, BrainCircuit, ArrowRight, Target, Zap, Trophy, Info,
 } from 'lucide-react'
 import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
+import { logoInstitucion, tipoDesdeNombre, estiloLogo } from '../../lib/instituciones'
 import { useStudentData } from '../../hooks/useStudentData'
 import { promedioPonderado, rankingGrupo, statsAsistencia, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
 import { fetchGroupMetrics } from '../../lib/supabaseData'
-import { useStudentTheme } from '../../context/StudentThemeContext'
+import { useStudentTheme, esColorClaro } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
 
 const PIE_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6']
@@ -57,6 +58,8 @@ function HoverInfo({ trigger, children }) {
 export default function StudentDashboard() {
   const navigate = useNavigate()
   const { t, card } = useStudentTheme()
+  const tarjetaClara = esColorClaro(card.grad)
+  const tintaTarjeta = tarjetaClara ? '#0f172a' : '#ffffff'
 
   const { student: s, group: grp, attendance, evaluations } = useStudentData({
     withAttendance: true, withEvaluations: true,
@@ -122,73 +125,93 @@ export default function StudentDashboard() {
   const { desglose, pesos } = pond
 
   return (
-    <div className="max-w-6xl space-y-5">
+    <div className="space-y-5">
 
       {/* ══ Tarjeta de bienvenida (color personalizable en Configuración) ══ */}
-      <div className="kw rounded-2xl p-5 sm:p-6 text-white"
-        style={{ background: card.grad, border: '1px solid rgba(255,255,255,.10)' }}>
+      {/* La tinta se decide por la luminancia del color elegido: con los
+          claros y con la rueda libre, el blanco de siempre sería ilegible. */}
+      <div className="kw rounded-2xl p-5 sm:p-6"
+        style={{
+          background: card.grad,
+          color: tintaTarjeta,
+          border: `1px solid ${tarjetaClara ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.10)'}`,
+        }}>
         <div className="flex flex-wrap items-center gap-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/10 flex items-center justify-center text-lg sm:text-xl font-bold flex-shrink-0">
-            {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
-          </div>
+          {s.avatarSrc ? (
+            <img src={s.avatarSrc} alt=""
+              className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover flex-shrink-0"
+              style={{ background: tarjetaClara ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.10)' }}/>
+          ) : (
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-lg sm:text-xl font-bold flex-shrink-0"
+              style={{ background: tarjetaClara ? 'rgba(15,23,42,.10)' : 'rgba(255,255,255,.10)' }}>
+              {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-white/45">Bienvenido de vuelta</p>
+            <p className="text-sm " style={{ opacity:.45 }}>Bienvenido de vuelta</p>
             <h1 className="text-lg sm:text-xl font-bold truncate">{s.name}</h1>
-            <p className="text-xs sm:text-sm mt-0.5 text-white/40 truncate">{grp?.name} — {grp?.subject}</p>
+            <p className="text-xs sm:text-sm mt-0.5  truncate" style={{ opacity:.40 }}>{grp?.name} — {grp?.subject}</p>
           </div>
 
           <div className="flex gap-3 w-full sm:w-auto sm:ml-auto">
             {/* Promedio ponderado + tooltip de desglose */}
             <HoverInfo trigger={
-              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl bg-white/10 min-w-[96px]">
-                <p className="text-2xl font-bold tabular-nums text-white flex items-center justify-center gap-1">
-                  {pond.promedio}
-                  <Info size={11} className="text-white/40"/>
+              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl min-w-[96px]" style={{ background: tarjetaClara ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.10)' }}>
+                <p className="text-2xl font-bold tabular-nums flex items-center justify-center gap-1">
+                  {pond.promedio ?? '—'}
+                  <Info size={11} className="" style={{ opacity:.40 }}/>
                 </p>
-                <p className="text-[11px] text-white/45">Promedio</p>
+                <p className="text-[11px] " style={{ opacity:.45 }}>Promedio</p>
               </div>
             }>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(255,255,255,.40)' }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ opacity:.4 }}>
                 ¿Cómo se calcula tu promedio?
               </p>
               {[
-                { l: `Exámenes (${pesos.examenes}%)`,  v: desglose.examenes.valor.toFixed(1) },
-                { l: `Tareas (${pesos.tareas}%)`,      v: `${desglose.tareas.done}/${desglose.tareas.total} → ${desglose.tareas.valor.toFixed(1)}` },
-                { l: `Asistencia (${pesos.asistencia}%)`, v: `${desglose.asistencia.pct}% → ${desglose.asistencia.valor.toFixed(1)}` },
+                { l: `Exámenes (${pesos.examenes}%)`,
+                  v: desglose.examenes.valor === null ? 'Sin datos' : desglose.examenes.valor.toFixed(1) },
+                { l: `Tareas (${pesos.tareas}%)`,
+                  v: desglose.tareas.valor === null
+                    ? 'Sin asignar'
+                    : `${desglose.tareas.done}/${desglose.tareas.total} → ${desglose.tareas.valor.toFixed(1)}` },
+                { l: `Asistencia (${pesos.asistencia}%)`,
+                  v: desglose.asistencia.valor === null
+                    ? 'Sin datos'
+                    : `${desglose.asistencia.pct}% → ${desglose.asistencia.valor.toFixed(1)}` },
               ].map(row => (
                 <div key={row.l} className="flex items-center justify-between py-1 text-xs">
-                  <span style={{ color: 'rgba(255,255,255,.55)' }}>{row.l}</span>
-                  <span className="font-bold tabular-nums" style={{ color: 'rgba(255,255,255,.85)' }}>{row.v}</span>
+                  <span style={{ opacity:.55 }}>{row.l}</span>
+                  <span className="font-bold tabular-nums" style={{ opacity:.85 }}>{row.v}</span>
                 </div>
               ))}
               <div className="flex items-center justify-between pt-2 mt-1 text-xs"
-                style={{ borderTop: '1px solid rgba(255,255,255,.10)' }}>
-                <span className="font-bold" style={{ color: 'rgba(255,255,255,.70)' }}>Promedio ponderado</span>
-                <span className="font-bold text-sm" style={{ color: '#34d399' }}>{pond.promedio}</span>
+                style={{ borderTop: `1px solid ${tarjetaClara ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.10)'}` }}>
+                <span className="font-bold" style={{ opacity:.7 }}>Promedio ponderado</span>
+                <span className="font-bold text-sm" style={{ color: 'var(--good)' }}>{pond.promedio ?? '—'}</span>
               </div>
             </HoverInfo>
 
             {/* Lugar en grupo + tooltip */}
             <HoverInfo trigger={
-              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl bg-white/10 min-w-[96px]">
+              <div className="flex-1 sm:flex-none text-center px-4 py-2 rounded-xl min-w-[96px]" style={{ background: tarjetaClara ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.10)' }}>
                 <p className="text-2xl font-bold tabular-nums text-amber-300 flex items-center justify-center gap-1">
                   #{myPos}
-                  <Info size={11} className="text-white/40"/>
+                  <Info size={11} className="" style={{ opacity:.40 }}/>
                 </p>
-                <p className="text-[11px] text-white/45">Lugar en grupo</p>
+                <p className="text-[11px] " style={{ opacity:.45 }}>Lugar en grupo</p>
               </div>
             }>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(255,255,255,.40)' }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ opacity:.4 }}>
                 Lugar en el grupo
               </p>
               <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,.60)' }}>
-                Es el orden del grupo según el <strong style={{ color: 'rgba(255,255,255,.85)' }}>promedio ponderado</strong>{' '}
+                Es el orden del grupo según el <strong style={{ opacity:.85 }}>promedio ponderado</strong>{' '}
                 (Exámenes {pesos.examenes}% · Tareas {pesos.tareas}% · Asistencia {pesos.asistencia}%).
               </p>
               <p className="text-xs mt-2 font-semibold" style={{ color: '#fbbf24' }}>
                 Estás en el lugar #{myPos} de {ranking.length} alumnos.
               </p>
-              {myPos > 1 && (
+              {myPos > 1 && pond.promedio !== null && (
                 <p className="text-[11px] mt-1.5" style={{ color: 'rgba(255,255,255,.45)' }}>
                   El lugar #{myPos - 1} tiene promedio {ranking[myPos - 2].promedio} — te faltan{' '}
                   {(ranking[myPos - 2].promedio - pond.promedio).toFixed(1)} puntos.
@@ -205,10 +228,16 @@ export default function StudentDashboard() {
           { icon: Zap,           label: 'Último Simulacro',  value: lastSim ? `${lastSim.aciertos}/${lastSim.total}` : '—',
             sub: lastSim?.folio, color: 'bg-emerald-600',
             go: () => document.getElementById('prediccion')?.scrollIntoView({ behavior: 'smooth' }) },
-          { icon: CalendarCheck, label: 'Asistencia',        value: `${asis.pct}%`,
-            sub: `${asis.counts.presente} presentes`, color: 'bg-blue-600', go: () => navigate('/student/asistencias') },
-          { icon: BookOpen,      label: 'Tareas Entregadas', value: `${s.assignmentsDone ?? 0}/${s.assignmentsTotal ?? 0}`,
-            sub: `${s.assignmentsTotal > 0 ? Math.round(s.assignmentsDone / s.assignmentsTotal * 100) : 0}% completado`, color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
+          { icon: CalendarCheck, label: 'Asistencia',
+            value: asis.pct === null ? '—' : `${asis.pct}%`,
+            sub: asis.pct === null ? 'Sin listas aún' : `${asis.counts.presente} presentes`,
+            color: 'bg-blue-600', go: () => navigate('/student/asistencias') },
+          { icon: BookOpen,      label: 'Tareas Entregadas',
+            value: s.assignmentsTotal > 0 ? `${s.assignmentsDone ?? 0}/${s.assignmentsTotal}` : '—',
+            sub: s.assignmentsTotal > 0
+              ? `${Math.round(s.assignmentsDone / s.assignmentsTotal * 100)}% completado`
+              : 'Sin tareas asignadas',
+            color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
           { icon: BrainCircuit,  label: 'Reporte IA',        value: 'Ver',
             sub: 'Análisis personalizado', color: 'bg-purple-600', go: () => navigate('/student/reporte-ia') },
         ].map(({ icon: Icon, label, value, sub, color, go }) => (
@@ -246,12 +275,23 @@ export default function StudentDashboard() {
         return (
           <div id="prediccion" className="card p-5 relative overflow-hidden">
             <div className="relative flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{
-                background: reached ? 'rgba(52,211,153,.15)' : 'rgba(96,165,250,.12)',
-                border: reached ? '1px solid rgba(52,211,153,.25)' : '1px solid rgba(96,165,250,.20)',
-              }}>
-                {reached ? <Trophy size={20} style={{ color: '#34d399' }}/> : <Target size={20} style={{ color: '#60a5fa' }}/>}
-              </div>
+              {(() => {
+                const logo = logoInstitucion(targetSchool?.tipo ?? tipoDesdeNombre(targetSchool?.nombre))
+                return logo ? (
+                  <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
+                    {/* Sobre la tarjeta clara el escudo va con sus colores; en
+                        el tema oscuro se pinta en blanco o se perdería. */}
+                    <img src={logo.src} alt={logo.alt} style={estiloLogo(!t.light)}
+                      className="max-w-full max-h-full object-contain"/>
+                  </div>
+                ) : (
+                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: reached ? 'var(--good-soft)' : 'var(--info-soft)',
+                             border: `1px solid ${reached ? 'var(--good-line)' : 'var(--info-line)'}` }}>
+                    {reached ? <Trophy size={20} style={{ color:'var(--good)' }}/> : <Target size={20} style={{ color:'var(--info)' }}/>}
+                  </div>
+                )
+              })()}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-xs font-bold uppercase tracking-wider" style={{ color: t.t3 }}>
@@ -265,7 +305,7 @@ export default function StudentDashboard() {
                   )}
                 </div>
                 {reached ? (
-                  <p className="text-sm font-semibold mt-1" style={{ color: '#34d399' }}>
+                  <p className="text-sm font-semibold mt-1" style={{ color:'var(--good)' }}>
                     ¡Alcanzaste el puntaje de corte de {targetSchool?.nombre}!
                   </p>
                 ) : gap !== null ? (
@@ -341,9 +381,12 @@ export default function StudentDashboard() {
                 <button key={m} onClick={() => toggleMateria(m)}
                   className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
                   style={{
-                    background: hidden ? 'transparent' : (t.light ? `${color}14` : 'rgba(255,255,255,.05)'),
-                    border: `1px solid ${hidden ? t.cardBorder : color}55`,
-                    color: hidden ? t.t4 : (t.light ? t.t2 : t.t2),
+                    /* Activo: color pleno con texto blanco. El 8 % de alfa
+                       anterior no se distinguía del fondo y no se sabía qué
+                       materia estaba encendida. */
+                    background: hidden ? 'transparent' : color,
+                    border: `1px solid ${hidden ? t.cardBorder : color}`,
+                    color: hidden ? t.t4 : '#ffffff',
                     textDecoration: hidden ? 'line-through' : 'none',
                   }}>
                   <span className="w-3 h-3 rounded flex items-center justify-center flex-shrink-0"

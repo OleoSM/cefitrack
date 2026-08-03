@@ -5,6 +5,111 @@
 /* ─────────────────────────────────────────────────────────────────
    BASE
 ───────────────────────────────────────────────────────────────── */
+/* ═════════════════════════════════════════════════════════════════
+   REGLA DE COLOR — LEER ANTES DE ESCRIBIR CUALQUIER ESTILO
+   ─────────────────────────────────────────────────────────────────
+   1. NUNCA escribas un color literal en JSX ni aquí. Usa las
+      variables de :root (--t1…--t4, --card-bg, --good, --warn…).
+      Un literal nuevo reintroduce el bug que dejó toda la app
+      ilegible en modo claro: fondo blanco con texto blanco.
+
+   2. En las identidades CLARAS (ipn, unam) está PROHIBIDO el neón.
+      Nada de hsl() con saturación alta, nada de filter: brightness(),
+      nada de #34d399 / #fbbf24 / #f87171 / #60a5fa y compañía.
+      Los semánticos ahí son PASTEL SÓLIDOS, definidos en los tokens.
+
+   2-bis. EL COLOR IDENTIFICADOR VA SÓLIDO. Ni degradados, ni alfa, ni
+      halos que se desvanecen. Sobre página blanca, un `${accent}14` o un
+      `radial-gradient(..., transparent)` no se lee como color tenue: se
+      lee como algo roto, y el equipo lo reportó literalmente como "se ve
+      transparente". Si un elemento lleva el color de un grupo, materia o
+      estado, píntalo con el color PLENO y pon el texto en blanco encima.
+      La paleta de referencia son los sólidos institucionales de
+      useGroupColors (registro de #4d0b1d).
+
+      Corolario: una barra de gráfica representa una cantidad, así que su
+      color no debe variar dentro de sí misma — nada de degradar de opaco
+      a transparente de arriba abajo.
+
+   3. La barra lateral y la superior tienen fondo oscuro en TODAS las
+      identidades: usan sideT1/sideT2/sideT3, no --t1…--t4.
+
+   4. Las clases utilitarias de Tailwind con color (text-emerald-400,
+      bg-blue-500/15…) no admiten variables. Si usas una, DEBES añadir
+      su override bajo [data-theme-light] al final de este archivo.
+
+   5. Si necesitas un color que no existe como token, añádelo a los
+      TRES temas en StudentThemeContext.jsx y publícalo en AdminLayout.
+      No lo improvises en un componente.
+
+   Verificación: agente `siga-identidad-auditor`.
+   ═════════════════════════════════════════════════════════════════ */
+
+/* ═════════════════════════════════════════════════════════════════
+   REGLA DE DESPLIEGUE — NO MUESTRES TODO DE GOLPE
+   ─────────────────────────────────────────────────────────────────
+   La plataforma se usa en teléfono, iPad, laptop y monitor. Obligar a
+   recorrer una lista de 32 alumnos para llegar a lo que se busca es un
+   defecto, no un detalle. El scroll es el costo que paga el usuario.
+
+   1. Primero el filtro, después los datos. Los controles para acotar
+      van ARRIBA y siempre alcanzables; en teléfono se pliegan tras un
+      botón con el número de filtros activos (`FilterBar`), nunca se
+      eliminan.
+
+   2. Renderiza un arranque, no el conjunto. Usa `ProgressiveList`:
+      6 elementos en teléfono, 12 en tableta, 24 en escritorio, y el
+      resto tras "Mostrar más". Aplica a listas de alumnos, grupos,
+      evaluaciones y cualquier colección que crezca con el uso.
+
+   3. Las secciones anchas arrancan plegadas en pantalla chica. Una
+      tabla de 40 columnas no se navega en 390px: colapsa por sección
+      y deja elegir cuál abrir.
+
+   4. Ancho: el contenido ocupa el viewport. NO pongas `max-w-*` en el
+      contenedor raíz de una página — dejaba una franja muerta en
+      monitor. La referencia de cómo debe verse es `Attendance.jsx`.
+
+   5. Lo que sólo estorba en pantalla chica se oculta con clases
+      (`hidden sm:flex`), no con JS. El hook `useBreakpoint` es para
+      decidir CUÁNTO se monta, no para ocultar lo ya montado.
+   ═════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────
+   TOKENS DE TEMA COMO VARIABLES CSS
+   Los valores por defecto son el tema oscuro. Los layouts (admin y alumno)
+   sobrescriben estas variables en su raíz según la identidad activa
+   (default / IPN / UNAM), de modo que cualquier componente anidado hereda
+   los colores correctos sin tener que recibir el tema por props ni llamar
+   al hook. Antes los colores estaban escritos a mano como rgba blancos y
+   en las identidades claras el texto quedaba ilegible sobre fondo blanco.
+───────────────────────────────────────────────────────────────── */
+:root {
+  --t1: rgba(255,255,255,.88);   /* texto principal   */
+  --t2: rgba(255,255,255,.55);   /* texto secundario  */
+  --t3: rgba(255,255,255,.35);   /* texto terciario   */
+  --t4: rgba(255,255,255,.22);   /* texto tenue       */
+  --card-bg: rgba(255,255,255,.05);
+  --card-border: rgba(255,255,255,.08);
+  --soft-bg: rgba(255,255,255,.06);
+  --divider: rgba(255,255,255,.07);
+  --grid: rgba(255,255,255,.06);
+  --axis: rgba(255,255,255,.35);
+  --tooltip-bg: rgba(10,10,20,.92);
+  --tooltip-border: rgba(255,255,255,.12);
+  --tooltip-text: rgba(255,255,255,.80);
+  --accent: #fbbf24;
+  --card-shadow: none;
+  --panel-bg: rgba(8,8,15,.96);
+  --header-bg: rgba(5,5,10,.70);
+  /* Semánticos: neón en el tema oscuro, pastel sólido en IPN/UNAM */
+  --good: #34d399; --info: #60a5fa; --warn: #fbbf24; --bad: #f87171;
+  --good-soft: rgba(52,211,153,.14); --info-soft: rgba(96,165,250,.14);
+  --warn-soft: rgba(251,191,36,.14);  --bad-soft: rgba(248,113,113,.14);
+  --good-line: rgba(52,211,153,.30); --info-line: rgba(96,165,250,.30);
+  --warn-line: rgba(251,191,36,.30);  --bad-line: rgba(248,113,113,.30);
+}
+
 @layer base {
   * { box-sizing: border-box; }
 
@@ -36,8 +141,9 @@
   /* ── Stat cards ── */
   .stat-card {
     @apply rounded-2xl p-5 transition-all duration-300 cursor-pointer;
-    background: rgba(255,255,255,.05);
-    border: 1px solid rgba(255,255,255,.08);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--card-shadow);
   }
   .stat-card:hover {
     @apply -translate-y-1;
@@ -49,8 +155,9 @@
   /* ── Cards ── */
   .card {
     @apply rounded-2xl overflow-hidden;
-    background: rgba(255,255,255,.05);
-    border: 1px solid rgba(255,255,255,.08);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--card-shadow);
   }
   .card-hover {
     @apply transition-all duration-300;
@@ -79,8 +186,8 @@
   }
 
   /* ── Typography helpers ── */
-  .page-title    { @apply text-2xl font-bold tracking-tight; color: rgba(255,255,255,.90); }
-  .section-title { @apply text-sm font-semibold; color: rgba(255,255,255,.60); }
+  .page-title    { @apply text-2xl font-bold tracking-tight; color: var(--t1); }
+  .section-title { @apply text-sm font-semibold; color: var(--t2); }
 
   /* ── Badge pill ── */
   .badge {
@@ -101,9 +208,9 @@
   .btn-secondary {
     @apply px-4 py-2.5 rounded-xl font-semibold text-sm
            transition-all duration-200 flex items-center gap-2 active:scale-95;
-    background: rgba(255,255,255,.07);
-    border: 1px solid rgba(255,255,255,.12);
-    color: rgba(255,255,255,.75);
+    background: var(--soft-bg);
+    border: 1px solid var(--card-border);
+    color: var(--t2);
   }
   .btn-secondary:hover {
     background: rgba(255,255,255,.11);
@@ -153,11 +260,12 @@
 
   /* ── Form inputs (unified dark) ── */
   .input-field, .input-dark {
-    @apply w-full rounded-xl px-3.5 py-2.5 text-sm text-white outline-none transition-all duration-200;
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.10);
+    @apply w-full rounded-xl px-3.5 py-2.5 text-sm outline-none transition-all duration-200;
+    background: var(--soft-bg);
+    border: 1px solid var(--card-border);
+    color: var(--t1);
   }
-  .input-field::placeholder, .input-dark::placeholder { color: rgba(255,255,255,.25); }
+  .input-field::placeholder, .input-dark::placeholder { color: var(--t4); }
   .input-field:hover:not(:focus), .input-dark:hover:not(:focus) { border-color: rgba(255,255,255,.16); }
   .input-field:focus, .input-dark:focus {
     background: rgba(255,255,255,.09);
@@ -168,9 +276,14 @@
   /* ── Table ── */
   .table-header {
     @apply text-left text-[11px] font-bold uppercase tracking-wider py-3 px-4;
-    color: rgba(255,255,255,.35);
+    color: var(--t2);
   }
-  .table-cell { @apply py-3 px-4 text-sm; color: rgba(255,255,255,.72); }
+  .table-cell { @apply py-2.5 px-4 text-sm; color: var(--t2); }
+
+  /* Las cifras se leen en columna: mismo ancho por dígito y alineadas a la
+     derecha, para poder comparar de un vistazo sin que bailen las unidades. */
+  .table-cell--num,
+  .table-header--num { @apply text-right tabular-nums; }
 
   /* ── Nav item (sidebar) ── */
   .nav-item {
@@ -350,33 +463,70 @@
 .flip-front { position: relative; z-index: 2; display:flex; justify-content:center; }
 .flip-back  { position: absolute; inset: 0; transform: rotateY(180deg); display:flex; justify-content:center; align-items:flex-start; }
 
+/* Rayado alterno: sobre listas largas es lo que impide saltar de renglón al
+   recorrer una fila con la vista. Muy tenue a propósito — es una guía, no una
+   decoración, y debe leerse igual en las tres identidades. */
+[data-datatable] [data-fila]:nth-of-type(even) {
+  /* Tinte OPACO del acento sobre el fondo de tarjeta. Mezclarlo con
+     `transparent` no servía: --soft-bg ya es semitransparente en las
+     identidades claras, así que el resultado quedaba al 3 % de alfa y no se
+     veía. El rayado tiene que ser un color, no un velo sobre un velo. */
+  background: color-mix(in srgb, var(--accent) 5%, var(--card-bg));
+}
+[data-datatable] [data-fila]:hover { background: var(--soft-bg) !important; }
+
+/* Objetivo táctil: en móvil la fila crece a 52 px. 46 px es cómodo con ratón
+   pero justo para el dedo. */
+@media (max-width: 639px) {
+  [data-datatable] [data-fila] { min-height: 52px; }
+
+  /* Rejilla de indicadores a dos columnas. Si el total es impar, la última
+     ocupa el ancho completo en vez de dejar un hueco a su lado. */
+  [data-kpi-grid] > *:last-child:nth-child(odd) { grid-column: span 2; }
+}
+
+/* Mismo rayado para las tablas nativas (portal del alumno, hoja de registro). */
+table tbody tr:nth-of-type(even) {
+  background: color-mix(in srgb, var(--accent) 5%, var(--card-bg));
+}
+table tbody tr:hover { background: var(--soft-bg); }
+
 /* ─────────────────────────────────────────────────────────────────
    TEMAS CLAROS DEL PORTAL ALUMNO (Identidad Politécnica / UNAM)
-   Se activan con [data-stheme-light] en el layout del alumno.
+
+   El portal emite AMBOS atributos: `data-stheme-light` (propio) y
+   `data-theme-light` (el del panel de administración), de modo que todos
+   los overrides escritos para admin —badges, tablas, paleta pastel— valen
+   también aquí. Antes el portal sólo emitía el suyo y ninguna de esas
+   correcciones llegaba a la mitad de la aplicación que ve el alumno.
+
+   Estas reglas usaban literales (#ffffff, #0f172a…) y no distinguían IPN de
+   UNAM. Ahora que StudentLayout publica los tokens de verdad, van por token.
 ───────────────────────────────────────────────────────────────── */
 [data-stheme-light] .card,
 [data-stheme-light] .stat-card {
-  background: #ffffff;
-  border-color: rgba(15,23,42,.10);
-  box-shadow: 0 1px 3px rgba(15,23,42,.05), 0 8px 24px rgba(15,23,42,.05);
+  background: var(--card-bg);
+  border-color: var(--card-border);
+  box-shadow: var(--card-shadow);
 }
 [data-stheme-light] .stat-card:hover {
-  background: #ffffff;
-  border-color: rgba(15,23,42,.20);
+  background: var(--card-bg);
+  border-color: var(--accent);
   box-shadow: 0 14px 36px rgba(15,23,42,.12);
 }
-[data-stheme-light] .page-title    { color: #0f172a; }
-[data-stheme-light] .section-title { color: #475569; }
-[data-stheme-light] .table-header  { color: #94a3b8; }
-[data-stheme-light] .table-cell    { color: #334155; }
-[data-stheme-light] .demo-btn:hover { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); }
+[data-stheme-light] .page-title    { color: var(--t1); }
+[data-stheme-light] .section-title { color: var(--t2); font-weight: 700; }
+[data-stheme-light] .table-header  { color: var(--t3); }
+[data-stheme-light] .table-cell    { color: var(--t2); }
+[data-stheme-light] .demo-btn:hover { background: var(--soft-bg); border-color: var(--divider); }
 
-/* Texto blanco escrito inline queda ilegible sobre fondo blanco:
-   se fuerza a slate dentro del contenido. Los bloques con fondo de
-   color propio (tarjeta de bienvenida, tooltips) usan la clase .kw
-   o clases Tailwind (text-white) y quedan exentos. */
+/* Red de seguridad: texto blanco escrito inline queda ilegible sobre fondo
+   blanco. Los bloques con fondo de color propio (tarjeta de bienvenida,
+   tooltips) llevan .kw o clases Tailwind y quedan exentos.
+   Es un parche por fuerza bruta — lo correcto es que la página use var(--t*)
+   desde el principio, no que esta regla lo repare después. */
 [data-stheme-light] main [style*="color: rgba(255, 255, 255"]:not(.kw):not(.kw *) {
-  color: #475569 !important;
+  color: var(--t2) !important;
 }
 
 /* ── Html5Qrcode — dark theme overrides ── */
@@ -398,3 +548,134 @@
   font-size: 12px !important;
 }
 #qr-reader__torch_button { display: none !important; }
+
+/* ─────────────────────────────────────────────────────────────────
+   IDENTIDADES CLARAS (IPN / UNAM) EN EL PANEL ADMIN
+   Los estados :hover y :focus de las clases base seguían con blancos
+   fijos, que sobre fondo claro producían rectángulos lavados y texto
+   ilegible. Aquí se reescriben en función de los tokens del tema.
+───────────────────────────────────────────────────────────────── */
+[data-theme-light] .stat-card:hover,
+[data-theme-light] .card-hover:hover {
+  background: var(--card-bg);
+  border-color: var(--accent);
+  box-shadow: 0 14px 36px rgba(15,23,42,.12);
+}
+[data-theme-light] .btn-secondary:hover {
+  background: var(--soft-bg);
+  border-color: var(--accent);
+  color: var(--t1);
+}
+[data-theme-light] .btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+}
+[data-theme-light] .btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, #000);
+}
+[data-theme-light] .input-field:hover:not(:focus),
+[data-theme-light] .input-dark:hover:not(:focus) { border-color: var(--accent); }
+[data-theme-light] .input-field:focus,
+[data-theme-light] .input-dark:focus {
+  background: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+[data-theme-light] select option { background: #ffffff; color: var(--t1); }
+[data-theme-light] h1, [data-theme-light] h2, [data-theme-light] h3,
+[data-theme-light] h4, [data-theme-light] h5, [data-theme-light] h6 { color: var(--t1); }
+
+/* El realce por brillo aclaraba las filas hasta el blanco en modo claro. */
+[data-theme-light] .glass-card,
+[data-theme-light] .glass-card-md {
+  background: var(--card-bg);
+  border-color: var(--card-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   PALETA PASTEL SÓLIDA PARA IPN / UNAM
+   statusConfig y attendanceColors usan clases utilitarias de Tailwind
+   (text-emerald-400, bg-emerald-500/15…), que no admiten variables.
+   En las identidades claras esos tonos neón sobre blanco se ven lavados
+   y con poco contraste, así que aquí se reemplazan por pasteles sólidos
+   con texto oscuro legible.
+───────────────────────────────────────────────────────────────── */
+[data-theme-light] .text-emerald-400,
+[data-theme-light] .text-emerald-500 { color: #1f6b55 !important; }
+[data-theme-light] .text-blue-400,
+[data-theme-light] .text-blue-500    { color: #2b5f9e !important; }
+[data-theme-light] .text-amber-400,
+[data-theme-light] .text-amber-300,
+[data-theme-light] .text-amber-500   { color: #8a5a10 !important; }
+[data-theme-light] .text-orange-400  { color: #97551b !important; }
+[data-theme-light] .text-red-400,
+[data-theme-light] .text-red-500     { color: #a52f2a !important; }
+[data-theme-light] .text-slate-400   { color: var(--t3) !important; }
+
+/* ── Etiquetas de estado en identidad clara ──
+   El fondo pastel con texto de color se lee como algo a medio pintar sobre
+   página blanca. La etiqueta va en color PLENO con texto blanco: es una marca
+   de estado, tiene que verse de un golpe al recorrer una columna.
+   Sólo dentro de .badge — `.text-emerald-400` también viste cifras sueltas,
+   y ahí el color sí es el texto. */
+[data-theme-light] .badge.bg-emerald-500\/15 { background-color: #17502D !important; border-color: #17502D !important; }
+[data-theme-light] .badge.bg-blue-500\/15    { background-color: #12345A !important; border-color: #12345A !important; }
+[data-theme-light] .badge.bg-amber-500\/15   { background-color: #633515 !important; border-color: #633515 !important; }
+[data-theme-light] .badge.bg-orange-500\/15  { background-color: #6B3410 !important; border-color: #6B3410 !important; }
+[data-theme-light] .badge.bg-red-500\/15     { background-color: #78182B !important; border-color: #78182B !important; }
+[data-theme-light] .badge.bg-slate-500\/15   { background-color: #3A3F47 !important; border-color: #3A3F47 !important; }
+
+[data-theme-light] .badge.text-emerald-400,
+[data-theme-light] .badge.text-blue-400,
+[data-theme-light] .badge.text-amber-400,
+[data-theme-light] .badge.text-orange-400,
+[data-theme-light] .badge.text-red-400,
+[data-theme-light] .badge.text-slate-400 { color: #ffffff !important; }
+
+/* El punto del badge también, o queda un lunar de color sobre el sólido. */
+[data-theme-light] .badge .bg-emerald-400,
+[data-theme-light] .badge .bg-blue-400,
+[data-theme-light] .badge .bg-amber-400,
+[data-theme-light] .badge .bg-orange-400,
+[data-theme-light] .badge .bg-red-400,
+[data-theme-light] .badge .bg-slate-400 { background-color: rgba(255,255,255,.85) !important; }
+
+[data-theme-light] .bg-emerald-500\/15 { background-color: #e2f1ea !important; }
+[data-theme-light] .bg-blue-500\/15    { background-color: #e4ecf8 !important; }
+[data-theme-light] .bg-amber-500\/15   { background-color: #fbeedb !important; }
+[data-theme-light] .bg-orange-500\/15  { background-color: #fbe9db !important; }
+[data-theme-light] .bg-red-500\/15     { background-color: #fae7e5 !important; }
+[data-theme-light] .bg-slate-500\/15   { background-color: var(--soft-bg) !important; }
+
+[data-theme-light] .border-emerald-500\/30 { border-color: #b6ddcd !important; }
+[data-theme-light] .border-blue-500\/30    { border-color: #bcd2ee !important; }
+[data-theme-light] .border-amber-500\/30   { border-color: #eed4ac !important; }
+[data-theme-light] .border-orange-500\/30  { border-color: #eecdae !important; }
+[data-theme-light] .border-red-500\/30     { border-color: #eec4c0 !important; }
+[data-theme-light] .border-slate-500\/30   { border-color: var(--divider) !important; }
+
+[data-theme-light] .bg-emerald-400 { background-color: #1f6b55 !important; }
+[data-theme-light] .bg-blue-400    { background-color: #2b5f9e !important; }
+[data-theme-light] .bg-amber-400   { background-color: #b0791f !important; }
+[data-theme-light] .bg-orange-400  { background-color: #b06a2a !important; }
+[data-theme-light] .bg-red-400     { background-color: #a52f2a !important; }
+[data-theme-light] .bg-slate-400   { background-color: var(--t3) !important; }
+
+/* Tipografía de alto contraste: el peso ligero se pierde sobre blanco */
+[data-theme-light] .section-title { color: var(--t2); font-weight: 700; }
+[data-theme-light] .page-title    { color: var(--t1); }
+[data-theme-light] .badge         { font-weight: 700; }
+
+/* Separación de filas dentro de tablas en identidad clara: el divider por sí
+   solo no bastaba para distinguir una fila de la siguiente sobre blanco. */
+[data-theme-light] [data-datatable] [class*="border-b"],
+[data-theme-light] .table-cell { border-color: var(--divider); }
+
+/* La cabecera pegajosa de DataTable pierde el blur en claro; sin fondo sólido
+   las filas se veían por debajo al hacer scroll. */
+[data-theme-light] [data-datatable] [class*="sticky"] {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

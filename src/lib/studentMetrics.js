@@ -30,27 +30,46 @@ export function statsAsistencia(records = []) {
   const tardanzasRestantes   = counts.tardanza % 3
   const ausentesEfectivos    = counts.ausente + tardanzasConvertidas
   const contabiles           = records.length - counts.justificado
+  // Sin sesiones capturadas devolvía 100 %, y la tarjeta mostraba "100 % de
+  // asistencia · 0 presentes". No hay dato, no hay porcentaje.
   const pct = contabiles > 0
     ? Math.round(((contabiles - ausentesEfectivos) / contabiles) * 100)
-    : 100
+    : null
   return { records, counts, total: records.length, pct, tardanzasConvertidas, tardanzasRestantes }
 }
 
 /* Promedio ponderado oficial + desglose para mostrar al alumno/tutor */
 export function promedioPonderado(student, { evals = [], attendance = [] } = {}, pesos = loadSettings().pesos) {
-  const exProm   = promedioExamenes(evals)
-  const tareas10 = student.assignmentsTotal > 0
+  const exProm = promedioExamenes(evals)
+  const hayTareas = student.assignmentsTotal > 0
+  const tareas10 = hayTareas
     ? +((student.assignmentsDone / student.assignmentsTotal) * 10).toFixed(2)
-    : 0
+    : null
+
   const asis   = statsAsistencia(attendance)
-  const asis10 = +(asis.pct / 10).toFixed(2)
-  const totalPesos = (pesos.examenes + pesos.tareas + pesos.asistencia) || 100
-  const promedio = +(((exProm * pesos.examenes) + (tareas10 * pesos.tareas) + (asis10 * pesos.asistencia)) / totalPesos).toFixed(1)
+  const asis10 = asis.pct === null ? null : +(asis.pct / 10).toFixed(2)
+
+  /* Un componente sin datos se excluye y su peso se reparte entre los demás.
+     Antes contaba como 0: a un alumno al que nadie le asignó tareas todavía
+     se le hundía el promedio por algo que no depende de él. */
+  const partes = [
+    { valor: evals.length ? exProm : null, peso: pesos.examenes },
+    { valor: tareas10,                     peso: pesos.tareas },
+    { valor: asis10,                       peso: pesos.asistencia },
+  ].filter(p => p.valor !== null)
+
+  const totalPesos = partes.reduce((sum, p) => sum + p.peso, 0)
+  const promedio = totalPesos > 0
+    ? +(partes.reduce((sum, p) => sum + p.valor * p.peso, 0) / totalPesos).toFixed(1)
+    : null
+
   return {
     promedio,
     pesos,
+    // `parcial` avisa a la vista de que el promedio no incluye todo el criterio.
+    parcial: partes.length < 3,
     desglose: {
-      examenes:   { valor: exProm,   peso: pesos.examenes },
+      examenes:   { valor: evals.length ? exProm : null, peso: pesos.examenes },
       tareas:     { valor: tareas10, peso: pesos.tareas, done: student.assignmentsDone, total: student.assignmentsTotal },
       asistencia: { valor: asis10,   peso: pesos.asistencia, pct: asis.pct },
     },
@@ -73,6 +92,9 @@ export function rankingGrupo(members = [], evalsByStudent = {}, attendanceByStud
         pesos,
       ).promedio,
     }))
+    // Sin promedio no hay nada que ordenar: restar null da NaN y el orden se
+    // vuelve arbitrario. Quien todavía no tiene datos queda fuera del ranking.
+    .filter(x => x.promedio !== null)
     .sort((a, b) => b.promedio - a.promedio)
 }
 

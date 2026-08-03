@@ -6,11 +6,14 @@ import {
   useGroupColors,
   GRADIENT_PALETTES,
   SOLID_PALETTES,
+  MATE_PALETTES,
   SHADER_CONFIG,
 } from '../../hooks/useGroupColors'
+import { logoInstitucion, estiloLogo } from '../../lib/instituciones'
 
 /* ── Picker portal — fuera del overflow:hidden de la tarjeta ── */
 function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
+  const { isLight } = useGroupColors()
   const pickerRef = useRef(null)
   const [pos, setPos] = useState({ top:0, left:0 })
 
@@ -46,32 +49,32 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
         left:       pos.left,
         width:      280,
         zIndex:     9999,
-        background: 'rgba(8,8,15,.96)',
+        background: 'var(--panel-bg)',
         backdropFilter: 'blur(28px)',
         WebkitBackdropFilter: 'blur(28px)',
-        border:     '1px solid rgba(255,255,255,.12)',
+        border:     '1px solid var(--card-border)',
         borderRadius: 20,
-        boxShadow:  '0 24px 64px rgba(0,0,0,.80), 0 4px 16px rgba(0,0,0,.40)',
+        boxShadow:  '0 24px 64px rgba(0,0,0,.28), 0 4px 16px rgba(0,0,0,.14)',
         padding:    16,
       }}>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-bold" style={{ color:'rgba(255,255,255,.70)' }}>
+        <p className="text-xs font-bold" style={{ color:'var(--t1)' }}>
           Apariencia del grupo
         </p>
         <button onClick={onClose}
           className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold transition-colors"
-          style={{ color:'rgba(255,255,255,.35)', background:'rgba(255,255,255,.07)' }}
-          onMouseEnter={e => e.currentTarget.style.color='white'}
-          onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,.35)'}>
+          style={{ color:'var(--t3)', background:'var(--soft-bg)' }}
+          onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
+          onMouseLeave={e => e.currentTarget.style.color='var(--t3)'}>
           ✕
         </button>
       </div>
 
       {/* ── Degradados ── */}
       <p className="text-[9px] font-bold uppercase tracking-widest mb-2"
-        style={{ color:'rgba(255,255,255,.28)' }}>
+        style={{ color:'var(--t3)' }}>
         Degradados
       </p>
       <div className="grid grid-cols-5 gap-1.5 mb-4">
@@ -85,7 +88,7 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
             <div
               className={`w-11 h-11 rounded-xl overflow-hidden transition-all duration-150 ${
                 activeId === p.id
-                  ? 'ring-2 ring-white ring-offset-2 ring-offset-[#08080f] scale-105'
+                  ? 'ring-2 ring-white ring-offset-2 ring-offset-[color:var(--card-bg)] scale-105'
                   : 'opacity-65 hover:opacity-100 hover:scale-105'
               }`}
               style={{ display:'grid', gridTemplateColumns:'1fr 1fr' }}>
@@ -97,7 +100,7 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
               </span>
             )}
             <span className="text-[8px] font-medium leading-none"
-              style={{ color: activeId === p.id ? 'rgba(255,255,255,.80)' : 'rgba(255,255,255,.30)' }}>
+              style={{ color: activeId === p.id ? 'var(--t1)' : 'var(--t3)' }}>
               {p.name}
             </span>
           </button>
@@ -109,7 +112,7 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
 
       {/* ── Colores sólidos ── */}
       <p className="text-[9px] font-bold uppercase tracking-widest mb-2"
-        style={{ color:'rgba(255,255,255,.28)' }}>
+        style={{ color:'var(--t3)' }}>
         Colores sólidos
       </p>
       <div className="grid grid-cols-6 gap-1.5">
@@ -122,7 +125,7 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
             <div
               className={`w-9 h-9 rounded-full transition-all duration-150 ${
                 activeId === p.id
-                  ? 'ring-2 ring-white ring-offset-2 ring-offset-[#08080f] scale-110'
+                  ? 'ring-2 ring-white ring-offset-2 ring-offset-[color:var(--card-bg)] scale-110'
                   : 'opacity-70 hover:opacity-100 hover:scale-110'
               }`}
               style={{ background: p.accent }} />
@@ -135,8 +138,37 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
         ))}
       </div>
 
+      {/* ── Mate ── */}
+      <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <p className="text-[9px] font-bold uppercase tracking-widest mb-2"
+        style={{ color:'var(--t3)' }}>
+        Mate {isLight && <span style={{ color:'var(--accent)' }}>· recomendados</span>}
+      </p>
+      <div className="grid grid-cols-6 gap-1.5">
+        {MATE_PALETTES.map(p => (
+          <button
+            key={p.id}
+            onClick={() => { onSelect(p.id); onClose() }}
+            title={p.name}
+            className="relative group flex flex-col items-center gap-1">
+            <div
+              className={`w-9 h-9 rounded-full transition-all duration-150 ${
+                activeId === p.id
+                  ? 'ring-2 ring-white ring-offset-2 ring-offset-[color:var(--card-bg)] scale-110'
+                  : 'opacity-70 hover:opacity-100 hover:scale-110'
+              }`}
+              style={{ background: isLight ? p.light.accent : p.accent }} />
+            {activeId === p.id && (
+              <span className="absolute top-0 right-0 w-3.5 h-3.5 rounded-full bg-white flex items-center justify-center">
+                <Check size={8} className="text-black" strokeWidth={3.5}/>
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {/* Footer hint */}
-      <p className="mt-3 text-[9px] text-center" style={{ color:'rgba(255,255,255,.20)' }}>
+      <p className="mt-3 text-[9px] text-center" style={{ color:'var(--t4)' }}>
         El color se guarda automáticamente
       </p>
     </div>,
@@ -153,24 +185,55 @@ export default function GroupShaderCard({
   showPicker = true,
   className = '',
 }) {
-  const { getColors, getAccent, getPaletteId, getPalette, setGroupPalette } = useGroupColors()
+  const { getColors, getAccent, getSurface, isLight, getPaletteId, getPalette, setGroupPalette } = useGroupColors()
   const [open, setOpen] = useState(false)
   const btnRef = useRef(null)
 
   const palette   = getPalette(group.id)
   const colors    = getColors(group.id)
   const accent    = getAccent(group.id)
+  const surface   = getSurface(group.id)
   const activeId  = getPaletteId(group.id)
   const letter    = group.name.split(' ')[1] ?? group.name[0]
+  /* La inicial es el respaldo: si el grupo tiene institución, manda su escudo.
+     Una "V" no dice nada; el escudo identifica el grupo de un vistazo. */
+  const logo      = logoInstitucion(group.institucion)
 
   return (
     /* Sin overflow-hidden en el root — lo ponemos solo en el shader layer */
     <div className={`relative rounded-2xl ${className}`}
-      style={{ border:'1px solid rgba(255,255,255,.12)' }}>
+      style={{
+        border: `1px solid ${isLight ? surface : 'var(--card-border)'}`,
+        boxShadow: 'var(--card-shadow)',
+        overflow: 'hidden',
+        /* En claro la tarjeta se pinta ENTERA del color del grupo, igual que
+           en oscuro se pinta entera con el shader. Con el color de fondo, la
+           escala de texto tiene que invertirse: se redefinen las variables en
+           este ámbito y todo lo anidado —cabecera, métricas, pie— las hereda
+           sin tener que saber nada del tema. */
+        ...(isLight ? {
+          '--t1': '#ffffff',
+          '--t2': 'rgba(255,255,255,.82)',
+          '--t3': 'rgba(255,255,255,.62)',
+          '--t4': 'rgba(255,255,255,.45)',
+          '--divider': 'rgba(255,255,255,.20)',
+          '--card-border': 'rgba(255,255,255,.24)',
+          '--soft-bg': 'rgba(255,255,255,.12)',
+          '--card-bg': 'rgba(255,255,255,.10)',
+        } : {}),
+      }}>
 
-      {/* ── Shader background (clipeado propio) ─────────────── */}
+      {/* ── Fondo ───────────────────────────────────────────────
+          En identidad clara no se usa el shader: sobre página blanca el velo
+          negro que necesita convertía la tarjeta en un bloque oscuro.
+
+          Tampoco se usa un tinte que degrada a blanco: eso era lo que se veía
+          "transparente". El fondo es la superficie normal de tarjeta, opaca, y
+          el color del grupo se afirma en una franja lateral sólida. */}
       <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-        {palette.type === 'gradient' ? (
+        {isLight ? (
+          <div className="absolute inset-0" style={{ background: surface }} />
+        ) : palette.type === 'gradient' ? (
           <>
             <Warp style={{ width:'100%', height:'100%' }} colors={colors} {...SHADER_CONFIG} />
             <div className="absolute inset-0" style={{ background:'rgba(0,0,0,.72)' }} />
@@ -196,16 +259,27 @@ export default function GroupShaderCard({
           tabIndex={onClick ? 0 : undefined}
           onClick={onClick}
           onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
-          className={`flex items-center gap-3 sm:gap-4 p-4 sm:p-5 ${onClick ? 'cursor-pointer select-none' : ''}`}>
+          className={`flex items-center gap-3 sm:gap-4 p-3 sm:p-5 ${onClick ? 'cursor-pointer select-none' : ''}`}>
 
-          {/* Accent bar */}
-          <div className="w-1 self-stretch rounded-full flex-shrink-0"
-            style={{ background: accent }} />
+          {/* Franja de acento. En claro ya la dibuja el fondo a todo lo alto. */}
+          {!isLight && (
+            <div className="w-1 self-stretch rounded-full flex-shrink-0"
+              style={{ background: accent }} />
+          )}
 
-          {/* Avatar */}
-          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-            style={{ background: accent, boxShadow:`0 0 20px ${accent}50` }}>
-            {letter}
+          {/* Avatar: escudo de la institución, o la inicial si no tiene */}
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-base sm:text-lg flex-shrink-0"
+            style={{
+              // Con escudo no hay recuadro: se pinta en silueta blanca sobre el
+              // color del grupo. El fondo blanco de antes se recortaba contra
+              // la tarjeta y se veía como un parche.
+              background: logo ? 'transparent' : (isLight ? 'rgba(255,255,255,.18)' : accent),
+              border: (!logo && isLight) ? '1px solid rgba(255,255,255,.35)' : 'none',
+              boxShadow: (logo || isLight) ? 'none' : `0 0 20px ${accent}50` }}>
+            {logo
+              ? <img src={logo.src} alt={logo.alt} style={estiloLogo(true)}
+                  className="w-full h-full object-contain"/>
+              : letter}
           </div>
 
           {/* Info */}
@@ -224,12 +298,12 @@ export default function GroupShaderCard({
                 title="Cambiar apariencia"
                 className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200"
                 style={{
-                  background: open ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.08)',
-                  border:     `1px solid ${open ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.12)'}`,
-                  color:      open ? 'white' : 'rgba(255,255,255,.55)',
+                  background: open ? 'var(--soft-bg)' : 'var(--soft-bg)',
+                  border:     `1px solid ${open ? 'var(--card-border)' : 'var(--card-border)'}`,
+                  color:      open ? 'var(--t1)' : 'var(--t2)',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.16)'; e.currentTarget.style.color='white' }}
-                onMouseLeave={e => { if (!open) { e.currentTarget.style.background='rgba(255,255,255,.08)'; e.currentTarget.style.color='rgba(255,255,255,.55)' } }}>
+                onMouseEnter={e => { e.currentTarget.style.background='var(--soft-bg)'; e.currentTarget.style.color='var(--t1)' }}
+                onMouseLeave={e => { if (!open) { e.currentTarget.style.background='var(--soft-bg)'; e.currentTarget.style.color='var(--t2)' } }}>
                 <Settings2 size={14} />
               </button>
             )}
@@ -237,9 +311,9 @@ export default function GroupShaderCard({
             {onClick && (
               <button type="button" onClick={onClick} aria-label="Ver grupo"
                 className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200"
-                style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.45)' }}
-                onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.16)'; e.currentTarget.style.color='white' }}
-                onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.08)'; e.currentTarget.style.color='rgba(255,255,255,.45)' }}>
+                style={{ background:'var(--soft-bg)', color:'var(--t2)' }}
+                onMouseEnter={e => { e.currentTarget.style.background='var(--soft-bg)'; e.currentTarget.style.color='var(--t1)' }}
+                onMouseLeave={e => { e.currentTarget.style.background='var(--soft-bg)'; e.currentTarget.style.color='var(--t2)' }}>
                 <span className="font-bold text-sm">→</span>
               </button>
             )}
@@ -247,7 +321,7 @@ export default function GroupShaderCard({
         </div>
 
         {footer && (
-          <div className="px-4 sm:px-5 pb-4 sm:pb-5">{footer}</div>
+          <div className="px-3 sm:px-5 pb-3 sm:pb-5">{footer}</div>
         )}
       </div>
 

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><clipPath id="clip-moctezuma"><circle cx="50" cy="50" r="50"/></clipPath></defs>
+  <g clip-path="url(#clip-moctezuma)">
+    <circle cx="50" cy="50" r="50" fill="#4D0B1D"/>
+    <path d="M17 100Q21 73 39 68H61Q79 73 83 100Z" fill="#633515"/>
+    <path d="M39 63V76L50 83L61 76V63Z" fill="#633515"/>
+    <ellipse cx="50" cy="46" rx="20" ry="25" fill="#633515"/>
+    <path d="M25 35L13 4Q27 7 38 33L33 2Q46 12 48 34L50 0Q58 13 55 34L70 2Q70 19 62 36L89 8Q80 30 67 42Z" fill="#064B60"/>
+    <path d="M18 28L6 13Q27 17 39 38L30 8Q48 22 49 39L55 6Q64 22 59 39L82 15Q77 33 64 44Z" fill="#17502D"/>
+    <path d="M28 34Q50 22 72 34L66 43Q50 35 34 43Z" fill="#12345A"/>
+    <circle cx="36" cy="37" r="4" fill="#FFFFFF"/>
+    <circle cx="50" cy="34" r="4" fill="#FFFFFF"/>
+    <circle cx="64" cy="37" r="4" fill="#FFFFFF"/>
+    <path d="M35 48Q40 43 45 48M55 48Q60 43 65 48" fill="none" stroke="#4D0B1D" stroke-width="3" stroke-linecap="round"/>
+    <path d="M48 51L44 60L51 61M41 67Q50 72 59 67" fill="none" stroke="#4D0B1D" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M31 76L50 88L69 76L74 100H26Z" fill="#17502D"/>
+    <path d="M38 78L50 88L62 78L58 96H42Z" fill="#064B60"/>
+  </g>
+</svg>

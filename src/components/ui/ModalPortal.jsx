@@ -33,8 +33,8 @@ export default function ModalPortal({
       <div
         className={`w-full ${maxWidth} rounded-2xl animate-scale-in ${scrollable ? 'max-h-[85vh] overflow-y-auto' : ''}`}
         style={{
-          background:'rgba(8,8,15,.96)',
-          border:'1px solid rgba(255,255,255,.12)',
+          background:'var(--panel-bg)',
+          border: '1px solid var(--card-border)',
           boxShadow:'0 32px 80px rgba(0,0,0,.70)',
         }}
         onClick={e => e.stopPropagation()}>

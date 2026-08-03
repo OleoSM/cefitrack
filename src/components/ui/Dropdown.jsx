@@ -49,9 +49,9 @@ export default function Dropdown({ value, onChange, options, className = '', ali
                 className="w-full flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-left transition-colors whitespace-nowrap"
                 style={{
                   color: active ? (t.light ? t.accent : '#fff') : t.t2,
-                  background: active ? (t.light ? `${t.accent}12` : 'rgba(255,255,255,.08)') : 'transparent',
+                  background: active ? (t.light ? `${t.accent}12` : 'var(--soft-bg)') : 'transparent',
                 }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = t.light ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.05)' }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = t.light ? 'rgba(0,0,0,.04)' : 'var(--soft-bg)' }}
                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
                 {o.icon}
                 <span className="flex-1">{o.label}</span>

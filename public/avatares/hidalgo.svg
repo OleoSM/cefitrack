@@ -1,0 +1,21 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="hidalgo-clip">
+      <circle cx="50" cy="50" r="50"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#hidalgo-clip)">
+    <circle cx="50" cy="50" r="50" fill="#5E1948"/>
+    <path d="M27 37C27 18 37 9 50 9S73 18 73 37V57C73 70 63 79 50 79S27 70 27 57Z" fill="#C99161"/>
+    <path d="M31 28C20 30 19 43 24 50 16 58 22 72 33 70L35 46ZM69 28C80 30 81 43 76 50 84 58 78 72 67 70L65 46Z" fill="#E9E4D9"/>
+    <path d="M27 35Q34 27 39 25M73 35Q66 27 61 25" fill="none" stroke="#E9E4D9" stroke-width="7" stroke-linecap="round"/>
+    <path d="M33 39Q40 34 46 39M54 39Q60 34 67 39" fill="none" stroke="#633515" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="40" cy="44" r="2.6" fill="#12345A"/>
+    <circle cx="60" cy="44" r="2.6" fill="#12345A"/>
+    <path d="M50 44 46 56 52 57" fill="none" stroke="#633515" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M42 64Q50 68 58 64" fill="none" stroke="#78182B" stroke-width="3" stroke-linecap="round"/>
+    <path d="M27 75 40 70H60L73 75 82 100H18Z" fill="#12345A"/>
+    <path d="M43 70H57L55 100H45Z" fill="#F1EEE6"/>
+    <path d="M46 73H54V78H46ZM48 78H52V92H48Z" fill="#633515"/>
+  </g>
+</svg>

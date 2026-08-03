@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><clipPath id="clip-cientifico"><circle cx="50" cy="50" r="50"/></clipPath></defs>
+  <g clip-path="url(#clip-cientifico)">
+    <circle cx="50" cy="50" r="50" fill="#5E1948"/>
+    <path d="M12 100C14 77 28 68 41 65H59C72 68 86 77 88 100Z" fill="#FFFFFF"/>
+    <path d="M37 67L50 78L63 67L69 100H31Z" fill="#E5E5E5"/>
+    <path d="M43 59H57V71L50 77L43 71Z" fill="#C98255"/>
+    <ellipse cx="50" cy="41" rx="21" ry="25" fill="#C98255"/>
+    <path d="M28 37C28 20 37 11 51 11C65 11 73 21 72 38L65 31L62 22L53 27L45 21L37 29Z" fill="#12345A"/>
+    <path d="M25 39H46V55H25Z" fill="#12345A"/>
+    <path d="M54 39H75V55H54Z" fill="#12345A"/>
+    <path d="M46 44H54" stroke="#12345A" stroke-width="5"/>
+    <rect x="29" y="42" width="13" height="10" rx="3" fill="#FFFFFF"/>
+    <rect x="58" y="42" width="13" height="10" rx="3" fill="#FFFFFF"/>
+    <circle cx="36" cy="47" r="2.5" fill="#064B60"/>
+    <circle cx="64" cy="47" r="2.5" fill="#064B60"/>
+    <path d="M47 50L45 57L51 58" fill="none" stroke="#633515" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M43 63C47 66 53 66 57 63" fill="none" stroke="#4D0B1D" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M37 69L50 79L42 87L32 72M63 69L50 79L58 87L68 72" fill="#FFFFFF" stroke="#12345A" stroke-width="2"/>
+    <path d="M47 79H53L56 100H44Z" fill="#064B60"/>
+    <path d="M72 82V95M66 88H78" stroke="#4D0B1D" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>

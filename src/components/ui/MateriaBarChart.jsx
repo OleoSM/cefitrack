@@ -10,7 +10,10 @@ import { Bar } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 
+/* Chart.js pide el color de barras que aún no existen mientras anima, así que
+   `hex` llega undefined y la página entera se caía al hacer .slice sobre él. */
 function hexToRgba(hex, a) {
+  if (typeof hex !== 'string' || !/^#[0-9a-f]{6}$/i.test(hex)) return `rgba(148, 163, 184, ${a})`
   const n = parseInt(hex.slice(1), 16)
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
 }
@@ -47,18 +50,14 @@ export default function MateriaBarChart({ stats, colorOf, t, avg }) {
     labels: stats.map(m => m.materia),
     datasets: [{
       data: stats.map(m => m.promedio),
-      backgroundColor: (ctx) => {
-        const { chart, dataIndex } = ctx
-        const { ctx: c, chartArea } = chart
-        const color = colorOf(stats[dataIndex]?.materia)
-        if (!chartArea) return hexToRgba(color, .75)
-        const g = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top)
-        g.addColorStop(0, hexToRgba(color, .18))
-        g.addColorStop(1, hexToRgba(color, .85))
-        return g
-      },
-      hoverBackgroundColor: (ctx) => hexToRgba(colorOf(stats[ctx.dataIndex]?.materia), .95),
-      borderColor: (ctx) => hexToRgba(colorOf(stats[ctx.dataIndex]?.materia), .9),
+      /* Barra de color pleno. Antes era un degradado que iba del 18 % de alfa
+         abajo al 85 % arriba: sobre el fondo blanco de IPN/UNAM la base de la
+         barra desaparecía y la gráfica se leía como si estuviera destiñéndose.
+         Una barra representa una cantidad; su color no debe variar dentro de
+         sí misma, porque sugiere una gradación que el dato no tiene. */
+      backgroundColor: (ctx) => colorOf(stats[ctx.dataIndex]?.materia),
+      hoverBackgroundColor: (ctx) => colorOf(stats[ctx.dataIndex]?.materia),
+      borderColor: (ctx) => colorOf(stats[ctx.dataIndex]?.materia),
       borderWidth: { top: 0, left: 0, right: 0, bottom: 0 },
       borderRadius: { topLeft: 6, topRight: 6 },
       borderSkipped: 'bottom',

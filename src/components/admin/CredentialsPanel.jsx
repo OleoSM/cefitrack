@@ -15,15 +15,15 @@ export default function CredentialsPanel({ cred, onClose }) {
   }
 
   return (
-    <div className="card p-4" style={{ borderColor:'rgba(251,191,36,.30)' }}>
+    <div className="card p-4" style={{ borderColor:'var(--warn-line)' }}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <KeyRound size={14} style={{ color:'#fbbf24' }}/>
-          <span className="text-sm font-bold" style={{ color:'rgba(255,255,255,.85)' }}>
+          <KeyRound size={14} style={{ color:'var(--warn)' }}/>
+          <span className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
             Credenciales de {cred.nombre}
           </span>
         </div>
-        <button onClick={onClose} className="p-1 rounded-lg" style={{ color:'rgba(255,255,255,.35)' }}>
+        <button onClick={onClose} className="p-1 rounded-lg" style={{ color: 'var(--t3)' }}>
           <X size={14}/>
         </button>
       </div>
@@ -34,12 +34,12 @@ export default function CredentialsPanel({ cred, onClose }) {
           { label:'Contraseña', value: cred.password, mono:true },
         ].map(f => (
           <div key={f.label} className="rounded-xl px-3 py-2"
-            style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.08)' }}>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color:'rgba(255,255,255,.30)' }}>
+            style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--t3)' }}>
               {f.label}
             </p>
             <p className={`text-sm mt-0.5 break-all ${f.mono ? 'font-mono font-bold' : ''}`}
-              style={{ color: f.mono ? '#fbbf24' : 'rgba(255,255,255,.80)' }}>
+              style={{ color: f.mono ? 'var(--warn)' : 'var(--t2)' }}>
               {f.value}
             </p>
           </div>
@@ -47,7 +47,7 @@ export default function CredentialsPanel({ cred, onClose }) {
       </div>
 
       <div className="flex items-center justify-between gap-3 mt-3">
-        <p className="text-[11px]" style={{ color:'rgba(255,255,255,.38)' }}>
+        <p className="text-[11px]" style={{ color: 'var(--t3)' }}>
           Anótalas ahora: la contraseña se guarda cifrada y no podrá consultarse después.
         </p>
         <button onClick={copy} className="btn-secondary text-xs py-1.5 flex-shrink-0">

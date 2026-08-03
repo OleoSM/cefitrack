@@ -5,7 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { statusConfig } from '../../data/mockData'
+import { getStatusConfig } from '../../data/mockData'
 import {
   fetchGroupById, fetchStudents, fetchGroups, fetchAttendanceStats,
   fetchGroupMetrics, computeGroupStats,
@@ -80,25 +80,25 @@ export default function GroupDetail() {
     [metrics],
   )
 
-  if (loading) return <div style={{ color:'rgba(255,255,255,.40)' }} className="p-6">Cargando grupo…</div>
-  if (!grp) return <div style={{ color:'rgba(255,255,255,.40)' }} className="p-6">Grupo no encontrado.</div>
+  if (loading) return <div style={{ color:'var(--t3)' }} className="p-6">Cargando grupo…</div>
+  if (!grp) return <div style={{ color:'var(--t3)' }} className="p-6">Grupo no encontrado.</div>
 
   const accent = getAccent(groupId)
   const stats  = computeGroupStats(grp, students, attByGroup)
 
   const sorted = [...students].sort((a, b) => (b.avgGrade ?? 0) - (a.avgGrade ?? 0))
-  const attColor = r => r >= 90 ? '#34d399' : r >= 75 ? '#60a5fa' : '#f87171'
+  const attColor = r => r >= 90 ? 'var(--good)' : r >= 75 ? 'var(--info)' : 'var(--bad)'
   const gradeClass = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="space-y-5">
 
       {/* Back */}
       <button onClick={() => navigate('/admin/grupos')}
         className="flex items-center gap-1.5 text-sm font-medium transition-colors"
-        style={{ color:'rgba(255,255,255,.38)' }}
-        onMouseEnter={e => e.currentTarget.style.color='white'}
-        onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,.38)'}>
+        style={{ color:'var(--t3)' }}
+        onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
+        onMouseLeave={e => e.currentTarget.style.color='var(--t3)'}>
         <ArrowLeft size={15}/> Regresar a Grupos
       </button>
 
@@ -111,10 +111,10 @@ export default function GroupDetail() {
         <div>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h1 className="text-lg sm:text-xl font-bold" style={{ color:'rgba(255,255,255,.92)' }}>
+              <h1 className="text-lg sm:text-xl font-bold" style={{ color:'var(--t1)' }}>
                 {grp.name} — {grp.subject}
               </h1>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs" style={{ color:'rgba(255,255,255,.40)' }}>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs" style={{ color:'var(--t3)' }}>
                 {grp.schedule && <span className="flex items-center gap-1.5"><Clock size={12}/>{grp.schedule}</span>}
                 {grp.room && <span className="flex items-center gap-1.5"><MapPin size={12}/>{grp.room}</span>}
                 <span className="flex items-center gap-1.5"><Users size={12}/>{stats.studentCount} alumnos</span>
@@ -122,16 +122,16 @@ export default function GroupDetail() {
             </div>
             <div className="flex gap-2 flex-shrink-0">
               <div className="text-center px-3 py-2 rounded-xl"
-                style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.10)' }}>
-                <p className="text-lg font-bold" style={{ color:'rgba(255,255,255,.90)' }}>{stats.avgGrade ?? '—'}</p>
-                <p className="text-[10px]" style={{ color:'rgba(255,255,255,.38)' }}>Promedio</p>
+                style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
+                <p className="text-lg font-bold" style={{ color:'var(--t1)' }}>{stats.avgGrade ?? '—'}</p>
+                <p className="text-[10px]" style={{ color:'var(--t3)' }}>Promedio</p>
               </div>
               <div className="text-center px-3 py-2 rounded-xl"
-                style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.10)' }}>
-                <p className="text-lg font-bold" style={{ color:'rgba(255,255,255,.90)' }}>
+                style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
+                <p className="text-lg font-bold" style={{ color:'var(--t1)' }}>
                   {stats.attendanceRate === null ? '—' : `${stats.attendanceRate}%`}
                 </p>
-                <p className="text-[10px]" style={{ color:'rgba(255,255,255,.38)' }}>Asistencia</p>
+                <p className="text-[10px]" style={{ color:'var(--t3)' }}>Asistencia</p>
               </div>
             </div>
           </div>
@@ -142,16 +142,16 @@ export default function GroupDetail() {
       <div className="card p-4 sm:p-5">
         <h2 className="section-title mb-4">Evolución del Promedio</h2>
         {trend.length === 0 ? (
-          <p className="text-sm py-8 text-center" style={{ color:'rgba(255,255,255,.32)' }}>
+          <p className="text-sm py-8 text-center" style={{ color:'var(--t3)' }}>
             Aún no hay calificaciones capturadas para este grupo.
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={trend} margin={{ top:5, right:10, bottom:0, left:-15 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" />
-              <XAxis dataKey="mes" tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0,10]} tick={{ fontSize:11, fill:'rgba(255,255,255,.35)' }} axisLine={false} tickLine={false} />
-              <Tooltip wrapperStyle={{ outline:'none' }} cursor={{ stroke:'rgba(255,255,255,.10)', strokeWidth:1 }} contentStyle={{ fontSize:11, borderRadius:10, background:'rgba(10,10,20,.92)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.80)' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
+              <XAxis dataKey="mes" tick={{ fontSize:11, fill:'var(--axis)' }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0,10]} tick={{ fontSize:11, fill:'var(--axis)' }} axisLine={false} tickLine={false} />
+              <Tooltip wrapperStyle={{ outline:'none' }} cursor={{ stroke:'var(--grid)', strokeWidth:1 }} contentStyle={{ fontSize:11, borderRadius:10, background:'var(--tooltip-bg)', border:'1px solid var(--tooltip-border)', color:'var(--tooltip-text)' }} />
               <Line type="monotone" dataKey="promedio" name={grp.name} stroke={accent} strokeWidth={2.5}
                 dot={{ r:4, fill:accent }} activeDot={{ r:5 }} />
             </LineChart>
@@ -187,7 +187,7 @@ export default function GroupDetail() {
         <DataTable columns={COLUMNS} isEmpty={sorted.length === 0}
           emptyText="Este grupo todavía no tiene alumnos asignados.">
           {sorted.map((s, i) => {
-            const cfg = statusConfig[s.status] ?? statusConfig.good
+            const cfg = getStatusConfig(s.status)
             const rate = attByStudent[s.id]
             const ac  = attColor(rate ?? 0)
             return (
@@ -197,7 +197,7 @@ export default function GroupDetail() {
                 cells={[
                   {
                     className: 'w-8',
-                    content: <span className="text-xs font-mono" style={{ color:'rgba(255,255,255,.35)' }}>{i+1}</span>,
+                    content: <span className="text-xs font-mono" style={{ color:'var(--t3)' }}>{i+1}</span>,
                   },
                   {
                     className: 'flex-grow min-w-[160px]',
@@ -211,20 +211,20 @@ export default function GroupDetail() {
                   {
                     className: 'w-32 hidden sm:flex',
                     content: rate === null || rate === undefined
-                      ? <span className="text-xs" style={{ color:'rgba(255,255,255,.28)' }}>Sin sesiones</span>
+                      ? <span className="text-xs" style={{ color:'var(--t3)' }}>Sin sesiones</span>
                       : <DataTableBar value={rate} color={ac} label={`${rate}%`} />,
                   },
                   {
                     className: 'w-20',
                     content: Number.isFinite(s.avgGrade)
                       ? <span className={`text-base font-bold ${gradeClass(s.avgGrade)}`}>{s.avgGrade}</span>
-                      : <span className="text-sm" style={{ color:'rgba(255,255,255,.28)' }}>—</span>,
+                      : <span className="text-sm" style={{ color:'var(--t3)' }}>—</span>,
                   },
                   {
                     className: 'w-28 hidden md:flex',
                     content: s.assignmentsTotal > 0
-                      ? <DataTableBar value={s.assignmentsDone} max={s.assignmentsTotal} color="#60a5fa" label={`${s.assignmentsDone}/${s.assignmentsTotal}`} />
-                      : <span className="text-xs" style={{ color:'rgba(255,255,255,.28)' }}>—</span>,
+                      ? <DataTableBar value={s.assignmentsDone} max={s.assignmentsTotal} color="var(--info)" label={`${s.assignmentsDone}/${s.assignmentsTotal}`} />
+                      : <span className="text-xs" style={{ color:'var(--t3)' }}>—</span>,
                   },
                   {
                     className: 'w-28',
@@ -233,7 +233,7 @@ export default function GroupDetail() {
                   {
                     className: 'w-16 flex justify-end',
                     content: (
-                      <span className="text-xs font-semibold" style={{ color:`${accent}cc` }}>
+                      <span className="text-xs font-semibold" style={{ color: accent }}>
                         Ver perfil →
                       </span>
                     ),

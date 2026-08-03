@@ -13,7 +13,7 @@ import {
   ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
   FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
   ChevronRight, UserCheck, CheckSquare, RotateCw,
-  Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown,
+  Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown, Download
 } from 'lucide-react'
 
 const QR_PREFIX   = 'EDUTRACK:'
@@ -107,7 +107,7 @@ export default function Attendance() {
 
   const grp           = groups.find(g => g.id === selectedGrp)
   const groupStudents = students.filter(s => s.groupId === selectedGrp)
-  const accentColor   = selectedGrp ? getAccent(selectedGrp) : '#3b82f6'
+  const accentColor   = selectedGrp ? getAccent(selectedGrp) : 'var(--info)'
 
   const dateLabel = selectedDate ? fmtDate(selectedDate) : ''
   const dateFile  = (selectedDate || todayISO()).replace(/-/g, '')
@@ -350,6 +350,36 @@ export default function Attendance() {
     XLSX.writeFile(wb, `${grp?.name?.replace(/\s+/g, '') ?? 'Grupo'}_${dateFile}.xlsx`)
   }
 
+  /**
+   * Descarga cualquier lista del historial sin tener que reabrirla.
+   * exportExcel() usa el estado de la sesión en curso; ésta parte de los
+   * registros ya guardados en BD para la fecha elegida.
+   */
+  const exportSessionExcel = (sesion) => {
+    const grupo = groups.find(g => g.id === sesion.groupId)
+    const alumnos = students.filter(s => s.groupId === sesion.groupId)
+    const porAlumno = Object.fromEntries(sesion.records.map(r => [r.studentId, r]))
+
+    const rows = alumnos.map((s, i) => {
+      const reg = porAlumno[s.id]
+      const ev  = lastEvalOf(s.id)
+      const sim = getLastSimulacro(s.id)
+      return {
+        '#': i + 1,
+        'Nombre del Alumno': s.name,
+        'Hora de Llegada': reg?.time ?? '—',
+        'Estado': !reg ? 'Ausente' : reg.retardo ? 'Retardo' : 'Presente',
+        'Evaluación': ev ? ev.calificacion : '',
+        'Examen General de Simulación': sim ? `${sim.folio ?? ''} ${sim.aciertos}/${sim.total}`.trim() : '',
+      }
+    })
+
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Lista')
+    XLSX.writeFile(wb, `${grupo?.name?.replace(/\s+/g, '') ?? 'Grupo'}_${sesion.date}.xlsx`)
+  }
+
   /* ══════════════════════════════════════════════════════════════
      VIEW: GROUP PICKER
   ══════════════════════════════════════════════════════════════ */
@@ -358,7 +388,7 @@ export default function Attendance() {
       <div className="w-full space-y-6">
         <div>
           <h1 className="page-title">Pasar Lista</h1>
-          <p className="text-sm mt-1" style={{ color:'rgba(255,255,255,.38)' }}>
+          <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
             Selecciona el grupo para comenzar a registrar asistencia.
           </p>
         </div>
@@ -374,16 +404,16 @@ export default function Attendance() {
                   <button
                     onClick={() => openHistory(g.id)}
                     className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
-                    style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.10)', color:'rgba(255,255,255,.55)' }}
-                    onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.12)'; e.currentTarget.style.color='white' }}
-                    onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.06)'; e.currentTarget.style.color='rgba(255,255,255,.55)' }}>
+                    style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
+                    onMouseEnter={e => { e.currentTarget.style.background= 'var(--t4)'; e.currentTarget.style.color='white' }}
+                    onMouseLeave={e => { e.currentTarget.style.background= 'var(--t2)'; e.currentTarget.style.color= 'var(--t2)' }}>
                     <FolderClock size={13}/> Ver historial de listas
                   </button>
                 )}>
                 <div>
-                  <p className="font-bold text-base" style={{ color:'rgba(255,255,255,.90)' }}>{g.name}</p>
-                  <p className="text-sm" style={{ color:'rgba(255,255,255,.45)' }}>{g.subject}</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-xs" style={{ color:'rgba(255,255,255,.32)' }}>
+                  <p className="font-bold text-base" style={{ color: 'var(--t1)' }}>{g.name}</p>
+                  <p className="text-sm" style={{ color: 'var(--t3)' }}>{g.subject}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-xs" style={{ color: 'var(--t3)' }}>
                     <span className="flex items-center gap-1"><Users size={11}/>{count} alumnos</span>
                     <span className="hidden sm:flex items-center gap-1"><Clock size={11}/>{g.schedule}</span>
                   </div>
@@ -399,18 +429,18 @@ export default function Attendance() {
             style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
             onClick={() => setShowHistoryModal(false)}>
             <div className="w-full max-w-md rounded-2xl p-6 space-y-4 animate-scale-in max-h-[80vh] overflow-y-auto"
-              style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
+              style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
               onClick={e => e.stopPropagation()}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.14)' }}>
-                  <History size={18} style={{ color:'rgba(255,255,255,.70)' }}/>
+                  style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>
+                  <History size={18} style={{ color: 'var(--t2)' }}/>
                 </div>
                 <div>
-                  <h2 className="text-base font-bold" style={{ color:'rgba(255,255,255,.92)' }}>
+                  <h2 className="text-base font-bold" style={{ color: 'var(--t1)' }}>
                     Historial — {groups.find(g => g.id === historyGroupId)?.name}
                   </h2>
-                  <p className="text-xs" style={{ color:'rgba(255,255,255,.40)' }}>
+                  <p className="text-xs" style={{ color: 'var(--t3)' }}>
                     Retoma cualquier lista para editarla o agregar alumnos.
                   </p>
                 </div>
@@ -418,32 +448,41 @@ export default function Attendance() {
 
               <div className="space-y-2">
                 {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => (
-                  <button key={s.date} onClick={() => applySession(toUiSession(s))}
-                    className="w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left transition-all active:scale-[.98]"
-                    style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.08)' }}
-                    onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.09)'}
-                    onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.05)'}>
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.85)' }}>{fmtDate(s.date)}</p>
-                      <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,.40)' }}>
+                  <div key={s.date}
+                    className="w-full flex items-center justify-between gap-2 p-3 rounded-xl transition-all"
+                    style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)' }}>
+                    {/* Fila y descarga son botones hermanos: anidarlos sería HTML inválido */}
+                    <button onClick={() => applySession(toUiSession(s))}
+                      className="flex-1 min-w-0 text-left active:scale-[.98] transition-transform">
+                      <p className="text-sm font-semibold" style={{ color:'var(--t1)' }}>{fmtDate(s.date)}</p>
+                      <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
                         {s.records.length} presentes
                         {s.records.filter(r => r.retardo).length > 0 &&
                           ` · ${s.records.filter(r => r.retardo).length} retardos`}
                       </p>
+                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"
+                        style={s.finished
+                          ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
+                          : { background:'var(--warn-soft)', color:'var(--warn)', border:'1px solid var(--warn-line)' }}>
+                        {s.finished ? 'Finalizada' : 'Borrador'}
+                      </span>
+                      <button onClick={() => exportSessionExcel(s)} title="Descargar esta lista en Excel"
+                        className="p-2 rounded-lg transition-colors"
+                        style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}
+                        onMouseEnter={e => e.currentTarget.style.color='var(--good)'}
+                        onMouseLeave={e => e.currentTarget.style.color='var(--t2)'}>
+                        <Download size={14}/>
+                      </button>
                     </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full flex-shrink-0"
-                      style={s.finished
-                        ? { background:'rgba(16,185,129,.14)', color:'#10b981', border:'1px solid rgba(16,185,129,.28)' }
-                        : { background:'rgba(251,191,36,.14)', color:'#fbbf24', border:'1px solid rgba(251,191,36,.28)' }}>
-                      {s.finished ? 'Finalizada' : 'Borrador'}
-                    </span>
-                  </button>
+                  </div>
                 ))}
               </div>
 
               <button onClick={() => setShowHistoryModal(false)}
                 className="w-full py-2.5 rounded-xl text-sm font-semibold"
-                style={{ background:'rgba(255,255,255,.07)', color:'rgba(255,255,255,.60)' }}>
+                style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
                 Cerrar
               </button>
             </div>
@@ -466,18 +505,18 @@ export default function Attendance() {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
       <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
-          style={{ background:'rgba(251,191,36,.12)', border:'1px solid rgba(251,191,36,.25)' }}>
-          <RotateCw size={20} style={{ color:'#fbbf24' }}/>
+          style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
+          <RotateCw size={20} style={{ color:'var(--warn)' }}/>
         </div>
         <div className="text-center">
-          <h2 className="text-base font-bold mb-1" style={{ color:'rgba(255,255,255,.92)' }}>
+          <h2 className="text-base font-bold mb-1" style={{ color: 'var(--t1)' }}>
             Lista guardada encontrada
           </h2>
-          <p className="text-sm leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--t2)' }}>
             Tienes una lista del día de hoy con{' '}
-            <strong style={{ color:'#10b981' }}>{resumeSession.log.length} alumnos</strong>
+            <strong style={{ color:'var(--good)' }}>{resumeSession.log.length} alumnos</strong>
             {' '}escaneados{resumeSession.finished ? ' (finalizada)' : ''}. ¿Deseas continuar donde te quedaste?
           </p>
         </div>
@@ -496,7 +535,7 @@ export default function Attendance() {
             setTolInput(String(loadSettings().toleranciaMin))
             setShowTolModal(true)
           }} className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background:'rgba(255,255,255,.07)', color:'rgba(255,255,255,.60)' }}>
+            style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
             Empezar de nuevo
           </button>
         </div>
@@ -509,17 +548,17 @@ export default function Attendance() {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
       <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
-          style={{ background:'rgba(251,191,36,.12)', border:'1px solid rgba(251,191,36,.25)' }}>
-          <AlertTriangle size={20} style={{ color:'#fbbf24' }}/>
+          style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
+          <AlertTriangle size={20} style={{ color:'var(--warn)' }}/>
         </div>
         <div className="text-center">
-          <h2 className="text-base font-bold mb-1" style={{ color:'rgba(255,255,255,.92)' }}>
+          <h2 className="text-base font-bold mb-1" style={{ color: 'var(--t1)' }}>
             Pase de lista en progreso
           </h2>
-          <p className="text-sm leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>
-            Tienes <strong style={{ color:'#10b981' }}>{scannedLog.length} alumnos</strong> registrados.
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--t2)' }}>
+            Tienes <strong style={{ color:'var(--good)' }}>{scannedLog.length} alumnos</strong> registrados.
             Si sales ahora, la lista se guardará en el historial y podrás continuar al regresar.
           </p>
         </div>
@@ -537,12 +576,12 @@ export default function Attendance() {
           </button>
           <button onClick={() => { deleteSessionDb(selectedGrp, selectedDate).then(refreshIndex).catch(() => {}); goBack(true) }}
             className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background:'rgba(248,113,113,.12)', border:'1px solid rgba(248,113,113,.25)', color:'#f87171' }}>
+            style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>
             Salir sin guardar
           </button>
           <button onClick={() => setShowLeaveModal(false)}
             className="w-full py-2.5 rounded-xl text-sm font-semibold"
-            style={{ background:'rgba(255,255,255,.07)', color:'rgba(255,255,255,.60)' }}>
+            style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
             Seguir pasando lista
           </button>
         </div>
@@ -558,40 +597,40 @@ export default function Attendance() {
       onClick={() => setShowConfirm(false)}>
       <div
         className="w-full max-w-sm rounded-2xl p-6 animate-scale-in"
-        style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
+        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
         onClick={e => e.stopPropagation()}>
 
         {/* Icon */}
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
-          style={{ background:'rgba(251,191,36,.12)', border:'1px solid rgba(251,191,36,.25)' }}>
-          <AlertTriangle size={22} style={{ color:'#fbbf24' }}/>
+          style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
+          <AlertTriangle size={22} style={{ color:'var(--warn)' }}/>
         </div>
 
         {/* Copy */}
-        <h2 className="text-base font-bold text-center mb-2" style={{ color:'rgba(255,255,255,.92)' }}>
+        <h2 className="text-base font-bold text-center mb-2" style={{ color: 'var(--t1)' }}>
           ¿Terminar pase de lista?
         </h2>
-        <p className="text-sm text-center leading-relaxed mb-1" style={{ color:'rgba(255,255,255,.50)' }}>
-          La lista quedará en el <span style={{ color:'rgba(255,255,255,.80)', fontWeight:600 }}>historial</span>{' '}
+        <p className="text-sm text-center leading-relaxed mb-1" style={{ color: 'var(--t2)' }}>
+          La lista quedará en el <span style={{ color: 'var(--t2)', fontWeight:600 }}>historial</span>{' '}
           — podrás reabrirla después desde "Ver historial de listas" para ajustar retardos o agregar alumnos.
         </p>
 
         {/* Summary */}
         <div className="mt-4 mb-5 rounded-xl p-3 flex items-center justify-around"
-          style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.07)' }}>
+          style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
           <div className="text-center">
-            <p className="text-lg font-bold" style={{ color:'#10b981' }}>{presentCount}</p>
-            <p className="text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>Presentes</p>
+            <p className="text-lg font-bold" style={{ color:'var(--good)' }}>{presentCount}</p>
+            <p className="text-[11px]" style={{ color: 'var(--t3)' }}>Presentes</p>
           </div>
-          <div className="w-px h-8" style={{ background:'rgba(255,255,255,.08)' }}/>
+          <div className="w-px h-8" style={{ background: 'var(--soft-bg)' }}/>
           <div className="text-center">
-            <p className="text-lg font-bold" style={{ color:'rgba(255,255,255,.40)' }}>{absentCount}</p>
-            <p className="text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>Ausentes</p>
+            <p className="text-lg font-bold" style={{ color: 'var(--t3)' }}>{absentCount}</p>
+            <p className="text-[11px]" style={{ color: 'var(--t3)' }}>Ausentes</p>
           </div>
-          <div className="w-px h-8" style={{ background:'rgba(255,255,255,.08)' }}/>
+          <div className="w-px h-8" style={{ background: 'var(--soft-bg)' }}/>
           <div className="text-center">
             <p className="text-lg font-bold" style={{ color: accentColor }}>{totalCount}</p>
-            <p className="text-[11px]" style={{ color:'rgba(255,255,255,.35)' }}>Total</p>
+            <p className="text-[11px]" style={{ color: 'var(--t3)' }}>Total</p>
           </div>
         </div>
 
@@ -600,16 +639,16 @@ export default function Attendance() {
           <button
             onClick={() => setShowConfirm(false)}
             className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}
-            onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.12)'}
-            onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.07)'}>
+            style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
+            onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
+            onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
             Cancelar
           </button>
           <button
             onClick={handleConfirmFinish}
             className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2"
             style={{ background:'white', color:'black' }}
-            onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.88)'}
+            onMouseEnter={e => e.currentTarget.style.background= 'var(--t1)'}
             onMouseLeave={e => e.currentTarget.style.background='white'}>
             <CheckSquare size={14}/> Confirmar
           </button>
@@ -623,19 +662,19 @@ export default function Attendance() {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
       <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
           style={{ background:`${accentColor}1f`, border:`1px solid ${accentColor}44` }}>
           <Timer size={20} style={{ color: accentColor }}/>
         </div>
         <div className="text-center">
-          <h2 className="text-base font-bold mb-1" style={{ color:'rgba(255,255,255,.92)' }}>
+          <h2 className="text-base font-bold mb-1" style={{ color: 'var(--t1)' }}>
             Tolerancia de llegada
           </h2>
-          <p className="text-sm leading-relaxed" style={{ color:'rgba(255,255,255,.50)' }}>
-            Define los minutos de tolerancia para <strong style={{ color:'rgba(255,255,255,.80)' }}>{grp?.name}</strong>.
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--t2)' }}>
+            Define los minutos de tolerancia para <strong style={{ color: 'var(--t2)' }}>{grp?.name}</strong>.
             Al vencer, los alumnos que se registren quedarán marcados con{' '}
-            <strong style={{ color:'#fbbf24' }}>retardo</strong> automáticamente.
+            <strong style={{ color:'var(--warn)' }}>retardo</strong> automáticamente.
           </p>
         </div>
 
@@ -645,36 +684,36 @@ export default function Attendance() {
               className="py-2 rounded-xl text-sm font-bold transition-all"
               style={String(m) === tolInput
                 ? { background:'white', color:'black' }
-                : { background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.10)', color:'rgba(255,255,255,.60)' }}>
+                : { background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}>
               {m} min
             </button>
           ))}
         </div>
 
         <div className="flex items-center gap-1 rounded-xl pl-3 pr-1.5 py-1.5"
-          style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.10)' }}>
-          <Clock size={14} style={{ color:'rgba(255,255,255,.35)' }}/>
+          style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
+          <Clock size={14} style={{ color: 'var(--t3)' }}/>
           <input type="number" min="1" max="120" value={tolInput}
             onChange={e => setTolInput(e.target.value)}
             className="flex-1 min-w-0 bg-transparent py-1 px-2 text-sm font-semibold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            style={{ color:'rgba(255,255,255,.85)' }}/>
-          <span className="text-xs flex-shrink-0" style={{ color:'rgba(255,255,255,.35)' }}>min</span>
+            style={{ color: 'var(--t1)' }}/>
+          <span className="text-xs flex-shrink-0" style={{ color: 'var(--t3)' }}>min</span>
           <div className="flex flex-col flex-shrink-0 rounded-lg overflow-hidden"
-            style={{ border:'1px solid rgba(255,255,255,.12)' }}>
+            style={{ border: '1px solid var(--card-border)' }}>
             <button type="button" aria-label="Sumar un minuto"
               onClick={() => setTolInput(String(Math.min(120, (parseInt(tolInput, 10) || 0) + 1)))}
               className="w-6 h-4 flex items-center justify-center transition-colors"
-              style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.65)', borderBottom:'1px solid rgba(255,255,255,.12)' }}
-              onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.16)'}
-              onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.08)'}>
+              style={{ background: 'var(--soft-bg)', color: 'var(--t2)', borderBottom: '1px solid var(--card-border)' }}
+              onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
+              onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
               <ChevronUp size={11}/>
             </button>
             <button type="button" aria-label="Restar un minuto"
               onClick={() => setTolInput(String(Math.max(1, (parseInt(tolInput, 10) || 0) - 1)))}
               className="w-6 h-4 flex items-center justify-center transition-colors"
-              style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.65)' }}
-              onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.16)'}
-              onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.08)'}>
+              style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}
+              onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
+              onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
               <ChevronDown size={11}/>
             </button>
           </div>
@@ -690,9 +729,9 @@ export default function Attendance() {
           </button>
           <button onClick={() => startTolerance(null)}
             className="w-full py-2 text-xs font-semibold transition-colors"
-            style={{ color:'rgba(255,255,255,.35)' }}
-            onMouseEnter={e => e.currentTarget.style.color='rgba(255,255,255,.60)'}
-            onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,.35)'}>
+            style={{ color: 'var(--t3)' }}
+            onMouseEnter={e => e.currentTarget.style.color= 'var(--t2)'}
+            onMouseLeave={e => e.currentTarget.style.color= 'var(--t3)'}>
             Continuar sin cronómetro
           </button>
         </div>
@@ -707,27 +746,27 @@ export default function Attendance() {
       <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => goBack()}
           className="flex items-center gap-1.5 text-sm font-medium transition-colors"
-          style={{ color:'rgba(255,255,255,.40)' }}
-          onMouseEnter={e => e.currentTarget.style.color='rgba(255,255,255,.85)'}
-          onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,.40)'}>
+          style={{ color: 'var(--t3)' }}
+          onMouseEnter={e => e.currentTarget.style.color= 'var(--t1)'}
+          onMouseLeave={e => e.currentTarget.style.color= 'var(--t3)'}>
           <ArrowLeft size={15}/> Pasar Lista
         </button>
-        <ChevronRight size={12} style={{ color:'rgba(255,255,255,.20)' }}/>
+        <ChevronRight size={12} style={{ color: 'var(--t4)' }}/>
         <span className="text-sm font-semibold" style={{ color: accentColor }}>
           {grp?.sucursal ? `${grp.sucursal} - ${grp.name}` : grp?.name}
         </span>
-        <span className="text-xs hidden sm:inline" style={{ color:'rgba(255,255,255,.28)' }}>· {grp?.subject}</span>
+        <span className="text-xs hidden sm:inline" style={{ color: 'var(--t4)' }}>· {grp?.subject}</span>
         {finished && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-            style={{ background:'rgba(16,185,129,.14)', color:'#10b981', border:'1px solid rgba(16,185,129,.28)' }}>
+            style={{ background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }}>
             Reabierta desde historial
           </span>
         )}
         <button onClick={() => openHistory(selectedGrp)}
           className="ml-auto flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
-          style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.10)', color:'rgba(255,255,255,.55)' }}
-          onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.12)'; e.currentTarget.style.color='white' }}
-          onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.06)'; e.currentTarget.style.color='rgba(255,255,255,.55)' }}>
+          style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
+          onMouseEnter={e => { e.currentTarget.style.background= 'var(--t4)'; e.currentTarget.style.color='white' }}
+          onMouseLeave={e => { e.currentTarget.style.background= 'var(--t2)'; e.currentTarget.style.color= 'var(--t2)' }}>
           <History size={13}/> Ver historial
         </button>
       </div>
@@ -737,16 +776,16 @@ export default function Attendance() {
         <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
           <div className="flex items-center flex-wrap gap-3 sm:gap-5">
             {[
-              { label:'Presentes',      value: presentCount, color:'#10b981' },
-              { label:'Retardos',       value: retardoCount, color:'#fbbf24' },
-              { label:'Sin escanear',   value: absentCount,  color:'rgba(255,255,255,.38)' },
+              { label:'Presentes',      value: presentCount, color:'var(--good)' },
+              { label:'Retardos',       value: retardoCount, color:'var(--warn)' },
+              { label:'Sin escanear',   value: absentCount,  color: 'var(--t3)' },
               { label:'Total',          value: totalCount,   color: accentColor },
             ].map((k, i) => (
               <div key={k.label} className="flex items-center gap-3 sm:gap-5">
-                {i > 0 && <div className="hidden sm:block w-px h-7" style={{ background:'rgba(255,255,255,.08)' }}/>}
+                {i > 0 && <div className="hidden sm:block w-px h-7" style={{ background: 'var(--soft-bg)' }}/>}
                 <div className="text-center">
                   <p className="text-2xl font-bold leading-none tabular-nums" style={{ color: k.color }}>{k.value}</p>
-                  <p className="text-[11px] mt-0.5" style={{ color:'rgba(255,255,255,.33)' }}>{k.label}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color:'var(--t3)' }}>{k.label}</p>
                 </div>
               </div>
             ))}
@@ -756,19 +795,19 @@ export default function Attendance() {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-sm font-bold tabular-nums"
                   style={tolExpired
-                    ? { background:'rgba(239,68,68,.14)',  border:'1px solid rgba(239,68,68,.30)',  color:'#f87171' }
+                    ? { background:'var(--bad-soft)',  border:'1px solid var(--bad-line)',  color:'var(--bad)' }
                     : timerPaused
-                      ? { background:'rgba(251,191,36,.12)', border:'1px solid rgba(251,191,36,.28)', color:'#fbbf24' }
-                      : { background:'rgba(16,185,129,.10)', border:'1px solid rgba(16,185,129,.25)', color:'#10b981' }}>
+                      ? { background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--warn)' }
+                      : { background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}>
                   <Timer size={13}/>
                   {tolExpired ? 'Tolerancia vencida' : fmtMMSS(remainingSec)}
                 </div>
                 {!tolExpired && (
                   <button onClick={togglePause}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
-                    style={{ background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', color:'rgba(255,255,255,.70)' }}
-                    onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.12)'}
-                    onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,.07)'}>
+                    style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
+                    onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
+                    onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
                     {timerPaused ? <><Play size={12}/> Reanudar</> : <><Pause size={12}/> Pausar</>}
                   </button>
                 )}
@@ -776,13 +815,13 @@ export default function Attendance() {
             )}
             <div className="text-right hidden sm:block">
               <p className="text-2xl font-bold tabular-nums" style={{ color: accentColor }}>{pct}%</p>
-              <p className="text-[11px]" style={{ color:'rgba(255,255,255,.33)' }}>completado</p>
+              <p className="text-[11px]" style={{ color:'var(--t3)' }}>completado</p>
             </div>
           </div>
         </div>
-        <div className="h-1.5 rounded-full overflow-hidden" style={{ background:'rgba(255,255,255,.07)' }}>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--soft-bg)' }}>
           <div className="h-full rounded-full transition-all duration-700 ease-out"
-            style={{ width:`${pct}%`, background:`linear-gradient(90deg, #10b981, ${accentColor})` }}/>
+            style={{ width:`${pct}%`, background:`linear-gradient(90deg, var(--good), ${accentColor})` }}/>
         </div>
       </div>
 
@@ -794,12 +833,12 @@ export default function Attendance() {
 
           {/* Camera card */}
           <div className="card overflow-hidden relative" style={{
-            outline: flashGreen ? '2px solid #10b981' : '2px solid transparent',
+            outline: flashGreen ? '2px solid var(--good)' : '2px solid transparent',
             transition: 'outline-color .25s ease',
           }}>
             {/* Success flash */}
             <div className="absolute inset-0 z-20 pointer-events-none transition-opacity duration-300"
-              style={{ background:'#10b981', opacity: flashGreen ? 0.13 : 0 }}/>
+              style={{ background:'var(--good)', opacity: flashGreen ? 0.13 : 0 }}/>
 
             {/* Html5Qrcode mount point */}
             <div id="qr-reader" className="w-full" style={{ minHeight: 280 }}/>
@@ -810,12 +849,12 @@ export default function Attendance() {
                 style={{ background:'#0a0a14', minHeight: 280 }}>
                 {camError ? (
                   <div className="text-center px-8 space-y-3">
-                    <AlertTriangle size={32} className="mx-auto" style={{ color:'#f87171' }}/>
+                    <AlertTriangle size={32} className="mx-auto" style={{ color:'var(--bad)' }}/>
                     <div>
-                      <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.80)' }}>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--t2)' }}>
                         Error de cámara
                       </p>
-                      <p className="text-xs mt-1" style={{ color:'rgba(255,255,255,.42)' }}>{camError}</p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--t3)' }}>{camError}</p>
                     </div>
                     <button onClick={startScanner} className="btn-primary text-xs py-2 px-4">
                       Reintentar
@@ -836,12 +875,12 @@ export default function Attendance() {
                       <span className="absolute bottom-0 right-0 w-7 h-7 rounded-br-2xl"
                         style={{ borderBottom:`2px solid ${accentColor}`, borderRight:`2px solid ${accentColor}` }}/>
                       <QrCode size={28} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-                        style={{ color:'rgba(255,255,255,.16)' }}/>
+                        style={{ color: 'var(--t4)' }}/>
                     </div>
-                    <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.55)' }}>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--t2)' }}>
                       Cámara inactiva
                     </p>
-                    <p className="text-xs mt-1" style={{ color:'rgba(255,255,255,.28)' }}>
+                    <p className="text-xs mt-1" style={{ color: 'var(--t4)' }}>
                       Presiona "Activar cámara" para escanear
                     </p>
                   </div>
@@ -853,7 +892,7 @@ export default function Attendance() {
             {scanning && (
               <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
-                  style={{ background:'rgba(0,0,0,.68)', backdropFilter:'blur(8px)', color:'rgba(255,255,255,.85)' }}>
+                  style={{ background:'rgba(0,0,0,.68)', backdropFilter:'blur(8px)', color: 'var(--t1)' }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
                   Escaneando…
                 </div>
@@ -869,27 +908,27 @@ export default function Attendance() {
           ) : (
             <button onClick={stopScanner}
               className="w-full flex items-center justify-center gap-2 rounded-xl font-semibold text-sm py-2.5 transition-all"
-              style={{ background:'rgba(239,68,68,.12)', border:'1px solid rgba(239,68,68,.22)', color:'#f87171' }}
-              onMouseEnter={e => e.currentTarget.style.background='rgba(239,68,68,.20)'}
-              onMouseLeave={e => e.currentTarget.style.background='rgba(239,68,68,.12)'}>
+              style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}
+              onMouseEnter={e => e.currentTarget.style.background='var(--bad-soft)'}
+              onMouseLeave={e => e.currentTarget.style.background='var(--bad-soft)'}>
               <CameraOff size={15}/> Pausar escaneo
             </button>
           )}
 
           {/* Last scanned banner */}
           {lastScanned && (
-            <div className="card p-3 animate-fade-in" style={{ borderLeft:`3px solid #10b981` }}>
+            <div className="card p-3 animate-fade-in" style={{ borderLeft:`3px solid var(--good)` }}>
               <div className="flex items-center gap-2.5">
-                <CheckCircle2 size={16} className="flex-shrink-0" style={{ color:'#10b981' }}/>
+                <CheckCircle2 size={16} className="flex-shrink-0" style={{ color:'var(--good)' }}/>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color:'#10b981' }}>
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color:'var(--good)' }}>
                     Último escaneado
                   </p>
-                  <p className="text-sm font-bold truncate" style={{ color:'rgba(255,255,255,.88)' }}>
+                  <p className="text-sm font-bold truncate" style={{ color: 'var(--t1)' }}>
                     {lastScanned.student.name}
                   </p>
                 </div>
-                <span className="font-mono text-xs flex-shrink-0" style={{ color:'rgba(255,255,255,.42)' }}>
+                <span className="font-mono text-xs flex-shrink-0" style={{ color: 'var(--t3)' }}>
                   {lastScanned.time}
                 </span>
               </div>
@@ -902,20 +941,20 @@ export default function Attendance() {
 
           {/* Table top bar */}
           <div className="px-4 py-3 flex items-center justify-between flex-shrink-0"
-            style={{ borderBottom:'1px solid rgba(255,255,255,.07)' }}>
+            style={{ borderBottom: '1px solid var(--divider)' }}>
             <div className="flex items-center gap-2.5">
               <UserCheck size={14} style={{ color: accentColor }}/>
-              <span className="text-sm font-bold" style={{ color:'rgba(255,255,255,.85)' }}>
+              <span className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
                 Lista de asistencia
               </span>
               {presentCount > 0 && (
                 <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                  style={{ background:'rgba(16,185,129,.15)', color:'#10b981' }}>
+                  style={{ background:'var(--good-soft)', color:'var(--good)' }}>
                   {presentCount}
                 </span>
               )}
             </div>
-            <span className="text-xs" style={{ color:'rgba(255,255,255,.26)' }}>{dateLabel}</span>
+            <span className="text-xs" style={{ color:'var(--t4)' }}>{dateLabel}</span>
           </div>
 
           {/* Table body */}
@@ -923,13 +962,13 @@ export default function Attendance() {
             {scannedLog.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-16 px-6 text-center">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-                  style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)' }}>
-                  <Scan size={22} style={{ color:'rgba(255,255,255,.16)' }}/>
+                  style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
+                  <Scan size={22} style={{ color: 'var(--t4)' }}/>
                 </div>
-                <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.36)' }}>
+                <p className="text-sm font-semibold" style={{ color:'var(--t3)' }}>
                   Sin registros aún
                 </p>
-                <p className="text-xs mt-1.5 leading-relaxed" style={{ color:'rgba(255,255,255,.20)' }}>
+                <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--t4)' }}>
                   Activa la cámara y escanea el QR de<br/>cada alumno para registrarlo aquí
                 </p>
               </div>
@@ -937,43 +976,43 @@ export default function Attendance() {
               <div className="w-full overflow-x-auto">
               <table className="w-full min-w-[420px]">
                 <thead>
-                  <tr style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--divider)' }}>
                     <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest w-10"
-                      style={{ color:'rgba(255,255,255,.24)' }}>#</th>
+                      style={{ color: 'var(--t4)' }}>#</th>
                     <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color:'rgba(255,255,255,.24)' }}>Nombre del Alumno</th>
+                      style={{ color: 'var(--t4)' }}>Nombre del Alumno</th>
                     <th className="pr-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color:'rgba(255,255,255,.24)' }}>Hora de llegada</th>
+                      style={{ color: 'var(--t4)' }}>Hora de llegada</th>
                     <th className="pr-4 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest w-20"
-                      style={{ color:'rgba(255,255,255,.24)' }}>Retardo</th>
+                      style={{ color: 'var(--t4)' }}>Retardo</th>
                   </tr>
                 </thead>
                 <tbody>
                   {scannedLog.map((entry, i) => (
                     <tr key={entry.student.id}
                       className="transition-colors animate-fade-in"
-                      style={{ borderBottom:'1px solid rgba(255,255,255,.04)' }}
-                      onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.03)'}
+                      style={{ borderBottom: '1px solid var(--divider)' }}
+                      onMouseEnter={e => e.currentTarget.style.background= 'var(--t2)'}
                       onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                       <td className="px-4 py-3">
-                        <span className="font-mono text-[11px] tabular-nums" style={{ color:'rgba(255,255,255,.28)' }}>
+                        <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--t4)' }}>
                           {String(i + 1).padStart(2, '0')}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                            style={{ background:'rgba(16,185,129,.15)', color:'#10b981' }}>
+                            style={{ background:'var(--good-soft)', color:'var(--good)' }}>
                             {entry.student.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
                           </div>
-                          <span className="text-sm font-medium truncate" style={{ color:'rgba(255,255,255,.85)' }}>
+                          <span className="text-sm font-medium truncate" style={{ color: 'var(--t1)' }}>
                             {entry.student.name}
                           </span>
                         </div>
                       </td>
                       <td className="pr-4 py-3 text-right">
                         <span className="font-mono text-xs font-semibold tabular-nums"
-                          style={{ color: retardos[entry.student.id] ? '#fbbf24' : 'rgba(255,255,255,.48)' }}>
+                          style={{ color: retardos[entry.student.id] ? 'var(--warn)' : 'var(--t2)' }}>
                           {entry.time}
                         </span>
                       </td>
@@ -982,7 +1021,7 @@ export default function Attendance() {
                           role="switch" aria-checked={!!retardos[entry.student.id]}
                           title={retardos[entry.student.id] ? 'Con retardo — clic para quitar' : 'Marcar retardo'}
                           className="relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 align-middle"
-                          style={{ background: retardos[entry.student.id] ? '#f59e0b' : 'rgba(255,255,255,.13)' }}>
+                          style={{ background: retardos[entry.student.id] ? 'var(--warn)' : 'var(--t4)' }}>
                           <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200"
                             style={{ transform: retardos[entry.student.id] ? 'translateX(16px)' : 'translateX(0)' }}/>
                         </button>
@@ -997,8 +1036,8 @@ export default function Attendance() {
 
           {/* Footer: export + finish */}
           <div className="px-4 py-3 flex items-center justify-between gap-3 flex-shrink-0"
-            style={{ borderTop:'1px solid rgba(255,255,255,.07)', background:'rgba(255,255,255,.02)' }}>
-            <p className="text-xs" style={{ color:'rgba(255,255,255,.36)' }}>
+            style={{ borderTop: '1px solid var(--divider)', background: 'var(--card-bg)' }}>
+            <p className="text-xs" style={{ color:'var(--t3)' }}>
               {scannedLog.length > 0
                 ? `${presentCount} de ${totalCount} alumnos registrados`
                 : 'Esperando escaneos…'}
@@ -1007,18 +1046,18 @@ export default function Attendance() {
               {scannedLog.length > 0 && (
                 <button onClick={exportExcel}
                   className="flex items-center gap-2 text-sm font-semibold px-3 py-2 rounded-xl transition-all active:scale-95"
-                  style={{ background:'rgba(16,185,129,.12)', border:'1px solid rgba(16,185,129,.25)', color:'#10b981' }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(16,185,129,.22)'}
-                  onMouseLeave={e => e.currentTarget.style.background='rgba(16,185,129,.12)'}>
+                  style={{ background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}
+                  onMouseEnter={e => e.currentTarget.style.background='var(--good-line)'}
+                  onMouseLeave={e => e.currentTarget.style.background='var(--good-soft)'}>
                   <FileSpreadsheet size={13}/>
                   <span className="hidden sm:inline">Excel</span>
                 </button>
               )}
               <button onClick={handleFinish}
                 className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all active:scale-95"
-                style={{ background:'rgba(255,255,255,.09)', border:'1px solid rgba(255,255,255,.16)', color:'rgba(255,255,255,.80)' }}
-                onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,.13)'; e.currentTarget.style.color='white' }}
-                onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.09)'; e.currentTarget.style.color='rgba(255,255,255,.80)' }}>
+                style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
+                onMouseEnter={e => { e.currentTarget.style.background= 'var(--t2)'; e.currentTarget.style.color='white' }}
+                onMouseLeave={e => { e.currentTarget.style.background= 'var(--t2)'; e.currentTarget.style.color= 'var(--t2)' }}>
                 <CheckSquare size={14}/> Terminar pase de lista
               </button>
             </div>
@@ -1038,18 +1077,18 @@ export default function Attendance() {
           style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
           onClick={() => setShowHistoryModal(false)}>
           <div className="w-full max-w-md rounded-2xl p-6 space-y-4 animate-scale-in max-h-[80vh] overflow-y-auto"
-            style={{ background:'#0f1020', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
+            style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.14)' }}>
-                <History size={18} style={{ color:'rgba(255,255,255,.70)' }}/>
+                style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>
+                <History size={18} style={{ color: 'var(--t2)' }}/>
               </div>
               <div>
-                <h2 className="text-base font-bold" style={{ color:'rgba(255,255,255,.92)' }}>
+                <h2 className="text-base font-bold" style={{ color: 'var(--t1)' }}>
                   Historial — {groups.find(g => g.id === historyGroupId)?.name}
                 </h2>
-                <p className="text-xs" style={{ color:'rgba(255,255,255,.40)' }}>
+                <p className="text-xs" style={{ color: 'var(--t3)' }}>
                   Retoma cualquier lista para editarla o agregar alumnos.
                 </p>
               </div>
@@ -1057,33 +1096,43 @@ export default function Attendance() {
 
             <div className="space-y-2">
               {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => (
-                <button key={s.date} onClick={() => applySession(toUiSession(s))}
-                  className="w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left transition-all active:scale-[.98]"
+                <div key={s.date}
+                  className="w-full flex items-center justify-between gap-2 p-3 rounded-xl transition-all"
                   style={{
-                    background: s.date === selectedDate ? `${accentColor}1a` : 'rgba(255,255,255,.05)',
-                    border: s.date === selectedDate ? `1px solid ${accentColor}55` : '1px solid rgba(255,255,255,.08)',
+                    background: s.date === selectedDate ? `${accentColor}1a` : 'var(--card-bg)',
+                    border: s.date === selectedDate ? `1px solid ${accentColor}55` : '1px solid var(--card-border)',
                   }}>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color:'rgba(255,255,255,.85)' }}>{fmtDate(s.date)}</p>
-                    <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,.40)' }}>
+                  <button onClick={() => applySession(toUiSession(s))}
+                    className="flex-1 min-w-0 text-left active:scale-[.98] transition-transform">
+                    <p className="text-sm font-semibold" style={{ color:'var(--t1)' }}>{fmtDate(s.date)}</p>
+                    <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
                       {s.records.length} presentes
                       {s.records.filter(r => r.retardo).length > 0 &&
                         ` · ${s.records.filter(r => r.retardo).length} retardos`}
                     </p>
+                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"
+                      style={s.finished
+                        ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
+                        : { background:'var(--warn-soft)', color:'var(--warn)', border:'1px solid var(--warn-line)' }}>
+                      {s.finished ? 'Finalizada' : 'Borrador'}
+                    </span>
+                    <button onClick={() => exportSessionExcel(s)} title="Descargar esta lista en Excel"
+                      className="p-2 rounded-lg transition-colors"
+                      style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}
+                      onMouseEnter={e => e.currentTarget.style.color='var(--good)'}
+                      onMouseLeave={e => e.currentTarget.style.color='var(--t2)'}>
+                      <Download size={14}/>
+                    </button>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full flex-shrink-0"
-                    style={s.finished
-                      ? { background:'rgba(16,185,129,.14)', color:'#10b981', border:'1px solid rgba(16,185,129,.28)' }
-                      : { background:'rgba(251,191,36,.14)', color:'#fbbf24', border:'1px solid rgba(251,191,36,.28)' }}>
-                    {s.finished ? 'Finalizada' : 'Borrador'}
-                  </span>
-                </button>
+                </div>
               ))}
             </div>
 
             <button onClick={() => setShowHistoryModal(false)}
               className="w-full py-2.5 rounded-xl text-sm font-semibold"
-              style={{ background:'rgba(255,255,255,.07)', color:'rgba(255,255,255,.60)' }}>
+              style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
               Cerrar
             </button>
           </div>

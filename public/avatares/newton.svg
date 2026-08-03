@@ -1,0 +1,22 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="newton-clip">
+      <circle cx="50" cy="50" r="50"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#newton-clip)">
+    <circle cx="50" cy="50" r="50" fill="#17502D"/>
+    <path d="M21 28C18 15 30 10 39 17 44 5 57 5 62 17 72 10 84 18 79 30 89 39 80 48 83 58 87 72 77 84 68 78L64 53H36L32 79C20 84 14 70 20 59 12 50 17 38 21 28Z" fill="#E6DED0"/>
+    <path d="M24 31Q14 38 24 45Q14 53 25 61Q15 70 28 78M76 31Q86 38 76 45Q86 53 75 61Q85 70 72 78" fill="none" stroke="#C8BEB0" stroke-width="7" stroke-linecap="round"/>
+    <path d="M32 30C32 18 40 14 50 14S68 18 68 30V56C68 70 60 78 50 78S32 70 32 56Z" fill="#D3A06F"/>
+    <path d="M30 31Q38 20 50 24 62 20 70 31 64 18 50 16 36 18 30 31Z" fill="#E6DED0"/>
+    <path d="M34 40Q40 35 46 39M54 39Q60 35 66 40" fill="none" stroke="#633515" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="41" cy="43" r="2.5" fill="#12345A"/>
+    <circle cx="59" cy="43" r="2.5" fill="#12345A"/>
+    <path d="M50 43 46 56 52 57" fill="none" stroke="#633515" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M43 64Q50 68 57 64" fill="none" stroke="#78182B" stroke-width="3" stroke-linecap="round"/>
+    <path d="M29 78 40 72 50 82 60 72 71 78 78 100H22Z" fill="#48245F"/>
+    <path d="M40 72 50 82 43 91 34 77ZM60 72 50 82 57 91 66 77Z" fill="#F3F0E8"/>
+    <path d="M47 82H53L56 100H44Z" fill="#78182B"/>
+  </g>
+</svg>

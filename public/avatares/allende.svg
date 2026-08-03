@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><clipPath id="clip-allende"><circle cx="50" cy="50" r="50"/></clipPath></defs>
+  <g clip-path="url(#clip-allende)">
+    <circle cx="50" cy="50" r="50" fill="#17502D"/>
+    <path d="M15 100Q18 71 38 66H62Q82 71 85 100Z" fill="#12345A"/>
+    <path d="M38 62V74L50 81L62 74V62Z" fill="#633515"/>
+    <ellipse cx="50" cy="43" rx="19" ry="24" fill="#633515"/>
+    <path d="M31 42Q30 23 50 20Q70 23 69 42L63 31Q50 25 37 31Z" fill="#4D0B1D"/>
+    <path d="M15 25Q36 4 50 16Q64 4 85 25Q69 31 50 26Q31 31 15 25Z" fill="#4D0B1D"/>
+    <path d="M21 23Q50 29 79 23" fill="none" stroke="#633515" stroke-width="4"/>
+    <path d="M36 44Q41 40 45 44M55 44Q60 40 64 44" fill="none" stroke="#4D0B1D" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M48 47L45 55L51 56M42 62Q50 67 58 62" fill="none" stroke="#4D0B1D" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M20 73L37 68L42 78L25 83ZM80 73L63 68L58 78L75 83Z" fill="#633515"/>
+    <path d="M25 80L38 76M23 85L40 80M75 80L62 76M77 85L60 80" stroke="#FFFFFF" stroke-width="2"/>
+    <path d="M45 74L50 81L55 74V100H45Z" fill="#78182B"/>
+  </g>
+</svg>

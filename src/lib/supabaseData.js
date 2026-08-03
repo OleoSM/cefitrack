@@ -56,6 +56,7 @@ export async function fetchStudents() {
     garantia: s.garantia,
     firmaGarantia: s.firma_garantia,
     examenGeneral: s.examen_general,
+    avatar: s.avatar,
   }))
 }
 
@@ -84,6 +85,7 @@ export async function fetchStudentById(id) {
     garantia: data.garantia,
     firmaGarantia: data.firma_garantia,
     examenGeneral: data.examen_general,
+    avatar: data.avatar,
   }
 }
 
@@ -576,4 +578,13 @@ export async function fetchAsistenciaRegistro(groupId) {
     }
   }
   return { porAlumno, fechas: sesiones.map(s => s.session_date) }
+}
+
+/** Avatar del alumno. El catálogo válido se valida también en la BD. */
+export async function setStudentAvatar(studentId, avatar) {
+  const { error } = await supabase.rpc('set_student_avatar', {
+    p_student_id: studentId,
+    p_avatar: avatar,
+  })
+  if (error) throw error
 }

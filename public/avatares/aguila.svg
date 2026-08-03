@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><clipPath id="clip-aguila"><circle cx="50" cy="50" r="50"/></clipPath></defs>
+  <g clip-path="url(#clip-aguila)">
+    <circle cx="50" cy="50" r="50" fill="#064B60"/>
+    <path d="M10 93L18 55L29 24L39 32L50 17L61 32L71 24L82 55L90 93L70 87L59 100H41L30 87Z" fill="#FFFFFF"/>
+    <path d="M18 55L8 47L26 42L16 31L36 37L50 23L64 37L84 31L74 42L92 47L82 55L67 48L50 42L33 48Z" fill="#FFFFFF"/>
+    <path d="M25 48L43 45L39 57L25 55Z" fill="#12345A"/>
+    <path d="M75 48L57 45L61 57L75 55Z" fill="#12345A"/>
+    <path d="M27 44L43 43" stroke="#4D0B1D" stroke-width="5" stroke-linecap="round"/>
+    <path d="M57 43L73 44" stroke="#4D0B1D" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="38" cy="50" r="3" fill="#FFFFFF"/>
+    <circle cx="62" cy="50" r="3" fill="#FFFFFF"/>
+    <path d="M42 57L50 51L58 57L64 66L54 69L50 86L43 73L36 67Z" fill="#F2B31B"/>
+    <path d="M36 67L54 69L50 76L43 73Z" fill="#D47B16"/>
+    <path d="M50 51L50 65" stroke="#633515" stroke-width="2"/>
+    <path d="M29 80L41 77L36 92M71 80L59 77L64 92" fill="none" stroke="#12345A" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>

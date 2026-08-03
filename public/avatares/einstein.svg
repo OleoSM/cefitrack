@@ -1,0 +1,19 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="einstein-clip">
+      <circle cx="50" cy="50" r="50"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#einstein-clip)">
+    <circle cx="50" cy="50" r="50" fill="#12345A"/>
+    <path d="M29 39 17 34 23 25 13 21 28 16 25 7 40 14 50 3 59 14 73 7 71 18 87 21 76 29 84 38 68 38Z" fill="#F3F0E8"/>
+    <path d="M30 40C30 25 39 18 50 18S70 25 70 40V57C70 72 61 82 50 82S30 72 30 57Z" fill="#D9A978"/>
+    <path d="M29 44C20 42 18 51 25 57L31 58ZM71 44C80 42 82 51 75 57L69 58Z" fill="#D9A978"/>
+    <path d="M32 37Q40 31 47 37Q39 35 32 40ZM53 37Q61 31 68 37Q61 35 53 40Z" fill="#F3F0E8"/>
+    <circle cx="40" cy="43" r="3" fill="#4D0B1D"/>
+    <circle cx="60" cy="43" r="3" fill="#4D0B1D"/>
+    <path d="M50 44 46 56 53 56" fill="none" stroke="#633515" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M50 57C43 51 32 54 31 62 37 68 45 66 50 62 55 66 63 68 69 62 68 54 57 51 50 57Z" fill="#F3F0E8"/>
+    <path d="M37 75Q50 85 63 75L70 100H30Z" fill="#4D0B1D"/>
+  </g>
+</svg>

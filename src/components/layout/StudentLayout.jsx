@@ -2,6 +2,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { LayoutDashboard, BookOpen, CalendarCheck, BrainCircuit, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
+import { rutaAvatar } from '../../lib/avatares'
 import { useState, useEffect, Suspense } from 'react'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
@@ -175,10 +176,18 @@ function LayoutInner() {
         <div className="relative px-3 py-4">
           <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl transition-colors group hover:bg-white/5">
             <div className="relative flex-shrink-0">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                style={{ background: t.light ? 'rgba(255,255,255,.30)' : '#f59e0b', border: '2px solid rgba(255,255,255,.25)' }}>
-                {initials}
-              </div>
+              {/* El avatar elegido sustituye a las iniciales; si no hay, se
+                  mantienen como respaldo. */}
+              {rutaAvatar(student?.avatar) ? (
+                <img src={rutaAvatar(student.avatar)} alt=""
+                  className="w-8 h-8 rounded-full object-cover"
+                  style={{ border: '2px solid rgba(255,255,255,.25)' }}/>
+              ) : (
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                  style={{ background: t.light ? 'rgba(255,255,255,.30)' : '#f59e0b', border: '2px solid rgba(255,255,255,.25)' }}>
+                  {initials}
+                </div>
+              )}
               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full"
                 style={{ border: `2px solid ${t.light ? t.sideBg : '#0d1630'}` }} />
             </div>

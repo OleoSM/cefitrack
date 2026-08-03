@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
 import { logoInstitucion, tipoDesdeNombre } from '../../lib/instituciones'
+import { rutaAvatar } from '../../lib/avatares'
 import { useStudentData } from '../../hooks/useStudentData'
 import { promedioPonderado, rankingGrupo, statsAsistencia, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
 import { fetchGroupMetrics } from '../../lib/supabaseData'
@@ -129,9 +130,15 @@ export default function StudentDashboard() {
       <div className="kw rounded-2xl p-5 sm:p-6 text-white"
         style={{ background: card.grad, border: '1px solid rgba(255,255,255,.10)' }}>
         <div className="flex flex-wrap items-center gap-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/10 flex items-center justify-center text-lg sm:text-xl font-bold flex-shrink-0">
-            {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
-          </div>
+          {rutaAvatar(s.avatar) ? (
+            <img src={rutaAvatar(s.avatar)} alt=""
+              className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover flex-shrink-0"
+              style={{ background:'rgba(255,255,255,.10)' }}/>
+          ) : (
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/10 flex items-center justify-center text-lg sm:text-xl font-bold flex-shrink-0">
+              {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <p className="text-sm text-white/45">Bienvenido de vuelta</p>
             <h1 className="text-lg sm:text-xl font-bold truncate">{s.name}</h1>

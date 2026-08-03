@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><clipPath id="clip-napoleon"><circle cx="50" cy="50" r="50"/></clipPath></defs>
+  <g clip-path="url(#clip-napoleon)">
+    <circle cx="50" cy="50" r="50" fill="#78182B"/>
+    <path d="M14 100Q18 71 38 66H62Q82 71 86 100Z" fill="#12345A"/>
+    <path d="M38 62V74L50 81L62 74V62Z" fill="#633515"/>
+    <ellipse cx="50" cy="43" rx="19" ry="24" fill="#633515"/>
+    <path d="M30 42Q29 21 50 18Q71 21 70 42L64 31Q50 24 36 31Z" fill="#4D0B1D"/>
+    <path d="M24 25Q42 5 79 17L68 28Q44 32 18 25Z" fill="#4D0B1D"/>
+    <path d="M23 24Q49 29 72 23" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+    <path d="M45 18Q55 22 48 34Q47 26 40 25Z" fill="#4D0B1D"/>
+    <path d="M36 44Q41 40 45 44M55 44Q60 40 64 44" fill="none" stroke="#4D0B1D" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M48 47L45 55L51 56M42 62Q50 66 58 62" fill="none" stroke="#4D0B1D" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M36 68L50 81L64 68L70 82L50 92L30 82Z" fill="#FFFFFF"/>
+    <path d="M42 74L50 81L58 74L61 100H39Z" fill="#12345A"/>
+    <path d="M20 73L37 68L41 78L25 83ZM80 73L63 68L59 78L75 83Z" fill="#633515"/>
+    <circle cx="50" cy="87" r="3" fill="#633515"/>
+    <circle cx="50" cy="96" r="3" fill="#633515"/>
+  </g>
+</svg>

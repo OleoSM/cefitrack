@@ -6,3 +6,7 @@ dist/
 
 .vercel
 .env*
+
+# Avatares de terceros: obra con copyright y fotos de personas reales.
+# Los archivos siguen en disco, pero el repositorio no debe distribuirlos.
+public/avatars/

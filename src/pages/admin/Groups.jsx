@@ -400,18 +400,7 @@ export default function Groups() {
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {(() => {
-                        const logo = logoInstitucion(g.institucion)
-                        return logo ? (
-                          <span className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 p-0.5"
-                            style={{ background:'#ffffff' }}>
-                            <img src={logo.src} alt={logo.alt} className="max-w-full max-h-full object-contain"/>
-                          </span>
-                        ) : null
-                      })()}
-                      <h3 className="text-base font-bold truncate" style={{ color:'var(--t1)' }}>{g.name}</h3>
-                    </div>
+                    <h3 className="text-base font-bold truncate" style={{ color:'var(--t1)' }}>{g.name}</h3>
                     <p className="text-sm mt-0.5 truncate" style={{ color:'var(--t2)' }}>
                       {g.subject}
                       <span className="sm:hidden" style={{ color:'var(--t3)' }}> · {stats.studentCount} alumnos</span>

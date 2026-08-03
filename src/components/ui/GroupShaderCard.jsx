@@ -9,6 +9,7 @@ import {
   MATE_PALETTES,
   SHADER_CONFIG,
 } from '../../hooks/useGroupColors'
+import { logoInstitucion } from '../../lib/instituciones'
 
 /* ── Picker portal — fuera del overflow:hidden de la tarjeta ── */
 function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
@@ -194,6 +195,9 @@ export default function GroupShaderCard({
   const surface   = getSurface(group.id)
   const activeId  = getPaletteId(group.id)
   const letter    = group.name.split(' ')[1] ?? group.name[0]
+  /* La inicial es el respaldo: si el grupo tiene institución, manda su escudo.
+     Una "V" no dice nada; el escudo identifica el grupo de un vistazo. */
+  const logo      = logoInstitucion(group.institucion)
 
   return (
     /* Sin overflow-hidden en el root — lo ponemos solo en el shader layer */
@@ -263,13 +267,19 @@ export default function GroupShaderCard({
               style={{ background: accent }} />
           )}
 
-          {/* Avatar */}
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-base sm:text-lg flex-shrink-0"
+          {/* Avatar: escudo de la institución, o la inicial si no tiene */}
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-base sm:text-lg flex-shrink-0 overflow-hidden"
             style={{
-              background: isLight ? 'rgba(255,255,255,.18)' : accent,
-              border: isLight ? '1px solid rgba(255,255,255,.35)' : 'none',
-              boxShadow: isLight ? 'none' : `0 0 20px ${accent}50` }}>
-            {letter}
+              // Con logo el fondo va blanco siempre: los escudos están hechos
+              // para papel y sobre color se pierden.
+              background: logo ? '#ffffff' : (isLight ? 'rgba(255,255,255,.18)' : accent),
+              border: logo ? '1px solid rgba(255,255,255,.35)'
+                           : (isLight ? '1px solid rgba(255,255,255,.35)' : 'none'),
+              padding: logo ? 4 : 0,
+              boxShadow: (logo || isLight) ? 'none' : `0 0 20px ${accent}50` }}>
+            {logo
+              ? <img src={logo.src} alt={logo.alt} className="max-w-full max-h-full object-contain"/>
+              : letter}
           </div>
 
           {/* Info */}

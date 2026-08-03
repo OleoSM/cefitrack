@@ -41,3 +41,16 @@ export const INSTITUCIONES = [
   { id: 'uam',    alt: 'UAM' },
   { id: 'ecoems', alt: 'ECOEMS' },
 ]
+
+/**
+ * Estilo para pintar un escudo sobre fondo de color.
+ *
+ * `brightness(0) invert(1)` lo aplasta a silueta blanca. Es lo que se hace con
+ * un escudo sobre color —los originales son guinda o azul oscuro y sobre un
+ * fondo del mismo registro desaparecen—, y evita el recuadro blanco que antes
+ * se recortaba contra la tarjeta y se veía como un parche pegado.
+ *
+ * Sobre fondo claro se devuelve el logo intacto, con sus colores oficiales.
+ */
+export const estiloLogo = sobreColor =>
+  sobreColor ? { filter: 'brightness(0) invert(1)' } : undefined

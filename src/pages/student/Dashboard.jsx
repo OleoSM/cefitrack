@@ -8,7 +8,7 @@ import {
   BookOpen, CalendarCheck, BrainCircuit, ArrowRight, Target, Zap, Trophy, Info,
 } from 'lucide-react'
 import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
-import { logoInstitucion, tipoDesdeNombre } from '../../lib/instituciones'
+import { logoInstitucion, tipoDesdeNombre, estiloLogo } from '../../lib/instituciones'
 import { useStudentData } from '../../hooks/useStudentData'
 import { promedioPonderado, rankingGrupo, statsAsistencia, esExamen, esTarea, evolucionPorMateria } from '../../lib/studentMetrics'
 import { fetchGroupMetrics } from '../../lib/supabaseData'
@@ -278,9 +278,11 @@ export default function StudentDashboard() {
               {(() => {
                 const logo = logoInstitucion(targetSchool?.tipo ?? tipoDesdeNombre(targetSchool?.nombre))
                 return logo ? (
-                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 p-1.5"
-                    style={{ background:'#ffffff', border:`1px solid ${t.cardBorder}` }}>
-                    <img src={logo.src} alt={logo.alt} className="max-w-full max-h-full object-contain"/>
+                  <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
+                    {/* Sobre la tarjeta clara el escudo va con sus colores; en
+                        el tema oscuro se pinta en blanco o se perdería. */}
+                    <img src={logo.src} alt={logo.alt} style={estiloLogo(!t.light)}
+                      className="max-w-full max-h-full object-contain"/>
                   </div>
                 ) : (
                   <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"

@@ -12,7 +12,8 @@ import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import KpiCard from '../../components/ui/KpiCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
-import { logoInstitucion, INSTITUCIONES } from '../../lib/instituciones'
+import { logoInstitucion, INSTITUCIONES, estiloLogo } from '../../lib/instituciones'
+import { useAdminTheme } from '../../context/AdminThemeContext'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { useAuth } from '../../context/AuthContext'
 
@@ -47,6 +48,7 @@ function MetricBar({ value, max, suffix = '', thresholds }) {
 const COLORES = ['#2B5F9E','#2F6B41','#8A5A12','#5D3E90','#94356B','#1C6474']
 
 function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
+  const { t: temaAdmin } = useAdminTheme()
   const editing = !!group
   const [form, setForm] = useState({
     name:     group?.name ?? '',
@@ -155,7 +157,8 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
                       border: activo ? '2px solid var(--accent)' : '1px solid var(--card-border)',
                     }}>
                     {logo
-                      ? <img src={logo.src} alt={logo.alt} className="max-h-7 max-w-full object-contain"/>
+                      ? <img src={logo.src} alt={logo.alt} style={estiloLogo(!temaAdmin?.light)}
+                          className="max-h-7 max-w-full object-contain"/>
                       : <Ban size={16} style={{ color:'var(--t4)' }}/>}
                     <span className="text-[8px] font-semibold leading-none truncate w-full text-center"
                       style={{ color: activo ? 'var(--t1)' : 'var(--t3)' }}>

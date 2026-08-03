@@ -9,7 +9,7 @@ import {
   MATE_PALETTES,
   SHADER_CONFIG,
 } from '../../hooks/useGroupColors'
-import { logoInstitucion } from '../../lib/instituciones'
+import { logoInstitucion, estiloLogo } from '../../lib/instituciones'
 
 /* ── Picker portal — fuera del overflow:hidden de la tarjeta ── */
 function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
@@ -268,17 +268,17 @@ export default function GroupShaderCard({
           )}
 
           {/* Avatar: escudo de la institución, o la inicial si no tiene */}
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-base sm:text-lg flex-shrink-0 overflow-hidden"
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-base sm:text-lg flex-shrink-0"
             style={{
-              // Con logo el fondo va blanco siempre: los escudos están hechos
-              // para papel y sobre color se pierden.
-              background: logo ? '#ffffff' : (isLight ? 'rgba(255,255,255,.18)' : accent),
-              border: logo ? '1px solid rgba(255,255,255,.35)'
-                           : (isLight ? '1px solid rgba(255,255,255,.35)' : 'none'),
-              padding: logo ? 4 : 0,
+              // Con escudo no hay recuadro: se pinta en silueta blanca sobre el
+              // color del grupo. El fondo blanco de antes se recortaba contra
+              // la tarjeta y se veía como un parche.
+              background: logo ? 'transparent' : (isLight ? 'rgba(255,255,255,.18)' : accent),
+              border: (!logo && isLight) ? '1px solid rgba(255,255,255,.35)' : 'none',
               boxShadow: (logo || isLight) ? 'none' : `0 0 20px ${accent}50` }}>
             {logo
-              ? <img src={logo.src} alt={logo.alt} className="max-w-full max-h-full object-contain"/>
+              ? <img src={logo.src} alt={logo.alt} style={estiloLogo(true)}
+                  className="w-full h-full object-contain"/>
               : letter}
           </div>
 

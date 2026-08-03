@@ -453,6 +453,21 @@ export async function fetchStaff() {
   return data
 }
 
+/**
+ * Todas las cuentas con acceso: personal y alumnos.
+ * El personal sale de `profiles` —donde vive su identidad y a donde apunta la
+ * tabla de permisos— y los alumnos de `students`, que es el padrón real y el
+ * único sitio donde consta su grupo.
+ */
+export async function fetchCuentas() {
+  const { data, error } = await supabase.rpc('list_cuentas')
+  if (error) throw error
+  return data.map(c => ({
+    id: c.id, name: c.name, email: c.email, role: c.role,
+    grupoId: c.grupo_id, grupoNombre: c.grupo_nombre, sucursal: c.sucursal,
+  }))
+}
+
 export async function createSubAdmin({ name, email, password }) {
   const { data, error } = await supabase.rpc('create_user_with_password', {
     p_name: name,

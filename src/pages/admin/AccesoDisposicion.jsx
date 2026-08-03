@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
-  ShieldCheck, UserPlus, ChevronDown, ChevronRight, Building2, KeyRound, CheckCircle2, X,
+  ShieldCheck, UserPlus, ChevronDown, ChevronRight, Building2, KeyRound, CheckCircle2, X, Search,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import {
-  fetchStaff, createSubAdmin, fetchGroups,
+  fetchCuentas, createSubAdmin, fetchGroups,
   fetchSubAdminAccess, grantSubAdminAccess, revokeSubAdminAccess,
 } from '../../lib/supabaseData'
 import { generarPassword } from '../../lib/credentials'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 
 // Las sucursales salen de los grupos reales; antes estaban escritas a mano
 // y no reflejaban las que existen en la base.
@@ -32,6 +33,24 @@ export default function AccesoDisposicion() {
   const [formError, setFormError] = useState(null)
   const [errorAcceso, setErrorAcceso] = useState(null)
 
+  /* La lista pasó de seis a treinta y ocho cuentas al incluir a los alumnos:
+     sin acotar no hay forma de encontrar a nadie. */
+  const [rolFiltro, setRolFiltro] = useState('todos')
+  const [busqueda, setBusqueda] = useState('')
+  const [grupoFiltro, setGrupoFiltro] = useState('todos')
+
+  const conteo = {
+    admin:     staff.filter(a => a.role === 'admin').length,
+    sub_admin: staff.filter(a => a.role === 'sub_admin').length,
+    student:   staff.filter(a => a.role === 'student').length,
+  }
+  const filtradas = staff.filter(a => {
+    const q = busqueda.trim().toLowerCase()
+    return (rolFiltro === 'todos' || a.role === rolFiltro)
+      && (rolFiltro !== 'student' || grupoFiltro === 'todos' || a.grupoId === grupoFiltro)
+      && (q === '' || a.name.toLowerCase().includes(q) || (a.email ?? '').toLowerCase().includes(q))
+  })
+
   const refreshAccess = useCallback(async (userId) => {
     const rows = await fetchSubAdminAccess(userId)
     setAccessByUser(prev => ({ ...prev, [userId]: rows }))
@@ -39,7 +58,7 @@ export default function AccesoDisposicion() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [personal, grps] = await Promise.all([fetchStaff(), fetchGroups()])
+    const [personal, grps] = await Promise.all([fetchCuentas(), fetchGroups()])
     setStaff(personal)
     setGroups(grps)
     // Los administradores no tienen filas de acceso: su alcance es total por rol.
@@ -119,7 +138,7 @@ export default function AccesoDisposicion() {
       <div>
         <h1 className="page-title flex items-center gap-2"><ShieldCheck size={22}/> Acceso y Disposición</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
-          Personal con acceso al panel. Los administradores ven todo; a los sub-admins se les asigna sucursal o grupos.
+          Todas las cuentas con acceso a la plataforma. Los administradores ven todo, a los sub-admins se les asigna sucursal o grupos, y cada alumno ve solo lo suyo.
         </p>
       </div>
 
@@ -161,7 +180,7 @@ export default function AccesoDisposicion() {
 
       {/* ── Lista de sub-admins ─────────────────────────────── */}
       <div className="card p-5 space-y-3">
-        <h2 className="section-title flex items-center gap-2"><Building2 size={16}/> Personal y sus accesos</h2>
+        <h2 className="section-title flex items-center gap-2"><Building2 size={16}/> Cuentas y accesos</h2>
 
         {errorAcceso && (
           <div className="flex items-start gap-2 rounded-lg px-3 py-2"
@@ -170,14 +189,42 @@ export default function AccesoDisposicion() {
           </div>
         )}
         {loading && <p className="text-sm" style={{ color: 'var(--t3)' }}>Cargando…</p>}
-        {!loading && staff.length === 0 && (
-          <p className="text-sm" style={{ color: 'var(--t3)' }}>Todavía no hay personal registrado.</p>
-        )}
 
-        <div className="space-y-3">
-          {staff.map(a => {
+        {/* Filtros */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color:'var(--t4)' }}/>
+            <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por nombre o correo…" className="input-field pl-9 text-sm"/>
+          </div>
+          <select value={rolFiltro} onChange={e => setRolFiltro(e.target.value)}
+            className="input-field text-sm w-auto">
+            {[['todos', `Todos (${staff.length})`],
+              ['admin', `Administradores (${conteo.admin})`],
+              ['sub_admin', `Sub-admins (${conteo.sub_admin})`],
+              ['student', `Alumnos (${conteo.student})`]].map(([v, l]) =>
+                <option key={v} value={v}>{l}</option>)}
+          </select>
+          {rolFiltro === 'student' && (
+            <select value={grupoFiltro} onChange={e => setGrupoFiltro(e.target.value)}
+              className="input-field text-sm w-auto">
+              <option value="todos">Todos los grupos</option>
+              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          )}
+        </div>
+
+        <p className="text-[11px]" style={{ color:'var(--t3)' }}>
+          {filtradas.length} de {staff.length} cuentas
+        </p>
+
+        <ProgressiveList items={filtradas} className="space-y-3"
+          sizes={{ mobile: 5, tablet: 10, desktop: 15 }}
+          emptyLabel="Ninguna cuenta coincide con el filtro.">
+          {a => {
             const rows = accessByUser[a.id] ?? []
             const esAdmin = a.role === 'admin'
+            const esAlumno = a.role === 'student'
             return (
               <div key={a.id} className="rounded-xl p-3.5 space-y-2.5"
                 style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
@@ -188,9 +235,11 @@ export default function AccesoDisposicion() {
                   </div>
                   <span className="badge flex-shrink-0"
                     style={esAdmin
-                      ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
-                      : { background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--divider)' }}>
-                    {esAdmin ? 'Administrador' : 'Sub-admin'}
+                      ? { background:'var(--good)', color:'#fff', border:'1px solid var(--good)' }
+                      : esAlumno
+                        ? { background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--divider)' }
+                        : { background:'var(--info)', color:'#fff', border:'1px solid var(--info)' }}>
+                    {esAdmin ? 'Administrador' : esAlumno ? 'Alumno' : 'Sub-admin'}
                   </span>
                 </div>
 
@@ -199,6 +248,15 @@ export default function AccesoDisposicion() {
                 {esAdmin ? (
                   <p className="text-xs" style={{ color: 'var(--t3)' }}>
                     Acceso total a todas las sucursales y grupos.
+                  </p>
+                ) : esAlumno ? (
+                  /* El alumno sólo ve lo suyo: no hay nada que conceder ni
+                     recortar, así que se muestra a qué grupo pertenece. */
+                  <p className="text-xs" style={{ color: 'var(--t3)' }}>
+                    {a.grupoNombre
+                      ? <>Grupo <strong style={{ color:'var(--t2)' }}>{a.grupoNombre}</strong>
+                          {a.sucursal ? ` · ${a.sucursal}` : ''} · sólo ve su propia información.</>
+                      : 'Sin grupo asignado.'}
                   </p>
                 ) : (
                 <div className="space-y-1.5">
@@ -251,8 +309,8 @@ export default function AccesoDisposicion() {
                 )}
               </div>
             )
-          })}
-        </div>
+          }}
+        </ProgressiveList>
       </div>
     </div>
   )

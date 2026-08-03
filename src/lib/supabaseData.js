@@ -62,7 +62,8 @@ export async function fetchStudents() {
 
 export async function fetchStudentById(id) {
   if (!id) return null
-  const { data, error } = await supabase.from('students').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await supabase.from('students')
+    .select('*, avatar_catalogo(src)').eq('id', id).maybeSingle()
   if (error) throw error
   if (!data) return null
   return {
@@ -86,6 +87,7 @@ export async function fetchStudentById(id) {
     firmaGarantia: data.firma_garantia,
     examenGeneral: data.examen_general,
     avatar: data.avatar,
+    avatarSrc: data.avatar_catalogo?.src ?? null,
   }
 }
 
@@ -587,4 +589,17 @@ export async function setStudentAvatar(studentId, avatar) {
     p_avatar: avatar,
   })
   if (error) throw error
+}
+
+/**
+ * Catálogo de avatares. Vive en la tabla `avatar_catalogo`, no en el código:
+ * añadir uno es insertar una fila, y la validación del RPC mira esa misma
+ * tabla, así que no hay una lista que mantener en dos sitios.
+ */
+export async function fetchAvatares() {
+  const { data, error } = await supabase.rpc('list_avatares')
+  if (error) throw error
+  return data.map(a => ({
+    id: a.id, nombre: a.nombre, categoria: a.categoria, src: a.src, orden: a.orden,
+  }))
 }

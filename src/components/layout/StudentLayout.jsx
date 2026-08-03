@@ -2,7 +2,6 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { LayoutDashboard, BookOpen, CalendarCheck, BrainCircuit, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
-import { rutaAvatar } from '../../lib/avatares'
 import { useState, useEffect, Suspense } from 'react'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
@@ -178,8 +177,8 @@ function LayoutInner() {
             <div className="relative flex-shrink-0">
               {/* El avatar elegido sustituye a las iniciales; si no hay, se
                   mantienen como respaldo. */}
-              {rutaAvatar(student?.avatar) ? (
-                <img src={rutaAvatar(student.avatar)} alt=""
+              {student?.avatarSrc ? (
+                <img src={student.avatarSrc} alt=""
                   className="w-8 h-8 rounded-full object-cover"
                   style={{ border: '2px solid rgba(255,255,255,.25)' }}/>
               ) : (

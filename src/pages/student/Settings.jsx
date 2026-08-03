@@ -1,14 +1,27 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Brush, Check, Sparkles, UserRound } from 'lucide-react'
 import { useStudentTheme, CARD_COLORS } from '../../context/StudentThemeContext'
 import AppearancePicker from '../../components/ui/AppearancePicker'
 import { useStudentData } from '../../hooks/useStudentData'
-import { AVATARES_POR_GRUPO, rutaAvatar } from '../../lib/avatares'
-import { setStudentAvatar } from '../../lib/supabaseData'
+import { setStudentAvatar, fetchAvatares } from '../../lib/supabaseData'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 
 export default function StudentSettings() {
   const { appearance, setAppearance, cardColor, setCardColor, t, card } = useStudentTheme()
   const { student: s, group: grp, setStudent } = useStudentData()
+
+  /* El catálogo viene de la BD: añadir avatares es insertar filas, sin tocar
+     esta pantalla ni volver a desplegar. */
+  const [avatares, setAvatares] = useState([])
+  const [categoria, setCategoria] = useState('todas')
+  useEffect(() => { fetchAvatares().then(setAvatares).catch(() => {}) }, [])
+
+  const categorias = useMemo(
+    () => [...new Set(avatares.map(a => a.categoria))], [avatares])
+  const visibles = useMemo(
+    () => categoria === 'todas' ? avatares : avatares.filter(a => a.categoria === categoria),
+    [avatares, categoria])
+  const rutaDe = id => avatares.find(a => a.id === id)?.src ?? null
 
   /* El avatar se pinta al instante y se guarda después: esperar a la red para
      mostrar la elección haría que el selector se sintiera lento. */
@@ -49,31 +62,48 @@ export default function StudentSettings() {
           <p className="text-xs font-semibold" style={{ color:'var(--bad)' }}>{errorAvatar}</p>
         )}
 
-        {Object.entries(AVATARES_POR_GRUPO).map(([grupo, items]) => (
-          <div key={grupo}>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-2"
-              style={{ color: t.t3 }}>{grupo}</p>
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2.5">
-              {items.map(a => {
-                const activo = s?.avatar === a.id
-                return (
-                  <button key={a.id} type="button" onClick={() => elegirAvatar(a.id)}
-                    title={a.nombre}
-                    className="flex flex-col items-center gap-1 rounded-xl p-1.5 transition-all active:scale-95"
-                    style={{
-                      background: activo ? t.softBg : 'transparent',
-                      border: activo ? `2px solid ${t.accent}` : '1px solid transparent',
-                    }}>
-                    <img src={rutaAvatar(a.id)} alt={a.nombre}
-                      className="w-full aspect-square rounded-full"/>
-                    <span className="text-[9px] font-semibold leading-none truncate w-full text-center"
-                      style={{ color: activo ? t.t1 : t.t3 }}>{a.nombre}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ))}
+        {/* Filtro por categoría: con el catálogo lleno, mostrarlo entero de
+            golpe obliga a recorrerlo todo para encontrar uno. */}
+        <div className="flex gap-1.5 flex-wrap">
+          {[{ id:'todas', nombre:`Todos (${avatares.length})` },
+            ...categorias.map(c => ({ id:c, nombre:c }))].map(c => {
+            const activo = categoria === c.id
+            return (
+              <button key={c.id} type="button" onClick={() => setCategoria(c.id)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                style={{
+                  background: activo ? t.accent : t.softBg,
+                  color: activo ? '#ffffff' : t.t2,
+                  border: `1px solid ${activo ? t.accent : t.cardBorder}`,
+                }}>
+                {c.nombre}
+              </button>
+            )
+          })}
+        </div>
+
+        <ProgressiveList items={visibles}
+          className="grid grid-cols-4 sm:grid-cols-7 gap-2.5"
+          sizes={{ mobile: 8, tablet: 14, desktop: 21 }}
+          emptyLabel="No hay avatares en esta categoría.">
+          {a => {
+            const activo = s?.avatar === a.id
+            return (
+              <button key={a.id} type="button" onClick={() => elegirAvatar(a.id)}
+                title={a.nombre}
+                className="flex flex-col items-center gap-1 rounded-xl p-1.5 transition-all active:scale-95"
+                style={{
+                  background: activo ? t.softBg : 'transparent',
+                  border: activo ? `2px solid ${t.accent}` : '1px solid transparent',
+                }}>
+                <img src={a.src} alt={a.nombre} loading="lazy"
+                  className="w-full aspect-square rounded-full object-cover"/>
+                <span className="text-[9px] font-semibold leading-none truncate w-full text-center"
+                  style={{ color: activo ? t.t1 : t.t3 }}>{a.nombre}</span>
+              </button>
+            )
+          }}
+        </ProgressiveList>
       </div>
 
       {/* ── Color de la tarjeta de presentación ────────────────── */}

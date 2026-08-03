@@ -193,7 +193,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats — el pill traduce el dato a un juicio rápido en vez de repetirlo */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+      <div data-kpi-grid className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4">
         <KpiCard icon={Users} label="Total Alumnos" tone="neutral"
           value={filteredStudents.length}
           sub={`${selectedGroups.length} grupo(s) activo(s)`}

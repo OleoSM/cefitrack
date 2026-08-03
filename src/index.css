@@ -475,6 +475,16 @@
 }
 [data-datatable] [data-fila]:hover { background: var(--soft-bg) !important; }
 
+/* Objetivo táctil: en móvil la fila crece a 52 px. 46 px es cómodo con ratón
+   pero justo para el dedo. */
+@media (max-width: 639px) {
+  [data-datatable] [data-fila] { min-height: 52px; }
+
+  /* Rejilla de indicadores a dos columnas. Si el total es impar, la última
+     ocupa el ancho completo en vez de dejar un hueco a su lado. */
+  [data-kpi-grid] > *:last-child:nth-child(odd) { grid-column: span 2; }
+}
+
 /* Mismo rayado para las tablas nativas (portal del alumno, hoja de registro). */
 table tbody tr:nth-of-type(even) {
   background: color-mix(in srgb, var(--accent) 5%, var(--card-bg));

@@ -55,7 +55,12 @@ export default function KpiCard({
   return (
     <Root
       onClick={onClick}
-      className={`relative overflow-hidden rounded-2xl p-5 text-left w-full
+      /* En móvil la tarjeta baja de 216 px a 100 px. No es la de escritorio
+         encogida: se eliminan el subtítulo, el pill y el birrete, y el icono y
+         el dato bajan de 44/36 px a 28/28. Reducirlo todo proporcionalmente
+         habría conservado el ruido y perdido legibilidad. */
+      className={`relative overflow-hidden rounded-2xl p-3 sm:p-5 text-left w-full
+                  h-[100px] sm:h-auto flex flex-col justify-center sm:block
                   transition-transform duration-200 ${onClick ? 'active:scale-[.99] hover:-translate-y-0.5' : ''} ${className}`}
       style={{
         // Color plano: el degradado diagonal aclaraba una esquina y oscurecía
@@ -64,32 +69,33 @@ export default function KpiCard({
         boxShadow: '0 1px 3px rgba(15,23,42,.14), 0 6px 16px rgba(15,23,42,.12)',
       }}>
 
-      <Birrete color="rgba(255,255,255,.16)" />
-
-      {/* Destellos sobre el birrete, como en la referencia */}
-      <svg viewBox="0 0 40 40" className="absolute right-[86px] bottom-[74px] w-7 h-7 pointer-events-none"
-        fill="none" stroke={ORO} strokeWidth="3.5" strokeLinecap="round" aria-hidden="true">
-        <path d="M20 6 v9" /><path d="M7 13 l6 6" /><path d="M33 13 l-6 6" />
-      </svg>
-
-      <div className="relative flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-          style={{ background:'#ffffff', boxShadow:'0 2px 8px rgba(0,0,0,.18)' }}>
-          {Icon && <Icon size={21} style={{ color: accent }} />}
-        </div>
-        {onClick && <ArrowUpRight size={18} style={{ color:'rgba(255,255,255,.75)' }} />}
+      {/* Adorno: sólo desde sm. En 100 px de alto competiría con el dato. */}
+      <div className="hidden sm:block">
+        <Birrete color="rgba(255,255,255,.16)" />
+        <svg viewBox="0 0 40 40" className="absolute right-[86px] bottom-[74px] w-7 h-7 pointer-events-none"
+          fill="none" stroke={ORO} strokeWidth="3.5" strokeLinecap="round" aria-hidden="true">
+          <path d="M20 6 v9" /><path d="M7 13 l6 6" /><path d="M33 13 l-6 6" />
+        </svg>
       </div>
 
-      <p className="relative text-4xl font-bold mt-4 leading-none tracking-tight text-white">
+      <div className="relative flex items-start justify-between">
+        <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-lg sm:rounded-2xl flex items-center justify-center flex-shrink-0"
+          style={{ background:'#ffffff', boxShadow:'0 2px 8px rgba(0,0,0,.18)' }}>
+          {Icon && <Icon className="w-4 h-4 sm:w-[21px] sm:h-[21px]" style={{ color: accent }} />}
+        </div>
+        {onClick && <ArrowUpRight className="w-4 h-4 sm:w-[18px] sm:h-[18px]" style={{ color:'rgba(255,255,255,.75)' }} />}
+      </div>
+
+      <p className="relative text-[28px] sm:text-4xl font-bold mt-1.5 sm:mt-4 leading-none tracking-tight text-white">
         {value}
       </p>
-      <p className="relative text-sm font-semibold mt-1.5 text-white">{label}</p>
+      <p className="relative text-[11px] sm:text-sm font-semibold mt-0.5 sm:mt-1.5 text-white leading-tight">{label}</p>
       {sub && (
-        <p className="relative text-xs mt-0.5" style={{ color:'rgba(255,255,255,.72)' }}>{sub}</p>
+        <p className="relative hidden sm:block text-xs mt-0.5" style={{ color:'rgba(255,255,255,.72)' }}>{sub}</p>
       )}
 
       {pill && (
-        <span className="relative inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs font-bold"
+        <span className="relative hidden sm:inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs font-bold"
           style={{ background: ORO, color:'#3B2A08' }}>
           {pill.icon && <pill.icon size={12} />}
           {pill.text}

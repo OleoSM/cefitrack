@@ -255,7 +255,7 @@ export default function GroupShaderCard({
           tabIndex={onClick ? 0 : undefined}
           onClick={onClick}
           onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
-          className={`flex items-center gap-3 sm:gap-4 p-4 sm:p-5 ${onClick ? 'cursor-pointer select-none' : ''}`}>
+          className={`flex items-center gap-3 sm:gap-4 p-3 sm:p-5 ${onClick ? 'cursor-pointer select-none' : ''}`}>
 
           {/* Franja de acento. En claro ya la dibuja el fondo a todo lo alto. */}
           {!isLight && (
@@ -264,7 +264,7 @@ export default function GroupShaderCard({
           )}
 
           {/* Avatar */}
-          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-base sm:text-lg flex-shrink-0"
             style={{
               background: isLight ? 'rgba(255,255,255,.18)' : accent,
               border: isLight ? '1px solid rgba(255,255,255,.35)' : 'none',
@@ -311,7 +311,7 @@ export default function GroupShaderCard({
         </div>
 
         {footer && (
-          <div className="px-4 sm:px-5 pb-4 sm:pb-5">{footer}</div>
+          <div className="px-3 sm:px-5 pb-3 sm:pb-5">{footer}</div>
         )}
       </div>
 

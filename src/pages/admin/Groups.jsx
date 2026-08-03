@@ -252,7 +252,7 @@ export default function Groups() {
       )}
 
       {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div data-kpi-grid className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
         <KpiCard icon={BookOpen} label="Total Grupos" tone="neutral" value={filteredGroups.length}
           sub={sucursal === 'todas' ? 'Todas las sucursales' : `Sucursal ${sucursal}`} />
         <KpiCard icon={Users} label="Total Alumnos" tone="info" value={filteredStudents.length}
@@ -289,25 +289,37 @@ export default function Groups() {
               footer={
                 <>
                   {/* Metrics */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 mb-4"
+                  <div className="flex sm:grid sm:grid-cols-2 items-center gap-4 sm:gap-3 pt-2.5 mb-2.5 sm:pt-4 sm:mb-4"
                     style={{ borderTop:'1px solid var(--divider)' }}>
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color:'var(--t3)' }}>
-                        Promedio del grupo
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-0 sm:mb-1.5" style={{ color:'var(--t3)' }}>
+                        <span className="sm:hidden">Prom.</span>
+                        <span className="hidden sm:inline">Promedio del grupo</span>
                       </p>
-                      <MetricBar value={stats.avgGrade} max={10} thresholds={[8.5, 7]} />
+                      <div className="hidden sm:block">
+                        <MetricBar value={stats.avgGrade} max={10} thresholds={[8.5, 7]} />
+                      </div>
+                      <p className="sm:hidden text-base font-bold tabular-nums leading-none" style={{ color:'var(--t1)' }}>
+                        {stats.avgGrade ?? '—'}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color:'var(--t3)' }}>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1 sm:mb-1.5" style={{ color:'var(--t3)' }}>
                         Asistencia
                       </p>
-                      <MetricBar value={stats.attendanceRate} max={100} suffix="%" thresholds={[90, 80]} />
+                      <div className="hidden sm:block">
+                        <MetricBar value={stats.attendanceRate} max={100} suffix="%" thresholds={[90, 80]} />
+                      </div>
+                      <p className="sm:hidden text-base font-bold tabular-nums leading-none" style={{ color:'var(--t1)' }}>
+                        {stats.attendanceRate === null || stats.attendanceRate === undefined ? '—' : `${stats.attendanceRate}%`}
+                      </p>
+                      <span className="sm:hidden flex-1"/>
                     </div>
                   </div>
 
                   {/* Avatares + botón */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex -space-x-2 overflow-hidden">
+                  <div className="flex items-center justify-end sm:justify-between gap-3">
+                    <div className="hidden sm:flex -space-x-2 overflow-hidden">
                       {grpStudents.slice(0, 6).map(s => (
                         <div key={s.id}
                           className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
@@ -337,9 +349,11 @@ export default function Groups() {
                           <Icon size={13}/>
                         </button>
                       ))}
+                      {/* En móvil sobra: la tarjeta entera ya navega al grupo,
+                          y repetir la acción cuesta una fila completa. */}
                       <button
                         onClick={e => { e.stopPropagation(); navigate(`/admin/grupos/${g.id}`) }}
-                        className="btn-secondary text-xs py-1.5">
+                        className="btn-secondary text-xs py-1.5 hidden sm:inline-flex">
                         Ver grupo <ArrowRight size={13}/>
                       </button>
                     </div>
@@ -352,7 +366,10 @@ export default function Groups() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="text-base font-bold truncate" style={{ color:'var(--t1)' }}>{g.name}</h3>
-                    <p className="text-sm mt-0.5" style={{ color:'var(--t2)' }}>{g.subject}</p>
+                    <p className="text-sm mt-0.5 truncate" style={{ color:'var(--t2)' }}>
+                      {g.subject}
+                      <span className="sm:hidden" style={{ color:'var(--t3)' }}> · {stats.studentCount} alumnos</span>
+                    </p>
                   </div>
                   {critical > 0 && (
                     <span className="badge bg-red-500/15 text-red-400 border border-red-500/25 flex-shrink-0 text-[11px]">
@@ -360,10 +377,10 @@ export default function Groups() {
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs" style={{ color:'var(--t3)' }}>
-                  {g.schedule && <span className="flex items-center gap-1.5"><Clock size={11}/>{g.schedule}</span>}
-                  {g.room && <span className="flex items-center gap-1.5"><MapPin size={11}/>{g.room}</span>}
-                  <span className="flex items-center gap-1.5"><Users size={11}/>{stats.studentCount} alumnos</span>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 sm:mt-2 text-xs" style={{ color:'var(--t3)' }}>
+                  {g.schedule && <span className="hidden sm:flex items-center gap-1.5"><Clock size={11}/>{g.schedule}</span>}
+                  {g.room && <span className="hidden sm:flex items-center gap-1.5"><MapPin size={11}/>{g.room}</span>}
+                  <span className="hidden sm:flex items-center gap-1.5"><Users size={11}/>{stats.studentCount} alumnos</span>
                 </div>
               </div>
             </GroupShaderCard>

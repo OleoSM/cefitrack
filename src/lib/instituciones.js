@@ -33,3 +33,11 @@ export function tipoDesdeNombre(nombre = '') {
   if (n.startsWith('UAM'))  return 'uam'
   return null
 }
+
+/** Catálogo para selectores. El orden es el de uso real en el centro. */
+export const INSTITUCIONES = [
+  { id: 'unam',   alt: 'UNAM' },
+  { id: 'ipn',    alt: 'IPN' },
+  { id: 'uam',    alt: 'UAM' },
+  { id: 'ecoems', alt: 'ECOEMS' },
+]

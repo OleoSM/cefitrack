@@ -25,6 +25,7 @@ export async function fetchGroups() {
     room: g.room,
     color: g.color,
     sucursal: g.sucursal,
+    institucion: g.institucion,
   }))
 }
 
@@ -91,7 +92,7 @@ export async function fetchGroupById(id) {
   const { data, error } = await supabase.from('groups').select('*').eq('id', id).maybeSingle()
   if (error) throw error
   return data
-    ? { id: data.id, name: data.name, subject: data.subject, schedule: data.schedule, room: data.room, color: data.color, sucursal: data.sucursal }
+    ? { id: data.id, name: data.name, subject: data.subject, schedule: data.schedule, room: data.room, color: data.color, sucursal: data.sucursal, institucion: data.institucion }
     : null
 }
 
@@ -342,7 +343,7 @@ export async function deleteEvaluation(id) {
 
 /* ── Grupos (escritura) ── */
 
-export async function createGroup({ name, subject, schedule = null, room = null, color = '#3b82f6', sucursal = null }) {
+export async function createGroup({ name, subject, schedule = null, room = null, color = '#3b82f6', sucursal = null, institucion = null }) {
   const { data, error } = await supabase.rpc('create_group', {
     p_name: name,
     p_subject: subject,
@@ -350,13 +351,14 @@ export async function createGroup({ name, subject, schedule = null, room = null,
     p_room: room,
     p_color: color,
     p_sucursal: sucursal,
+    p_institucion: institucion,
   })
   if (error) return { ok: false, message: 'No se pudo crear el grupo.' }
   const row = data?.[0]
   return { ok: true, group: row ? { ...row, id: row.id } : null }
 }
 
-export async function updateGroup({ id, name, subject, schedule = null, room = null, color = null, sucursal = null }) {
+export async function updateGroup({ id, name, subject, schedule = null, room = null, color = null, sucursal = null, institucion = null }) {
   const { error } = await supabase.rpc('update_group', {
     p_id: id,
     p_name: name,
@@ -365,6 +367,7 @@ export async function updateGroup({ id, name, subject, schedule = null, room = n
     p_room: room,
     p_color: color,
     p_sucursal: sucursal,
+    p_institucion: institucion,
   })
   if (error) return { ok: false, message: 'No se pudo actualizar el grupo.' }
   return { ok: true }

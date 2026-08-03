@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, ArrowRight, Filter, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, BookOpen, TrendingUp, Star } from 'lucide-react'
+import { Users, Clock, MapPin, ArrowRight, Filter, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, BookOpen, TrendingUp, Star, Ban } from 'lucide-react'
 import {
   fetchGroups, fetchStudents, fetchAttendanceStats,
   computeGroupStats, createGroup, updateGroup, deleteGroup,
@@ -12,6 +12,7 @@ import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import KpiCard from '../../components/ui/KpiCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
+import { logoInstitucion, INSTITUCIONES } from '../../lib/instituciones'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { useAuth } from '../../context/AuthContext'
 
@@ -54,6 +55,7 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
     room:     group?.room ?? '',
     color:    group?.color ?? COLORES[0],
     sucursal: group?.sucursal ?? (sucursales[0] ?? ''),
+    institucion: group?.institucion ?? null,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
@@ -66,6 +68,7 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
       name: form.name, subject: form.subject,
       schedule: form.schedule || null, room: form.room || null,
       color: form.color, sucursal: form.sucursal || null,
+      institucion: form.institucion || null,
     }
     const res = editing
       ? await updateGroup({ id: group.id, ...payload })
@@ -129,6 +132,38 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
                     border: form.color === c ? '2px solid var(--card-border)' : '2px solid transparent',
                   }}/>
               ))}
+            </div>
+          </div>
+
+          {/* Institución a la que apunta el grupo. Se guarda la clave, no la
+              ruta del archivo: el logo es presentación y puede cambiar de
+              formato sin que haya que migrar datos. */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-2"
+              style={{ color:'var(--t3)' }}>Institución</label>
+            <div className="grid grid-cols-5 gap-2">
+              {[{ id:null, alt:'Sin asignar' }, ...INSTITUCIONES].map(inst => {
+                const activo = form.institucion === inst.id
+                const logo = inst.id ? logoInstitucion(inst.id) : null
+                return (
+                  <button key={inst.id ?? 'ninguna'} type="button"
+                    onClick={() => set('institucion', inst.id)}
+                    title={logo?.alt ?? 'Sin asignar'}
+                    className="h-14 rounded-xl flex flex-col items-center justify-center gap-1 p-1.5 transition-all active:scale-95"
+                    style={{
+                      background: activo ? 'var(--soft-bg)' : 'transparent',
+                      border: activo ? '2px solid var(--accent)' : '1px solid var(--card-border)',
+                    }}>
+                    {logo
+                      ? <img src={logo.src} alt={logo.alt} className="max-h-7 max-w-full object-contain"/>
+                      : <Ban size={16} style={{ color:'var(--t4)' }}/>}
+                    <span className="text-[8px] font-semibold leading-none truncate w-full text-center"
+                      style={{ color: activo ? 'var(--t1)' : 'var(--t3)' }}>
+                      {logo?.alt ?? 'Ninguna'}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -365,7 +400,18 @@ export default function Groups() {
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="text-base font-bold truncate" style={{ color:'var(--t1)' }}>{g.name}</h3>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {(() => {
+                        const logo = logoInstitucion(g.institucion)
+                        return logo ? (
+                          <span className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 p-0.5"
+                            style={{ background:'#ffffff' }}>
+                            <img src={logo.src} alt={logo.alt} className="max-w-full max-h-full object-contain"/>
+                          </span>
+                        ) : null
+                      })()}
+                      <h3 className="text-base font-bold truncate" style={{ color:'var(--t1)' }}>{g.name}</h3>
+                    </div>
                     <p className="text-sm mt-0.5 truncate" style={{ color:'var(--t2)' }}>
                       {g.subject}
                       <span className="sm:hidden" style={{ color:'var(--t3)' }}> · {stats.studentCount} alumnos</span>

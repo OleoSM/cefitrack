@@ -1,0 +1,29 @@
+-- Dar de alta o restablecer seguía escribiendo la contraseña sólo en `users`,
+-- pero desde la migración el inicio de sesión lee de `auth.users`: las
+-- credenciales que la pantalla entregaba iban a una tabla que ya nadie
+-- consulta, así que ningún alumno podía entrar con ellas.
+--
+-- `sincronizar_acceso` pasa a ser la ÚNICA puerta por la que atraviesa una
+-- contraseña: escribe en auth.users, profiles y users a la vez, de modo que no
+-- queden dos sitios donde equivocarse. La usan el alta de alumno, el alta de
+-- sub-admin y los dos restablecimientos.
+--
+-- Además se guarda una copia recuperable de la contraseña. bcrypt es
+-- unidireccional, así que sin ella un administrador sólo podía REEMPLAZAR la
+-- contraseña de alguien, nunca recordársela: consultar obligaba a cambiar.
+-- Decisión del equipo, siendo la plataforma interna y generando el centro las
+-- credenciales. CONTRAPARTIDA explícita: quien tenga acceso a esta base puede
+-- leerlas todas. El hash de auth.users sigue siendo la verdad para autenticar;
+-- esta columna es sólo una copia para consulta.
+--
+-- El acceso a esa copia pasa por `ver_credenciales`, con cascadeo jerárquico:
+-- el administrador ve las de cualquiera, el sub-admin las de los alumnos de sus
+-- grupos, y el alumno sólo la suya. La comprobación va dentro de la función y
+-- no en una política porque nadie toca la columna directamente: así hay un
+-- único punto donde se decide quién ve qué.
+--
+-- El contenido íntegro de esta migración se aplicó por el panel de Supabase;
+-- este archivo la deja versionada. Ver las funciones vigentes en la base:
+--   sincronizar_acceso, create_student, create_user_with_password,
+--   reset_password, reset_student_password, ver_credenciales,
+--   ver_credenciales_alumno

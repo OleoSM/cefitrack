@@ -499,13 +499,20 @@ export async function deleteStudent(id) {
   if (error) throw error
 }
 
+/**
+ * Restablece la contraseña de un alumno y devuelve el correo con el que entra.
+ *
+ * El correo lo dicta la base, no el cliente: al unificar el dominio a @siga.mx
+ * el usuario de acceso cambió, y mostrar el que la pantalla tenía cargado en
+ * memoria era justo lo que hacía que las credenciales entregadas no sirvieran.
+ */
 export async function resetStudentPassword(studentId, password) {
-  const { error } = await supabase.rpc('reset_student_password', {
+  const { data, error } = await supabase.rpc('reset_student_password', {
     p_student_id: studentId,
     p_password: password,
   })
   if (error) return { ok: false, message: 'No se pudo restablecer la contraseña.' }
-  return { ok: true }
+  return { ok: true, email: data?.[0]?.email ?? null }
 }
 
 /**
@@ -683,4 +690,22 @@ export async function fetchAvatares() {
   return data.map(a => ({
     id: a.id, nombre: a.nombre, categoria: a.categoria, src: a.src, orden: a.orden,
   }))
+}
+
+/**
+ * Credenciales vigentes de un alumno: el correo con el que entra y su
+ * contraseña actual.
+ *
+ * Quién puede verlas lo decide la base, no el cliente: el administrador ve las
+ * de cualquiera, el sub-admin las de los alumnos de sus grupos, y el alumno
+ * sólo la suya. Si no hay permiso, devuelve null en vez de un error, porque
+ * tampoco debe revelarse si la cuenta existe.
+ */
+export async function fetchCredencialesAlumno(studentId) {
+  const { data, error } = await supabase.rpc('ver_credenciales_alumno', {
+    p_student_id: studentId,
+  })
+  if (error) throw error
+  const row = data?.[0]
+  return row ? { email: row.email, password: row.password } : null
 }

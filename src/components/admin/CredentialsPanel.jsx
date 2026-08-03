@@ -3,7 +3,13 @@ import { useState } from 'react'
 
 /**
  * Muestra las credenciales recién generadas. Es la única oportunidad de verlas:
- * en la BD se guardan cifradas.
+ * la contraseña se guarda con bcrypt, que es unidireccional, y no hay forma de
+ * recuperarla después — sólo de generar otra.
+ *
+ * El correo que llega aquí es el que confirma la base tras crear o restablecer
+ * la cuenta, no el que la pantalla tenga en memoria: son el mismo dato en el
+ * caso normal, pero si difirieran el bueno es el de la base, porque es contra
+ * el que se valida el inicio de sesión.
  */
 export default function CredentialsPanel({ cred, onClose }) {
   const [copied, setCopied] = useState(false)
@@ -30,8 +36,8 @@ export default function CredentialsPanel({ cred, onClose }) {
 
       <div className="mt-3 grid sm:grid-cols-2 gap-3">
         {[
-          { label:'Usuario (correo)', value: cred.usuario },
-          { label:'Contraseña', value: cred.password, mono:true },
+          { label:'Correo — con este se entra', value: cred.usuario, mono:true },
+          { label:'Contraseña', value: cred.password, mono:true, destacar:true },
         ].map(f => (
           <div key={f.label} className="rounded-xl px-3 py-2"
             style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
@@ -39,7 +45,7 @@ export default function CredentialsPanel({ cred, onClose }) {
               {f.label}
             </p>
             <p className={`text-sm mt-0.5 break-all ${f.mono ? 'font-mono font-bold' : ''}`}
-              style={{ color: f.mono ? 'var(--warn)' : 'var(--t2)' }}>
+              style={{ color: f.destacar ? 'var(--warn)' : 'var(--t1)' }}>
               {f.value}
             </p>
           </div>
@@ -48,7 +54,8 @@ export default function CredentialsPanel({ cred, onClose }) {
 
       <div className="flex items-center justify-between gap-3 mt-3">
         <p className="text-[11px]" style={{ color: 'var(--t3)' }}>
-          Anótalas ahora: la contraseña se guarda cifrada y no podrá consultarse después.
+          Anótalas ahora: la contraseña se guarda cifrada y no podrá consultarse
+          después, sólo generarse de nuevo. Se entra con el correo, no con el nombre.
         </p>
         <button onClick={copy} className="btn-secondary text-xs py-1.5 flex-shrink-0">
           {copied ? <><Check size={12}/> Copiado</> : <><Copy size={12}/> Copiar</>}

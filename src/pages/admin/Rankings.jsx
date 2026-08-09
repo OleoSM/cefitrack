@@ -164,8 +164,8 @@ export default function Rankings() {
       <DataTable
         columns={[
           { key:'pos',    label:'',          className:'w-10' },
-          { key:'alumno', label:'Alumno',     className:'flex-grow min-w-[160px]' },
-          { key:'score',  label:'Score',      className:'w-24' },
+          { key:'alumno', label:'Alumno',     className:'flex-grow min-w-[110px] sm:min-w-[160px]' },
+          { key:'score',  label:'Score',      className:'w-16 sm:w-24' },
           { key:'grade',  label:'Promedio',   className:'w-24 hidden sm:flex' },
           { key:'att',    label:'Asistencia', className:'w-24 hidden sm:flex' },
           { key:'tasks',  label:'Tareas',     className:'w-24 hidden md:flex' },

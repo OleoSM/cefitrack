@@ -19,7 +19,7 @@ import CredentialsPanel from '../../components/admin/CredentialsPanel'
 
 const COLUMNS = [
   { key:'rank',   label:'#',          className:'w-8' },
-  { key:'name',   label:'Alumno',     className:'flex-grow min-w-[140px]' },
+  { key:'name',   label:'Alumno',     className:'flex-grow min-w-[110px] sm:min-w-[140px]' },
   { key:'att',    label:'Asistencia', className:'w-32 hidden sm:flex' },
   { key:'grade',  label:'Promedio',   className:'w-16 sm:w-20' },
   { key:'tasks',  label:'Tareas',     className:'w-28 hidden md:flex' },

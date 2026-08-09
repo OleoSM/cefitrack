@@ -47,11 +47,11 @@ const METODO_ICON = {
 }
 
 const COLUMNS = [
-  { key: 'alumno',  label: 'Alumno',   className: 'flex-grow min-w-[130px]' },
+  { key: 'alumno',  label: 'Alumno',   className: 'flex-grow min-w-[110px] sm:min-w-[130px]' },
   { key: 'grupo',   label: 'Grupo',    className: 'w-28 hidden lg:flex' },
   { key: 'total',   label: 'Total',    className: 'w-24 hidden xl:flex' },
   { key: 'pagado',  label: 'Pagado',   className: 'w-28 hidden sm:flex' },
-  { key: 'avance',  label: 'Avance',   className: 'w-28 sm:w-40' },
+  { key: 'avance',  label: 'Avance',   className: 'w-24 sm:w-40' },
   { key: 'formas',  label: 'Formas',   className: 'w-24 hidden xl:flex' },
   { key: 'estado',  label: 'Estado',   className: 'w-28 hidden md:flex' },
   { key: 'accion',  label: '',         className: 'w-9 flex justify-end' },

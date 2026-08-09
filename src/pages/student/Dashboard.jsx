@@ -490,7 +490,7 @@ export default function StudentDashboard() {
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[480px]">
+          <table className="w-full min-w-0 sm:min-w-[480px]">
             <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
               <tr>
                 <th className="table-header">Materia</th>

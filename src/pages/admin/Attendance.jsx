@@ -975,7 +975,10 @@ export default function Attendance() {
               </div>
             ) : (
               <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[420px]">
+              {/* Sin ancho minimo en telefono: forzaba barrido horizontal desde el
+                  primer pixel contra los ~379 px utiles. De `sm` en adelante se
+                  recupera, que es donde el minimo si aporta. */}
+              <table className="w-full min-w-0 sm:min-w-[420px]">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--divider)' }}>
                     <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest w-10"

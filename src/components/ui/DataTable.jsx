@@ -53,8 +53,14 @@ export const DataTable = forwardRef(function DataTable(
         */}
         <div className="min-w-full">
 
-          {/* Encabezado */}
-          <div className="flex items-center px-5 py-2.5 sticky top-0 z-10"
+          {/* Encabezado.
+              `gap`: las celdas iban pegadas una junto a otra, sin separación
+              ninguna. En escritorio sobra ancho y no se nota; en un teléfono
+              el contenido de una columna acaba rozando el de la siguiente
+              —el caso reportado: la barra de avance y su porcentaje contra la
+              columna vecina—. Se separa menos en móvil que en escritorio,
+              porque ahí cada píxel cuenta para que las columnas quepan. */}
+          <div className="flex items-center gap-2 sm:gap-3 px-5 py-2.5 sticky top-0 z-10"
             style={{
               background: 'var(--header-bg)',
               backdropFilter: 'blur(12px)',
@@ -102,7 +108,7 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
       onClick={onClick}
       onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
       data-fila=""
-      className={`flex items-center px-5 py-2.5 min-h-[46px] transition-colors duration-150 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`flex items-center gap-2 sm:gap-3 px-5 py-2.5 min-h-[46px] transition-colors duration-150 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
       style={{ borderBottom:'1px solid var(--divider)', ...rowStyle }}
       /* `filter: brightness()` está prohibido por la regla de color: sobre
          fondo claro aclara la fila hasta el blanco. El realce es el fondo
@@ -167,8 +173,11 @@ export function DataTableBadge({ label, dot, bg, color, border }) {
 export function DataTableBar({ value, max = 100, color, label }) {
   const pct = Math.min(100, (value / max) * 100)
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-14 h-1.5 rounded-full overflow-hidden flex-shrink-0"
+    /* La barra encoge en móvil: con 56 px fijos, más el hueco y el
+       porcentaje, el contenido llenaba casi por completo su columna de
+       112 px y el número quedaba rozando la columna de al lado. */
+    <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="w-10 sm:w-14 h-1.5 rounded-full overflow-hidden flex-shrink-0"
         style={{ background:'var(--soft-bg)' }}>
         <div className="h-full rounded-full transition-all" style={{ width:`${pct}%`, background: color }} />
       </div>

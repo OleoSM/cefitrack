@@ -141,10 +141,10 @@ function Modal({ students, onClose, onSaved }) {
 
 /* ── Columnas ── */
 const COLUMNS = [
-  { key:'alumno',  label:'Alumno',       className:'flex-grow min-w-[180px]' },
+  { key:'alumno',  label:'Alumno',       className:'flex-grow min-w-[120px] sm:min-w-[180px]' },
   { key:'materia', label:'Materia',       className:'w-36 hidden sm:flex' },
   { key:'tipo',    label:'Tipo',          className:'w-36 hidden md:flex' },
-  { key:'cal',     label:'Calificación',  className:'w-28' },
+  { key:'cal',     label:'Calificación',  className:'w-20 sm:w-28' },
   { key:'periodo', label:'Periodo',       className:'w-28 hidden lg:flex' },
   { key:'fecha',   label:'Fecha',         className:'w-24 hidden lg:flex' },
   { key:'acciones',label:'',              className:'w-10' },

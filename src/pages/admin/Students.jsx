@@ -20,7 +20,7 @@ const attColor   = r => r >= 90 ? 'var(--good)' : r >= 75 ? 'var(--info)' : 'var
 const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
 const COLUMNS = [
-  { key:'name',    label:'Alumno',     className:'flex-grow min-w-[140px]' },
+  { key:'name',    label:'Alumno',     className:'flex-grow min-w-[110px] sm:min-w-[140px]' },
   { key:'group',   label:'Grupo',      className:'w-28 hidden sm:flex' },
   { key:'att',     label:'Asistencia', className:'w-36 hidden lg:flex' },
   { key:'grade',   label:'Promedio',   className:'w-16 sm:w-24' },

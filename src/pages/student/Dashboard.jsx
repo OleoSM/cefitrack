@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer,
 } from 'recharts'
 import {
-  BookOpen, CalendarCheck, BrainCircuit, ArrowRight, Target, Zap, Trophy, Info,
+  BookOpen, CalendarCheck, ArrowRight, Target, Zap, Trophy, Info,
 } from 'lucide-react'
 import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
 import { logoInstitucion, tipoDesdeNombre, estiloLogo } from '../../lib/instituciones'
@@ -238,8 +238,6 @@ export default function StudentDashboard() {
               ? `${Math.round(s.assignmentsDone / s.assignmentsTotal * 100)}% completado`
               : 'Sin tareas asignadas',
             color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
-          { icon: BrainCircuit,  label: 'Reporte IA',        value: 'Ver',
-            sub: 'Análisis personalizado', color: 'bg-purple-600', go: () => navigate('/student/reporte-ia') },
         ].map(({ icon: Icon, label, value, sub, color, go }) => (
           <button key={label} onClick={go}
             className="stat-card text-left transition-all group w-full flex flex-col">

@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, Cell
 } from 'recharts'
 import { getStatusConfig } from '../../data/mockData'
+import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { fetchStudents, fetchGroups, fetchAttendanceStats } from '../../lib/supabaseData'
 import { DataTable, DataTableRow, DataTableAvatar } from '../../components/ui/DataTable'
 import ProgressiveList from '../../components/ui/ProgressiveList'

@@ -3,9 +3,9 @@ import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { createPortal } from 'react-dom'
 import {
   Plus, Minus, Trash2, Check, ChevronDown, ChevronRight,
-  UserPlus, X, GraduationCap, Maximize2, Minimize2,
-  RotateCcw, ArrowLeft, Calendar, Shield, Users, Clock,
-  Contrast, Save, AlertTriangle, RotateCw, Download,
+  UserPlus, X, GraduationCap, Maximize2, SlidersHorizontal,
+  ArrowLeft, Calendar, Shield, Users, Clock,
+  Save, AlertTriangle, RotateCw, Download,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
@@ -15,6 +15,8 @@ import {
 } from '../../lib/supabaseData'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { useAdminTheme } from '../../context/AdminThemeContext'
 import { folioEX, folioEXD } from '../../lib/folios'
 
@@ -572,6 +574,120 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
 // TABLA DE REGISTRO
 // ─────────────────────────────────────────────────────────────────────────────
 
+/* ── Menú de utilidades ───────────────────────────────────────────────────────
+   La barra de la hoja acumulaba diez mandos en fila. Los que no se usan
+   mientras se captura —plegar, reiniciar vistas, exportar y ahora la fijación
+   de columnas— se recogen aquí detrás de un botón.
+
+   No reutiliza `ui/Dropdown` a propósito: aquél sustituye a un <select>, sirve
+   una lista de valores y se pinta con el tema del portal del ALUMNO; este panel
+   lleva contenido libre y va en el panel de administración. Comparten aspecto a
+   través de las variables de tema, no del componente. */
+function MenuUtilidades({ children }) {
+  const [abierto, setAbierto] = useState(false)
+  const [caja, setCaja] = useState(null)
+  const botonRef = useRef(null)
+  const panelRef = useRef(null)
+
+  /* El panel se dibuja en un portal con coordenadas calculadas y recortadas al
+     viewport, no como `absolute` colgando del botón. Tres motivos, y los tres
+     se daban aquí:
+       · la barra envuelve en varias filas, así que el botón acaba en cualquier
+         sitio y un panel anclado a su borde derecho se salía por la izquierda
+         en pantalla de teléfono;
+       · en pantalla completa el panel vive dentro de una barra con
+         `backdrop-filter`, que crea bloque contenedor para los descendientes
+         `fixed` y desplazaría cualquier posicionamiento respecto al viewport;
+       · si el botón queda en la mitad baja, el menú se abre hacia arriba. */
+  const medir = useCallback(() => {
+    const b = botonRef.current?.getBoundingClientRect()
+    if (!b) return
+    const vw = window.innerWidth, vh = window.innerHeight
+    const M = 12                                   // aire contra los bordes
+    const ancho = Math.min(268, vw - M * 2)
+    const izq = Math.min(Math.max(M, b.right - ancho), vw - ancho - M)
+
+    const huecoAbajo  = vh - b.bottom - M - 6
+    const huecoArriba = b.top - M - 6
+    const haciaArriba = huecoAbajo < 240 && huecoArriba > huecoAbajo
+
+    setCaja(haciaArriba
+      ? { left: izq, bottom: vh - b.top + 6, width: ancho, maxHeight: huecoArriba }
+      : { left: izq, top: b.bottom + 6,      width: ancho, maxHeight: huecoAbajo })
+  }, [])
+
+  const alternar = () => {
+    if (!abierto) medir()
+    setAbierto(a => !a)
+  }
+
+  useEffect(() => {
+    if (!abierto) return
+    const fuera = e => {
+      if (botonRef.current?.contains(e.target)) return
+      if (panelRef.current?.contains(e.target)) return
+      setAbierto(false)
+    }
+    const escape = e => { if (e.key === 'Escape') setAbierto(false) }
+    // El panel va en el body: si la página o la hoja se desplazan por debajo,
+    // hay que reubicarlo o quedaría flotando lejos de su botón.
+    document.addEventListener('mousedown', fuera)
+    document.addEventListener('keydown', escape)
+    window.addEventListener('resize', medir)
+    window.addEventListener('scroll', medir, true)
+    return () => {
+      document.removeEventListener('mousedown', fuera)
+      document.removeEventListener('keydown', escape)
+      window.removeEventListener('resize', medir)
+      window.removeEventListener('scroll', medir, true)
+    }
+  }, [abierto, medir])
+
+  return (
+    <>
+      <button ref={botonRef} type="button" onClick={alternar}
+        aria-haspopup="menu" aria-expanded={abierto}
+        className="btn-secondary text-xs py-2 gap-1.5">
+        <SlidersHorizontal size={13}/> Utilidades
+        <ChevronDown size={12} style={{ transform: abierto ? 'rotate(180deg)' : 'none', transition:'transform .2s' }}/>
+      </button>
+
+      {abierto && caja && createPortal(
+        <div ref={panelRef} role="menu"
+          className="rounded-xl py-1.5 animate-fade-in"
+          style={{ position:'fixed', zIndex:10000, overflowY:'auto', overscrollBehavior:'contain',
+            background:'var(--panel-bg)', border:'1px solid var(--card-border)',
+            boxShadow:'0 18px 48px rgba(0,0,0,.30)', ...caja }}>
+          {children({ cerrar: () => setAbierto(false) })}
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+/* Fila de acción dentro del menú. */
+function ItemMenu({ icon: Icono, label, onClick }) {
+  return (
+    <button type="button" role="menuitem" onClick={onClick}
+      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-left transition-colors"
+      style={{ color:'var(--t2)' }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-bg)'; e.currentTarget.style.color = 'var(--t1)' }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--t2)' }}>
+      <Icono size={13} className="flex-shrink-0"/>{label}
+    </button>
+  )
+}
+
+const SeparadorMenu = () => (
+  <div className="my-1.5" style={{ borderTop:'1px solid var(--divider)' }}/>
+)
+
+const TituloMenu = ({ children }) => (
+  <p className="px-3.5 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-widest"
+    style={{ color:'var(--t3)' }}>{children}</p>
+)
+
 function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   /* Esta hoja es la fuente maestra de calificaciones: columnas, celdas y datos
      administrativos viven en la BD. Antes todo estaba en localStorage, así que
@@ -605,6 +721,12 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       ? { docs: true, sims: true, online: true }
       : {})
   const [isFullscreen,  setIsFullscreen]  = useState(false)
+  /* Fijar el nombre a la izquierda ayuda a no perder de vista de quién es la
+     fila, pero se lleva un tercio del ancho. Arranca SUELTO: pesa más recuperar
+     ese ancho que conservar el nombre a la vista, y quien lo prefiera lo activa
+     en Utilidades. Gobierna todo el bloque congelado —# y Alumno—: soltar sólo
+     uno de los dos dejaría el ordinal flotando sobre el nombre. */
+  const [fijarAlumno,   setFijarAlumno]   = useState(false)
   const [attModal,      setAttModal]      = useState(null)
   const [addColModal,   setAddColModal]   = useState(null)
   const [addSubjModal,  setAddSubjModal]  = useState(false)
@@ -619,6 +741,76 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   // Antes era un interruptor manual con paleta propia, ajena al sistema de
   // tokens. Ahora lo determina la identidad activa: IPN y UNAM son claras.
   const hcMode = !!adminT?.light
+
+  /* ── Adaptación a la pantalla ────────────────────────────────────
+     La hoja congela las columnas # y Alumno. Con 44 + 210 px congelados,
+     en un teléfono de 411 px no quedaba sitio para las celdas que se van a
+     rellenar: el bloque fijo tapaba la zona de registro y la hoja no se
+     podía usar. Una tableta en vertical sufre lo mismo en menor grado, así
+     que el corte es el de escritorio (1024) —el mismo que ya usa esta hoja
+     para plegar secciones al arrancar—, con el nombre más estrecho todavía
+     en teléfono. */
+  const { isMobile, isDesktop } = useBreakpoint()
+  const esCompacto = !isDesktop
+
+  /* Puntero grueso = dedo. Es la señal estándar para distinguir un teléfono o
+     una tableta de un portátil, y no cambia al girar el aparato, al revés que
+     el ancho. Sólo ahí se toca la pantalla completa nativa y la orientación:
+     en un monitor el overlay ya lo ocupa todo y fijar el apaisado no significa
+     nada. */
+  const esTactil = useMemo(
+    () => window.matchMedia?.('(pointer: coarse)').matches ?? false, [])
+  const [avisoGirar, setAvisoGirar] = useState(false)
+
+  /* Pantalla completa en teléfono y tableta: además del overlay se pide la
+     pantalla completa nativa y se fija el apaisado, que es lo único que hace
+     caber cuarenta columnas. Si el navegador no deja fijarla —iOS no lo
+     permite— se pide al usuario que gire, en vez de rotar la hoja por CSS:
+     con una rotación falsa el teclado sale desalineado, y ésta es justo la
+     pantalla donde más se teclea. */
+  useEffect(() => {
+    if (!esTactil) return
+    let cancelado = false
+    ;(async () => {
+      if (isFullscreen) {
+        try { await document.documentElement.requestFullscreen?.() } catch { /* iOS Safari no lo permite fuera de <video> */ }
+        try { await window.screen?.orientation?.lock?.('landscape') }
+        catch { if (!cancelado) setAvisoGirar(true) }
+      } else {
+        try { window.screen?.orientation?.unlock?.() } catch { /* no soportado */ }
+        if (document.fullscreenElement) { try { await document.exitFullscreen() } catch { /* ignorado */ } }
+        if (!cancelado) setAvisoGirar(false)
+      }
+    })()
+    return () => { cancelado = true }
+  }, [isFullscreen, esTactil])
+
+  /* Salir con Esc o con el botón "atrás" del sistema deja la pantalla completa
+     nativa pero no nuestro overlay; hay que sincronizarlos. Sólo en táctil,
+     que es donde llegamos a pedirla. */
+  useEffect(() => {
+    if (!esTactil) return
+    const alCambiarFS = () => { if (!document.fullscreenElement) setIsFullscreen(false) }
+    document.addEventListener('fullscreenchange', alCambiarFS)
+    return () => document.removeEventListener('fullscreenchange', alCambiarFS)
+  }, [esTactil])
+
+  /* Si se pidió girar a mano, el aviso se retira solo al girar. */
+  useEffect(() => {
+    if (!avisoGirar) return
+    const mq = window.matchMedia('(orientation: landscape)')
+    const revisar = () => { if (mq.matches) setAvisoGirar(false) }
+    revisar()
+    mq.addEventListener('change', revisar)
+    return () => mq.removeEventListener('change', revisar)
+  }, [avisoGirar])
+
+  /* Salir de la hoja con la pantalla completa puesta dejaría el aparato
+     bloqueado en apaisado para el resto de la aplicación. */
+  useEffect(() => () => {
+    try { window.screen?.orientation?.unlock?.() } catch { /* no soportado */ }
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+  }, [])
 
   /* ── Carga de la hoja desde la BD ───────────────────────────── */
   const cargarHoja = useCallback(async () => {
@@ -731,6 +923,29 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const resetCollapsed = () => setCollapsed({})
   const plegarTodo = () => setCollapsed({ docs: true, sims: true, online: true,
     ...Object.fromEntries(subjects.map(x => [x.id, true])) })
+
+  /* Las secciones de la hoja, para el selector de Utilidades. Asistencias no
+     está: ocupa una columna y no se pliega. */
+  const secciones = useMemo(() => [
+    { id:'docs',   label:'Documentos' },
+    ...subjects.map(s => ({ id:s.id, label:s.name })),
+    { id:'sims',   label:'Simulacros' },
+    { id:'online', label:'Exámenes digitales' },
+  ], [subjects])
+
+  /* En vertical la hoja abría con las materias desplegadas: cuarenta columnas
+     que obligaban a un barrido horizontal largo antes de encontrar nada. Fuera
+     de escritorio arranca con TODO plegado, y se abre la sección que se va a
+     capturar desde Utilidades o tocando su cabecera. Se hace una sola vez, al
+     llegar las materias: replegar cada vez que alguien gira el aparato le
+     cerraría secciones que acaba de abrir a mano. */
+  const plegadoInicial = useRef(false)
+  useEffect(() => {
+    if (plegadoInicial.current || isDesktop || subjects.length === 0) return
+    plegadoInicial.current = true
+    setCollapsed({ docs: true, sims: true, online: true,
+      ...Object.fromEntries(subjects.map(x => [x.id, true])) })
+  }, [isDesktop, subjects])
 
   /* El padrón es el del grupo. Antes se podían agregar alumnos aquí con un id
      inventado (`r<timestamp>`), y quedaban sólo en la hoja: no tenían cuenta,
@@ -846,21 +1061,33 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   }, [students,attendance,cells,simCount])
 
   // ── Column widths & sticky (SOLO # y Alumno) ─────────────────────────────────
-  const W = { num:44, name:210, pago:114, gar:92 }
-  const L = { num:0, name:W.num }   // ← only # and Alumno are sticky
+  /* En pantalla chica el ordinal se retira —es un número de fila, el dato menos
+     útil de la hoja— y el nombre se estrecha. Así el bloque congelado baja de
+     254 px a 132, y en un teléfono de 411 px quedan ~247 px de zona de registro
+     en vez de ~125: la diferencia entre ver una columna y ver tres. */
+  const W = isMobile
+    ? { num:0,  name:132, pago:96,  gar:84 }   // teléfono
+    : esCompacto
+      ? { num:0,  name:168, pago:104, gar:88 } // tableta
+      : { num:44, name:210, pago:114, gar:92 } // portátil y monitor
+  const L = { num:0, name: esCompacto ? 0 : W.num }   // ← only # and Alumno are sticky
 
   const solidBg = hcMode ? HC.solidBg : SOLID_BG
 
   const thStickyStyle = (left, extra={}) => ({
-    position:'sticky', left, zIndex:4,
+    ...(fijarAlumno ? { position:'sticky', left, zIndex:4 } : null),
     background: solidBg,
     borderBottom: hcMode ? '2px solid #1e293b' : '1px solid rgba(255,255,255,.09)',
     ...extra,
   })
 
   // ── Render helper: toolbar ───────────────────────────────────────────────────
+  /* Pantalla completa sobre pantalla chica: ahí cada fila que envuelve la barra
+     se resta de la hoja, así que se deja sólo lo que se usa mientras se captura. */
+  const compactoFS = isFullscreen && esCompacto
+
   const toolbar = (
-    <div className="flex flex-wrap items-center gap-2 mb-4">
+    <div className={clsx('flex flex-wrap items-center gap-2', compactoFS ? 'mb-2' : 'mb-4')}>
       {/* Back (no fullscreen) */}
       {!isFullscreen && (
         <button onClick={handleBack} className="btn-secondary text-xs py-2 gap-1.5">
@@ -878,9 +1105,13 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         <span className="text-xs" style={{ color:'rgba(255,255,255,.80)' }}>{group.subject}</span>
       </div>
 
-      {/* Stats */}
+      {/* Stats. En pantalla completa sobre pantalla chica se retiran: son
+          informativos, y con el chip de grupo y seis botones la barra envolvía
+          en dos filas: ~90 px de los 411 de alto de un teléfono apaisado, justo
+          en el modo que se abre para ver MÁS hoja. */}
       {[{v:stats.total,l:'Total',c:'var(--t2)'},{v:stats.conGar,l:'Con garantía',c:'var(--good)'},{v:stats.sinGar,l:'Sin garantía',c:'var(--bad)'}].map(({v,l,c})=>(
-        <div key={l} className="text-center px-3 py-1 rounded-lg" style={{ background: 'var(--card-bg)' }}>
+        <div key={l} className={clsx('text-center px-3 py-1 rounded-lg', compactoFS && 'hidden')}
+          style={{ background: 'var(--card-bg)' }}>
           <span className="text-base font-black mr-1" style={{ color:c }}>{v}</span>
           <span className="text-[10px]" style={{ color: 'var(--t3)' }}>{l}</span>
         </div>
@@ -895,27 +1126,79 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       <button onClick={() => setAddSubjModal(true)} className="btn-secondary text-xs py-2 gap-1.5">
         <Plus size={13}/> Materia
       </button>
-      <button onClick={plegarTodo} className="btn-secondary text-xs py-2 gap-1.5 sm:hidden" title="Plegar todas las secciones">
-        <ChevronRight size={13}/> Plegar
-      </button>
-      <button onClick={resetCollapsed} className="btn-secondary text-xs py-2 gap-1.5" title="Reiniciar vistas">
-        <RotateCcw size={12}/> Reiniciar vistas
-      </button>
+      {/* Utilidades: lo que no se toca mientras se capturan calificaciones. */}
+      <MenuUtilidades>
+        {({ cerrar }) => (
+          <>
+            <TituloMenu>Vista</TituloMenu>
+            <div className="px-3.5 pb-1">
+              <NeonCheckbox
+                label="Fijar columna Alumno"
+                checked={fijarAlumno}
+                onChange={e => setFijarAlumno(e.target.checked)}
+                className="text-xs"
+              />
+              <p className="text-[10px] mt-1.5 leading-snug" style={{ color:'var(--t3)' }}>
+                El nombre se queda a la vista al desplazar. Cuesta {W.name} px
+                de ancho de captura.
+              </p>
+            </div>
+
+            <SeparadorMenu/>
+
+            {/* El mando de verdad contra el barrido horizontal: se muestran
+                sólo los bloques que se van a capturar. */}
+            <div className="flex items-baseline justify-between px-3.5 pt-1 pb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color:'var(--t3)' }}>
+                Secciones visibles
+              </span>
+              <span className="text-[10px] font-semibold" style={{ color:'var(--t3)' }}>
+                {secciones.filter(s => !collapsed[s.id]).length}/{secciones.length}
+              </span>
+            </div>
+            <div className="px-3.5 pb-1 space-y-1.5">
+              {secciones.map(s => (
+                <NeonCheckbox key={s.id}
+                  label={<span className="text-xs truncate">{s.label}</span>}
+                  checked={!collapsed[s.id]}
+                  onChange={() => toggleSection(s.id)}
+                />
+              ))}
+            </div>
+            <div className="flex gap-1.5 px-3.5 pt-1.5 pb-1">
+              <button type="button" onClick={plegarTodo}
+                className="flex-1 text-[10px] font-bold py-1.5 rounded-lg transition-colors"
+                style={{ background:'var(--soft-bg)', color:'var(--t2)' }}>
+                Ocultar todas
+              </button>
+              <button type="button" onClick={resetCollapsed}
+                className="flex-1 text-[10px] font-bold py-1.5 rounded-lg transition-colors"
+                style={{ background:'var(--soft-bg)', color:'var(--t2)' }}>
+                Mostrar todas
+              </button>
+            </div>
+
+            <SeparadorMenu/>
+            <ItemMenu icon={Download} label="Descargar Excel"
+              onClick={() => { exportListExcel(); cerrar() }}/>
+          </>
+        )}
+      </MenuUtilidades>
       {/* Guardar */}
       <button onClick={handleSaveEval}
         className="btn-primary text-xs py-2 gap-1.5 transition-all duration-300"
         style={saveFlash ? { background:'var(--good)', color:'#000', boxShadow:'0 0 14px var(--good-line)' } : {}}>
         <Save size={13}/> {saveFlash ? '¡Guardado!' : 'Guardar'}
       </button>
-      {/* Descargar, ahora bajo demanda */}
-      <button onClick={exportListExcel} className="btn-secondary text-xs py-2 gap-1.5">
-        <Download size={13}/> Descargar Excel
-      </button>
-      <button
-        onClick={() => setIsFullscreen(f => !f)}
-        className="btn-secondary text-xs py-2 gap-1.5">
-        {isFullscreen ? <><Minimize2 size={13}/> Salir</> : <><Maximize2 size={13}/> Pantalla completa</>}
-      </button>
+      {/* En pantalla completa la salida es la "X" de la esquina, siempre a la
+          vista; repetirla aquí sólo duplicaba el mismo mando. */}
+      {!isFullscreen && (
+        <button
+          onClick={() => setIsFullscreen(true)}
+          className="btn-secondary text-xs py-2 gap-1.5">
+          <Maximize2 size={13}/> Pantalla completa
+        </button>
+      )}
     </div>
   )
 
@@ -929,15 +1212,28 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
   const tableEl = (
     <div className="rounded-2xl overflow-hidden"
-      style={{ border:'1px solid var(--card-border)', boxShadow:'var(--card-shadow)' }}>
-      <div style={{ overflowX:'auto', overflowY:'auto', maxHeight: isFullscreen ? 'calc(100vh - 104px)' : 'calc(100vh - 208px)' }}>
+      style={{ border:'1px solid var(--card-border)', boxShadow:'var(--card-shadow)',
+        /* En pantalla completa la hoja ocupa el hueco que le deja la barra en
+           lugar de restarle una altura fija: la barra envuelve en varias líneas
+           en móvil, y el `calc(100vh - 104px)` de antes se pasaba de largo. */
+        ...(isFullscreen ? { flex:1, minHeight:0, display:'flex', flexDirection:'column' } : {}) }}>
+      <div style={{
+        overflowX:'auto', overflowY:'auto',
+        /* El barrido horizontal sobre la hoja disparaba el gesto de "atrás"
+           del navegador al llegar al borde. */
+        overscrollBehaviorX:'contain',
+        ...(isFullscreen
+          ? { flex:1, minHeight:0 }
+          : { maxHeight:'calc(100vh - 208px)' }) }}>
         <table style={{ borderCollapse:'collapse', minWidth:'max-content', fontSize:12, background: hcMode ? 'var(--card-bg)' : 'transparent' }}>
           <thead style={{ position:'sticky', top:0, zIndex:5 }}>
 
             {/* ── Fila 1: headers de sección ── */}
             <tr style={{ background: solidBg }}>
               {/* # y ALUMNO: sticky */}
-              <th rowSpan={2} style={{ ...thStickyStyle(L.num), minWidth:W.num, textAlign:'center', padding:'8px 4px', fontSize:10, fontWeight:700, color: hcMode ? '#1e293b' : 'var(--t3)' }}>#</th>
+              {!esCompacto && (
+                <th rowSpan={2} style={{ ...thStickyStyle(L.num), minWidth:W.num, textAlign:'center', padding:'8px 4px', fontSize:10, fontWeight:700, color: hcMode ? '#1e293b' : 'var(--t3)' }}>#</th>
+              )}
               <th rowSpan={2} style={{ ...thStickyStyle(L.name), minWidth:W.name, textAlign:'left', padding:'8px 12px', fontSize:10, fontWeight:700, color: hcMode ? '#1e293b' : 'var(--t3)' }}>ALUMNO</th>
               {/* PAGO y GARANTÍA: NO sticky */}
               <th rowSpan={2} style={{ minWidth:W.pago, textAlign:'center', padding:'8px 4px', fontSize:10, fontWeight:700, color: hcMode ? HC.pago : 'var(--t3)', background: hcMode ? `${HC.pago}14` : solidBg, borderBottom: hcMode ? `3px solid ${HC.pago}` : '1px solid rgba(255,255,255,.09)', borderLeft: hcMode ? `2px solid ${HC.pago}70` : 'none', borderRight: hcMode ? `2px solid ${HC.pago}70` : 'none' }}>PAGO</th>
@@ -1051,17 +1347,28 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                   onMouseLeave={e=>e.currentTarget.style.background=rowBg}
                   className="group transition-colors duration-75">
 
-                  {/* # — sticky */}
-                  <td style={{ position:'sticky', left:L.num, zIndex:2, background:solidBg, minWidth:W.num, width:W.num, textAlign:'center', fontSize:11, fontWeight:700, color: hcMode ? '#1e293b' : 'var(--t3)', padding:'0 4px', verticalAlign:'middle', borderRight: hcMode ? '2px solid #1e293b30' : 'none' }}>
-                    {idx+1}
-                  </td>
+                  {/* # — sticky (se retira en pantalla chica) */}
+                  {!esCompacto && (
+                    <td style={{ ...(fijarAlumno ? { position:'sticky', left:L.num, zIndex:2 } : null), background:solidBg, minWidth:W.num, width:W.num, textAlign:'center', fontSize:11, fontWeight:700, color: hcMode ? '#1e293b' : 'var(--t3)', padding:'0 4px', verticalAlign:'middle', borderRight: hcMode ? '2px solid #1e293b30' : 'none' }}>
+                      {idx+1}
+                    </td>
+                  )}
 
                   {/* Alumno — sticky */}
-                  <td style={{ position:'sticky', left:L.name, zIndex:2, background:solidBg, minWidth:W.name, width:W.name, padding:'0 10px', verticalAlign:'middle', borderRight: hcMode ? '2px solid #1e293b40' : '1px solid rgba(255,255,255,.06)' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <td style={{ ...(fijarAlumno ? { position:'sticky', left:L.name, zIndex:2 } : null), background:solidBg, minWidth:W.name, width:W.name, maxWidth:W.name, padding:'0 10px', verticalAlign:'middle', borderRight: hcMode ? '2px solid #1e293b40' : '1px solid rgba(255,255,255,.06)' }}>
+                    {/* El ancho se ata AQUÍ y no sólo en la celda: en una tabla
+                        de layout automático el `width` de un <td> es una
+                        sugerencia, y el navegador ensanchaba la columna hasta
+                        que cupiera el nombre entero —medido: 280 px donde se
+                        pedían 168—. Con el contenedor acotado, el `flex:1` de
+                        abajo por fin recorta con puntos suspensivos. */}
+                    <div style={{ display:'flex', alignItems:'center', gap:8,
+                      width: W.name - 20, maxWidth: W.name - 20 }}>
                       <AvatarAlumno student={s} size={24}
                         style={{ background: hcMode ? 'rgba(0,0,0,.08)' : 'var(--card-border)', color: hcMode ? '#1e293b' : 'var(--t2)', border:'none' }}/>
-                      <span style={{ fontSize:12, fontWeight:500, color: hcMode ? '#0f172a' : 'rgba(255,255,255,.78)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
+                      {/* `minWidth:0` es lo que permite a un hijo flex encoger
+                          por debajo de su contenido; sin él no hay elipsis. */}
+                      <span style={{ fontSize:12, fontWeight:500, color: hcMode ? '#0f172a' : 'rgba(255,255,255,.78)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>
                         {s.name}
                       </span>
                       <button onClick={() => setDeleteConfirm({ id:s.id, name:s.name })}
@@ -1248,14 +1555,40 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     <HCCtx.Provider value={hcMode}>
       <div style={{ position:'fixed', inset:0, zIndex:9999, background: hcMode ? '#f8fafc' : 'var(--card-bg)', display:'flex', flexDirection:'column' }}>
         {/* Topbar fullscreen */}
-        <div style={{ flexShrink:0, padding:'12px 20px 10px', borderBottom: hcMode ? '2px solid #1e293b20' : '1px solid rgba(255,255,255,.07)', background: hcMode ? '#ffffff' : 'rgba(5,5,10,.92)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)' }}>
-          {toolbar}
+        <div style={{ flexShrink:0, display:'flex', alignItems:'flex-start', gap:12, padding:'12px 20px 10px', borderBottom: hcMode ? '2px solid #1e293b20' : '1px solid rgba(255,255,255,.07)', background: hcMode ? '#ffffff' : 'rgba(5,5,10,.92)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)' }}>
+          <div style={{ flex:1, minWidth:0 }}>{toolbar}</div>
+          {/* Salida. 44 px de lado: el mínimo táctil recomendado, y la hoja se
+              usa con el dedo justo en esta vista. */}
+          <button onClick={() => setIsFullscreen(false)}
+            aria-label="Salir de pantalla completa" title="Salir de pantalla completa"
+            style={{ flexShrink:0, width:44, height:44, display:'flex', alignItems:'center', justifyContent:'center',
+              borderRadius:12, border:'1px solid var(--card-border)',
+              background:'var(--soft-bg)', color:'var(--t1)' }}>
+            <X size={18}/>
+          </button>
         </div>
         {/* Contenido */}
-        <div style={{ flex:1, overflow:'hidden', padding:'12px 16px 8px' }}>
+        <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', overflow:'hidden', padding:'12px 16px 8px' }}>
           {tableEl}
           {legend}
         </div>
+
+        {/* Sólo cuando el navegador no dejó fijar el apaisado (iOS). Se retira
+            solo en cuanto el aparato gira. */}
+        {avisoGirar && (
+          <div style={{ position:'absolute', left:16, right:16, bottom:16, display:'flex', alignItems:'center', gap:10,
+            padding:'12px 14px', borderRadius:14,
+            border:'1px solid var(--card-border)', background:'var(--panel-bg)', color:'var(--t1)' }}>
+            <RotateCw size={18} style={{ flexShrink:0, color:'var(--accent)' }}/>
+            <span style={{ fontSize:12, lineHeight:1.35 }}>
+              Gira el dispositivo para ver la hoja completa. Este navegador no permite fijar el apaisado.
+            </span>
+            <button onClick={() => setAvisoGirar(false)} aria-label="Ocultar aviso"
+              style={{ marginLeft:'auto', flexShrink:0, width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:8, color:'var(--t3)' }}>
+              <X size={14}/>
+            </button>
+          </div>
+        )}
         {/* Modales */}
         {attModal && <AttendanceModal studentId={attModal} studentName={students.find(s=>s.id===attModal)?.name??''} attendance={attendance} onChange={toggleAtt} onClose={()=>setAttModal(null)}/>}
         {addColModal && <AddColModal subjName={subjects.find(s=>s.id===addColModal)?.name??''} onAdd={(n,t)=>addCol(addColModal,n,t)} onClose={()=>setAddColModal(null)}/>}

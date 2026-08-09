@@ -24,11 +24,16 @@ export function generarPassword(len = 8) {
   return out
 }
 
+/** Dominio institucional de los correos de acceso. Fuente única de verdad:
+ *  cualquier pantalla que sugiera o genere un correo debe importarlo de aquí
+ *  en vez de escribirlo a mano, que fue como se colaron los @edutrack.mx. */
+export const DOMINIO_CORREO = 'siga.mx'
+
 /**
  * El acceso a la plataforma es por correo, así que el usuario ES el correo.
  * Si el CSV no trae uno, se deriva del nombre sobre el dominio institucional.
  */
-export function generarCredenciales(rows, dominio = 'edutrack.mx') {
+export function generarCredenciales(rows, dominio = DOMINIO_CORREO) {
   const usados = new Set()
   return rows.map(r => {
     const correo = r.email?.trim() || `${generarUsuario(r.nombre, usados)}@${dominio}`

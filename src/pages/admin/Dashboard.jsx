@@ -9,7 +9,6 @@ import {
   Users, TrendingUp, CalendarCheck, ClipboardList,
   AlertTriangle, CheckCircle, ArrowRight, Filter, Star
 } from 'lucide-react'
-import { getStatusConfig } from '../../data/mockData'
 import {
   fetchGroups, fetchStudents, fetchEvaluations,
   fetchAttendanceStats, fetchAsistenciaHoy,
@@ -57,6 +56,43 @@ function construirTendencia(evaluations, students, grupos) {
     return fila
   })
   return data
+}
+
+/* ── Tops del tablero ───────────────────────────────────────────────
+   Ambas listas salen de datos REALES: la asistencia se recalcula sobre las
+   sesiones capturadas (fetchAttendanceStats, misma cuenta que el perfil del
+   alumno) y el promedio sobre las evaluaciones registradas. Las columnas
+   students.attendance_rate y students.avg_grade quedaron obsoletas —vienen en
+   null— y students.status es una etiqueta sembrada, no un cálculo. */
+const UMBRAL_ASISTENCIA = 80   // % de asistencia mínimo esperado
+const UMBRAL_PROMEDIO   = 7    // calificación mínima esperada
+
+/** Promedio real por alumno a partir de sus evaluaciones, normalizadas a base 10. */
+function promediosPorAlumno(evaluations) {
+  const acc = {}
+  for (const e of evaluations) {
+    const a = (acc[e.studentId] ??= { suma: 0, n: 0 })
+    a.suma += calificacionBase10(e)
+    a.n += 1
+  }
+  return Object.fromEntries(
+    Object.entries(acc).map(([id, a]) => [id, +(a.suma / a.n).toFixed(1)])
+  )
+}
+
+/**
+ * Índice de riesgo = cuánto le falta al alumno para llegar a los umbrales.
+ * La brecha de promedio se multiplica por 10 para que ambas escalas (0–100 de
+ * asistencia y 0–10 de calificación) pesen lo mismo. Sin dato no hay brecha:
+ * a nadie se le acusa de riesgo por información que aún no existe.
+ */
+function calcularRiesgo({ asist, prom }) {
+  const brechaAsist = asist === null ? 0 : Math.max(0, UMBRAL_ASISTENCIA - asist)
+  const brechaProm  = prom  === null ? 0 : Math.max(0, UMBRAL_PROMEDIO - prom) * 10
+  const motivos = []
+  if (brechaAsist > 0) motivos.push(`Asistencia ${asist}%`)
+  if (brechaProm  > 0) motivos.push(`Promedio ${prom}`)
+  return { riesgo: brechaAsist + brechaProm, motivos }
 }
 
 /** Rendimiento por materia a partir de las evaluaciones capturadas. */
@@ -152,13 +188,30 @@ export default function Dashboard() {
   const filteredStudents = students.filter(s => selectedGroupIds.has(s.groupId))
   const evalsFiltradas   = evaluations.filter(e => filteredStudents.some(s => s.id === e.studentId))
 
-  const atRisk = filteredStudents.filter(s => s.status === 'critical' || s.status === 'at-risk')
-  const top5   = [...filteredStudents]
-    .filter(s => Number.isFinite(s.avgGrade))
-    .sort((a, b) => b.avgGrade - a.avgGrade)
+  // Promedio real por alumno: se calcula una vez sobre todas las evaluaciones
+  // y después se filtra, para no rehacerlo con cada cambio de grupo.
+  const promedioReal = useMemo(() => promediosPorAlumno(evaluations), [evaluations])
+
+  const conMetricas = filteredStudents.map(s => ({
+    ...s,
+    prom:  promedioReal[s.id] ?? null,
+    asist: attByStudent[s.id] ?? null,
+  }))
+
+  // Top mejor promedio: empate resuelto por asistencia real, que es
+  // justamente lo que distingue a dos alumnos con la misma calificación.
+  const topPromedio = conMetricas
+    .filter(s => s.prom !== null)
+    .sort((a, b) => b.prom - a.prom || (b.asist ?? -1) - (a.asist ?? -1))
     .slice(0, 5)
 
-  const notas = filteredStudents.map(s => s.avgGrade).filter(Number.isFinite)
+  const enRiesgo = conMetricas
+    .map(s => ({ ...s, ...calcularRiesgo(s) }))
+    .filter(s => s.riesgo > 0)
+    .sort((a, b) => b.riesgo - a.riesgo)
+  const topRiesgo = enRiesgo.slice(0, 5)
+
+  const notas = conMetricas.map(s => s.prom).filter(Number.isFinite)
   const promedioNum = notas.length ? notas.reduce((a, b) => a + b, 0) / notas.length : null
   const promedioGeneral = promedioNum === null ? '—' : promedioNum.toFixed(1)
 
@@ -183,7 +236,7 @@ export default function Dashboard() {
   const esperadosHoy = hoy?.esperados ?? 0
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-6">
       {/* Filtro sucursal / grupo */}
       <div className="flex items-center gap-2 flex-wrap">
         <Filter size={14} style={{ color: 'var(--t3)' }} />
@@ -217,10 +270,12 @@ export default function Dashboard() {
           onClick={() => navigate('/admin/rankings')} />
 
         <KpiCard icon={ClipboardList} label="Alumnos en Riesgo" tone="bad"
-          value={atRisk.length}
-          sub={atRisk.length ? 'Requieren atención' : 'Ninguno por ahora'}
-          pill={atRisk.length ? { icon: AlertTriangle, text: 'Dar seguimiento' } : null}
-          onClick={() => navigate('/admin/ia')} />
+          value={enRiesgo.length}
+          sub={enRiesgo.length
+            ? `Asistencia < ${UMBRAL_ASISTENCIA}% o promedio < ${UMBRAL_PROMEDIO}`
+            : 'Ninguno por ahora'}
+          pill={enRiesgo.length ? { icon: AlertTriangle, text: 'Dar seguimiento' } : null}
+          onClick={() => navigate('/admin/alumnos')} />
       </div>
 
       {/* Charts row 1 */}
@@ -361,76 +416,107 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Top students + At risk */}
+      {/* Tops: mejor promedio y riesgo — ambos sobre asistencia y evaluaciones reales */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Top 5 */}
+        {/* Mejor promedio */}
         <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="section-title">Top 5 Alumnos</h2>
-            <button onClick={()=>navigate('/admin/rankings')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--t3)' }}>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <h2 className="section-title flex items-center gap-2">
+                <Star size={16} style={{ color: 'var(--warn)' }} />
+                Top 5 · Mejor Promedio
+              </h2>
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--t3)' }}>
+                Promedio de evaluaciones capturadas · desempate por asistencia
+              </p>
+            </div>
+            <button onClick={()=>navigate('/admin/rankings')} className="text-xs font-medium hover:underline flex items-center gap-1 flex-shrink-0" style={{ color: 'var(--t3)' }}>
               Ver todos <ArrowRight size={12}/>
             </button>
           </div>
+          {topPromedio.length === 0 ? (
+            <p className="text-sm py-10 text-center" style={{ color: 'var(--t3)' }}>
+              Aún no hay calificaciones capturadas para rankear.
+            </p>
+          ) : (
           <div className="space-y-2">
-            {top5.map((s, i) => (
+            {topPromedio.map((s, i) => (
               <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
                 className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
                 onMouseEnter={e=>e.currentTarget.style.background='var(--card-bg)'}
                 onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                  i===0?'bg-gold-500 text-white':i===1?'bg-white/20 text-white/70':i===2?'bg-amber-700/70 text-white':'bg-white/8 text-white/45'
-                }`}>{i+1}</div>
-                <AvatarAlumno student={s} size={32}
-                  style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}/>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={i === 0
+                    ? { background: 'var(--warn)', color: '#fff' }
+                    : { background: 'var(--soft-bg)', color: 'var(--t2)' }}>{i+1}</div>
+                <AvatarAlumno student={s} size={32}/>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{s.name}</p>
-                  <p className="text-[11px]" style={{ color: 'var(--t3)' }}>{groups.find(g=>g.id===s.groupId)?.name ?? '—'}</p>
+                  <p className="text-[11px] truncate" style={{ color: 'var(--t3)' }}>{groups.find(g=>g.id===s.groupId)?.name ?? '—'}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>{s.avgGrade}</p>
-                  <p className="text-[10px]" style={{ color: 'var(--t3)' }}>{attByStudent[s.id] == null ? 'sin asist.' : `${attByStudent[s.id]}% asist.`}</p>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-bold" style={{ color: 'var(--good)' }}>{s.prom}</p>
+                  <p className="text-[10px]" style={{ color: 'var(--t3)' }}>
+                    {s.asist === null ? 'sin asist.' : `${s.asist}% asist.`}
+                  </p>
                 </div>
               </button>
             ))}
           </div>
+          )}
         </div>
 
-        {/* At risk */}
+        {/* En riesgo */}
         <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="section-title flex items-center gap-2">
-              <AlertTriangle size={16} className="text-red-500" />
-              Alumnos en Riesgo
-            </h2>
-            <button onClick={()=>navigate('/admin/ia')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--t3)' }}>
-              Ver análisis IA <ArrowRight size={12}/>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <h2 className="section-title flex items-center gap-2">
+                <AlertTriangle size={16} style={{ color: 'var(--bad)' }} />
+                Top 5 · Alumnos en Riesgo
+              </h2>
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--t3)' }}>
+                Asistencia real por debajo de {UMBRAL_ASISTENCIA}% o promedio menor a {UMBRAL_PROMEDIO}
+              </p>
+            </div>
+            <button onClick={()=>navigate('/admin/alumnos')} className="text-xs font-medium hover:underline flex items-center gap-1 flex-shrink-0" style={{ color: 'var(--t3)' }}>
+              Ver alumnos <ArrowRight size={12}/>
             </button>
           </div>
+          {topRiesgo.length === 0 ? (
+            <p className="text-sm py-10 text-center" style={{ color: 'var(--t3)' }}>
+              Ningún alumno por debajo de los umbrales con los datos registrados.
+            </p>
+          ) : (
           <div className="space-y-2">
-            {atRisk.map(s => {
-              const cfg = getStatusConfig(s.status)
-              return (
-                <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
-                  style={{ border: '1px solid var(--divider)' }}
-                  onMouseEnter={e=>e.currentTarget.style.background='var(--card-bg)'}
-                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  <AvatarAlumno student={s} size={32} className="bg-red-500/20 text-red-400"/>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{s.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] font-semibold ${cfg.color}`}>{cfg.label}</span>
-                      <span className="text-[10px]" style={{ color: 'var(--t3)' }}>· Asist. {attByStudent[s.id] == null ? '—' : `${attByStudent[s.id]}%`}</span>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-red-400">{s.avgGrade ?? '—'}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--t3)' }}>promedio</p>
-                  </div>
-                </button>
-              )
-            })}
+            {topRiesgo.map(s => (
+              <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
+                style={{ border: '1px solid var(--divider)' }}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--card-bg)'}
+                onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                <AvatarAlumno student={s} size={32}
+                  style={{ background: 'var(--bad-soft)', color: 'var(--bad)', border: '1px solid var(--bad-line)' }}/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{s.name}</p>
+                  <p className="text-[10px] truncate" style={{ color: 'var(--t3)' }}>
+                    {s.motivos.join(' · ')}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-bold" style={{ color: 'var(--bad)' }}>
+                    {s.asist === null ? '—' : `${s.asist}%`}
+                  </p>
+                  <p className="text-[10px]" style={{ color: 'var(--t3)' }}>asistencia</p>
+                </div>
+              </button>
+            ))}
           </div>
+          )}
+          {enRiesgo.length > topRiesgo.length && (
+            <p className="text-[11px] mt-3 text-center" style={{ color: 'var(--t3)' }}>
+              y {enRiesgo.length - topRiesgo.length} alumno(s) más por debajo de los umbrales
+            </p>
+          )}
         </div>
       </div>
     </div>

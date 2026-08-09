@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { LayoutDashboard, BookOpen, CalendarCheck, BrainCircuit, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings } from 'lucide-react'
+import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
 import { useState, useEffect, Suspense } from 'react'
 import clsx from 'clsx'
@@ -11,7 +11,6 @@ const nav = [
   { to:'/student',                label:'Mi Panel',       icon:LayoutDashboard, exact:true },
   { to:'/student/calificaciones', label:'Calificaciones', icon:BookOpen },
   { to:'/student/asistencias',    label:'Asistencias',    icon:CalendarCheck },
-  { to:'/student/reporte-ia',     label:'Reporte IA',     icon:BrainCircuit },
   { to:'/student/mi-qr',          label:'Mi QR',          icon:QrCode },
   { to:'/student/terminos',       label:'T&C / Firma',    icon:ScrollText, badge:'terms' },
   { to:'/student/configuracion',  label:'Configuración',  icon:Settings },
@@ -56,6 +55,9 @@ function LayoutInner() {
     '--warn-soft': t.warnSoft, '--bad-soft': t.badSoft,
     '--good-line': t.goodLine, '--info-line': t.infoLine,
     '--warn-line': t.warnLine, '--bad-line': t.badLine,
+    // Relleno mate: color pleno y opaco, siempre con texto blanco encima.
+    '--good-solid': t.goodSolid, '--info-solid': t.infoSolid,
+    '--warn-solid': t.warnSolid, '--bad-solid': t.badSolid,
     '--card-shadow': t.light
       ? '0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.08)'
       : 'none',

@@ -108,6 +108,11 @@
   --warn-soft: rgba(251,191,36,.14);  --bad-soft: rgba(248,113,113,.14);
   --good-line: rgba(52,211,153,.30); --info-line: rgba(96,165,250,.30);
   --warn-line: rgba(251,191,36,.30);  --bad-line: rgba(248,113,113,.30);
+  /* Relleno mate: color pleno y opaco pensado para llevar texto blanco
+     encima. No es el semántico de arriba: en oscuro esos son neón y el
+     blanco sobre ellos no llega al contraste mínimo. */
+  --good-solid: #18795F; --info-solid: #2F6BB0;
+  --warn-solid: #9C6210;  --bad-solid: #B23A33;
 }
 
 @layer base {
@@ -131,6 +136,25 @@
 
   /* Selects dark */
   select option { background: #111118; color: rgba(255,255,255,.85); }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   UTILITY LAYER
+───────────────────────────────────────────────────────────────── */
+@layer utilities {
+
+  /* Carril deslizable sin barra visible, para tiras de pestañas y chips que
+     no caben a lo ancho en móvil. La barra global mide 4 px de alto y dentro
+     de una píldora de 4 px de padding se come el aire de los botones; el
+     desplazamiento sigue disponible con dedo, trackpad, Shift+rueda y foco
+     de teclado, que es como se navega una tira de pestañas. */
+  .scroll-carril {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;   /* no encadena al gesto de "atrás" */
+    scrollbar-width: none;            /* Firefox */
+    -ms-overflow-style: none;         /* Edge heredado */
+  }
+  .scroll-carril::-webkit-scrollbar { display: none; }
 }
 
 /* ─────────────────────────────────────────────────────────────────

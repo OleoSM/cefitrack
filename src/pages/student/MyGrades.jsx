@@ -99,13 +99,18 @@ export default function MyGrades() {
     <div className="space-y-5">
       {/* Header + selector General / materia */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="min-w-0">
           <h1 className="page-title">Mis Calificaciones</h1>
           <p className="text-sm mt-1" style={{ color: t.t3 }}>
             {scope === 'general' ? 'Historial completo de evaluaciones — solo lectura.' : `Desglose de ${scope}.`}
           </p>
         </div>
-        <Dropdown value={scope} onChange={setScope} options={scopeOptions} align="right"/>
+        {/* En teléfono el selector no cabe junto al título y bajaba a su propia
+            línea pegado a la izquierda; su panel, anclado a la derecha del
+            botón, se salía entonces por el borde izquierdo de la pantalla.
+            Ocupando la fila completa el panel queda anclado a la página. */}
+        <Dropdown value={scope} onChange={setScope} options={scopeOptions} align="right"
+          className="w-full sm:w-auto"/>
       </div>
 
       {/* KPI cards (en función del alcance elegido) */}
@@ -161,7 +166,9 @@ export default function MyGrades() {
           General: grid compacto tipo KPI (una tarjetita por materia).
           Materia seleccionada: una sola card con su desglose completo. */}
       {scope === 'general' ? (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+        /* 150 px de mínimo, no 160: con 160 un teléfono de 375 px se quedaba en
+           una sola columna y la lista de materias se volvía interminable. */
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
           {materias.map(mat => {
             const evs = byMateria[mat]
             const prom = +(evs.reduce((sum, e) => sum + e.calificacion, 0) / evs.length).toFixed(1)
@@ -194,8 +201,15 @@ export default function MyGrades() {
           const Icon = materiaIcon(mat)
           return (
             <div className="card overflow-hidden" style={{ borderLeft: `3px solid ${accent}` }}>
-              <div className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3" style={{ background: t.softBg }}>
-                <div className="flex items-center gap-2.5 min-w-0">
+              {/* Cabecera en dos alturas: el botón de volver, el nombre de la
+                  materia y el contador viven en la primera fila, y el promedio
+                  se queda pegado a la derecha sin poder encogerse. Antes el
+                  contador se escondía por debajo de `sm` para hacer sitio; con
+                  el nombre truncando ya cabe, y es justo el dato que explica el
+                  promedio que tiene al lado. */}
+              <div className="px-3 sm:px-5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3"
+                style={{ background: t.softBg }}>
+                <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
                   <button onClick={() => setScope('general')} aria-label="Volver a todas las materias"
                     className="p-1.5 rounded-lg transition-colors flex-shrink-0" style={{ color: t.t3 }}
                     onMouseEnter={e => e.currentTarget.style.background = t.ddBg}
@@ -206,7 +220,12 @@ export default function MyGrades() {
                     style={{ background: accent }}>
                     <Icon size={15} style={{ color:'#ffffff' }}/>
                   </div>
-                  <h3 className="font-bold text-sm sm:text-base truncate" style={{ color: t.t1 }}>{mat}</h3>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm sm:text-base truncate" style={{ color: t.t1 }}>{mat}</h3>
+                    <p className="text-[10px] sm:hidden" style={{ color: t.t3 }}>
+                      {evs.length} de {evals.length} evaluaciones
+                    </p>
+                  </div>
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 hidden sm:inline"
                     style={{ background: accent, color:'#ffffff' }}>
                     {evs.length} / {evals.length}
@@ -215,14 +234,24 @@ export default function MyGrades() {
                 <span className="text-base sm:text-lg font-bold tabular-nums flex-shrink-0" style={{ color: gradeColor(prom) }}>{prom}</span>
               </div>
 
-              <div className="overflow-x-auto" style={{ borderTop: `1px solid ${t.divider}` }}>
-                <table className="w-full min-w-[360px]">
+              {/* Sin ancho mínimo en teléfono: con `min-w-[360px]` fijo, una
+                  pantalla de 375 px ya obligaba a desplazar la tabla a los
+                  lados para leer la fecha. Ahora las tres columnas que quedan
+                  caben enteras, y el mínimo cómodo entra a partir de `sm`.
+                  `overscroll-behavior-x: contain` evita que el barrido lateral
+                  dispare el gesto de "atrás" del navegador. */}
+              <div className="overflow-x-auto"
+                style={{ borderTop: `1px solid ${t.divider}`, overscrollBehaviorX: 'contain' }}>
+                <table className="w-full min-w-0 sm:min-w-[420px] lg:min-w-[520px]">
                   <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
                     <tr>
-                      <th className="table-header">Tipo</th>
-                      <th className="table-header table-header--num">Calificación</th>
+                      <th className="table-header px-3 sm:px-4">Tipo</th>
+                      <th className="table-header table-header--num px-3 sm:px-4">
+                        <span className="sm:hidden">Calif.</span>
+                        <span className="hidden sm:inline">Calificación</span>
+                      </th>
                       <th className="table-header hidden sm:table-cell">Periodo</th>
-                      <th className="table-header table-header--num">Fecha</th>
+                      <th className="table-header table-header--num px-3 sm:px-4">Fecha</th>
                     </tr>
                   </thead>
                   <ProgressiveList as="tbody" colSpan={4} items={evs}
@@ -230,11 +259,15 @@ export default function MyGrades() {
                     emptyLabel="Sin evaluaciones en esta materia.">
                     {e => (
                       <tr key={e.id} className="transition-colors" style={{ borderBottom: `1px solid ${t.divider}` }}>
-                        <td className="table-cell">
-                          <span className="badge text-[11px]" style={{ background: t.softBg, color: t.t2, border: `1px solid ${t.cardBorder}` }}>{e.tipo}</span>
+                        <td className="table-cell px-3 sm:px-4">
+                          <span className="badge text-[11px] px-2 whitespace-nowrap"
+                            style={{ background: t.softBg, color: t.t2, border: `1px solid ${t.cardBorder}` }}>{e.tipo}</span>
                         </td>
-                        <td className="table-cell table-cell--num">
-                          <div className="flex items-center gap-1.5">
+                        <td className="table-cell table-cell--num px-3 sm:px-4">
+                          {/* `justify-end` para que la cifra quede bajo su
+                              encabezado: la celda es numérica y alineada a la
+                              derecha, pero el flex la empujaba a la izquierda. */}
+                          <div className="flex items-center justify-end gap-1.5">
                             <span className="font-bold text-base sm:text-lg tabular-nums" style={{ color: gradeColor(e.calificacion) }}>{e.calificacion}</span>
                             {e.editedByAdmin && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold hidden sm:inline"
@@ -245,7 +278,8 @@ export default function MyGrades() {
                           </div>
                         </td>
                         <td className="table-cell hidden sm:table-cell" style={{ color: t.t2 }}>{e.periodo}</td>
-                        <td className="table-cell table-cell--num text-xs" style={{ color: t.t3 }}>{e.fecha}</td>
+                        <td className="table-cell table-cell--num px-3 sm:px-4 text-xs whitespace-nowrap"
+                          style={{ color: t.t3 }}>{e.fecha}</td>
                       </tr>
                     )}
                   </ProgressiveList>

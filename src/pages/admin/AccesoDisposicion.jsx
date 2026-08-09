@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
-  ShieldCheck, UserPlus, ChevronDown, ChevronRight, Building2, KeyRound, CheckCircle2, X, Search,
+  ShieldCheck, UserPlus, ChevronDown, ChevronRight, Building2, KeyRound, X, Search,
+  UserMinus, UserCheck, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import {
   fetchCuentas, createSubAdmin, fetchGroups,
   fetchSubAdminAccess, grantSubAdminAccess, revokeSubAdminAccess,
+  desactivarSubAdmin, reactivarSubAdmin,
 } from '../../lib/supabaseData'
 import { generarPassword } from '../../lib/credentials'
 import ProgressiveList from '../../components/ui/ProgressiveList'
+import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
+import ModalPortal from '../../components/ui/ModalPortal'
 
 // Las sucursales salen de los grupos reales; antes estaban escritas a mano
 // y no reflejaban las que existen en la base.
@@ -33,6 +37,13 @@ export default function AccesoDisposicion() {
   const [formError, setFormError] = useState(null)
   const [errorAcceso, setErrorAcceso] = useState(null)
 
+  /* Baja y reincorporación. Ninguna de las dos se ejecuta sin pasar por el
+     modal: retirar a alguien le corta la sesión en el acto y le quita todos sus
+     accesos, así que no puede ser el resultado de un clic mal puesto. */
+  const [confirmacion, setConfirmacion] = useState(null) // { modo, id, name, email, accesos }
+  const [procesando, setProcesando]     = useState(false)
+  const [aviso, setAviso]               = useState(null) // { tono: 'good'|'bad', texto }
+
   /* La lista pasó de seis a treinta y ocho cuentas al incluir a los alumnos:
      sin acotar no hay forma de encontrar a nadie. */
   const [rolFiltro, setRolFiltro] = useState('todos')
@@ -43,10 +54,13 @@ export default function AccesoDisposicion() {
     admin:     staff.filter(a => a.role === 'admin').length,
     sub_admin: staff.filter(a => a.role === 'sub_admin').length,
     student:   staff.filter(a => a.role === 'student').length,
+    retiradas: staff.filter(a => a.activo === false).length,
   }
   const filtradas = staff.filter(a => {
     const q = busqueda.trim().toLowerCase()
-    return (rolFiltro === 'todos' || a.role === rolFiltro)
+    const porRol = rolFiltro === 'todos'
+      || (rolFiltro === 'retiradas' ? a.activo === false : a.role === rolFiltro)
+    return porRol
       && (rolFiltro !== 'student' || grupoFiltro === 'todos' || a.grupoId === grupoFiltro)
       && (q === '' || a.name.toLowerCase().includes(q) || (a.email ?? '').toLowerCase().includes(q))
   })
@@ -61,9 +75,10 @@ export default function AccesoDisposicion() {
     const [personal, grps] = await Promise.all([fetchCuentas(), fetchGroups()])
     setStaff(personal)
     setGroups(grps)
-    // Los administradores no tienen filas de acceso: su alcance es total por rol.
+    // Los administradores no tienen filas de acceso: su alcance es total por
+    // rol. Las cuentas retiradas tampoco: la baja se las quitó todas.
     const entries = await Promise.all(
-      personal.filter(a => a.role === 'sub_admin')
+      personal.filter(a => a.role === 'sub_admin' && a.activo !== false)
         .map(a => fetchSubAdminAccess(a.id).then(rows => [a.id, rows])))
     setAccessByUser(Object.fromEntries(entries))
     setLoading(false)
@@ -121,15 +136,58 @@ export default function AccesoDisposicion() {
   const handleCreate = async (e) => {
     e.preventDefault()
     setFormError(null)
-    if (!form.name.trim() || !form.email.trim()) return
+    const name  = form.name.trim()
+    const email = form.email.trim().toLowerCase()
+    if (!name || !email) return
     setCreating(true)
     const password = generarPassword()
-    const res = await createSubAdmin({ name: form.name.trim(), email: form.email.trim(), password })
+    const res = await createSubAdmin({ name, email, password })
     setCreating(false)
     if (!res.ok) { setFormError(res.message); return }
     setCreatedCreds({ name: res.user.name, email: res.user.email, password })
     setForm({ name: '', email: '' })
     loadAll()
+  }
+
+  /* ── Baja / reincorporación ───────────────────────────────────────────── */
+
+  const pedirBaja = (cuenta) => {
+    setAviso(null)
+    setConfirmacion({
+      modo: 'baja',
+      id: cuenta.id, name: cuenta.name, email: cuenta.email,
+      accesos: (accessByUser[cuenta.id] ?? []).length,
+    })
+  }
+
+  const pedirAlta = (cuenta) => {
+    setAviso(null)
+    setConfirmacion({ modo: 'alta', id: cuenta.id, name: cuenta.name, email: cuenta.email })
+  }
+
+  const ejecutarConfirmacion = async () => {
+    if (!confirmacion) return
+    const { modo, id, name } = confirmacion
+    setProcesando(true)
+    const res = modo === 'baja'
+      ? await desactivarSubAdmin(id)
+      : await reactivarSubAdmin(id)
+    setProcesando(false)
+    setConfirmacion(null)
+
+    if (!res.ok) { setAviso({ tono: 'bad', texto: res.message }); return }
+
+    setAviso(modo === 'baja'
+      ? {
+          tono: 'good',
+          texto: `${name} ya no puede entrar. Se le retiraron ${res.accesosRetirados} acceso(s) `
+               + `y su correo quedó liberado como ${res.email}.`,
+        }
+      : {
+          tono: 'good',
+          texto: `${name} vuelve a entrar con ${res.email}. Sus accesos se conceden de nuevo aquí abajo.`,
+        })
+    await loadAll()
   }
 
   return (
@@ -178,7 +236,7 @@ export default function AccesoDisposicion() {
         )}
       </div>
 
-      {/* ── Lista de sub-admins ─────────────────────────────── */}
+      {/* ── Lista de cuentas ────────────────────────────────── */}
       <div className="card p-5 space-y-3">
         <h2 className="section-title flex items-center gap-2"><Building2 size={16}/> Cuentas y accesos</h2>
 
@@ -188,6 +246,21 @@ export default function AccesoDisposicion() {
             <span className="text-xs" style={{ color:'var(--bad)' }}>{errorAcceso}</span>
           </div>
         )}
+
+        {aviso && (
+          <div className="flex items-start gap-2 rounded-lg px-3 py-2"
+            style={{
+              background: aviso.tono === 'good' ? 'var(--good-soft)' : 'var(--bad-soft)',
+              border: `1px solid ${aviso.tono === 'good' ? 'var(--good-line)' : 'var(--bad-line)'}`,
+            }}>
+            <span className="text-xs flex-1"
+              style={{ color: aviso.tono === 'good' ? 'var(--good)' : 'var(--bad)' }}>
+              {aviso.texto}
+            </span>
+            <button onClick={() => setAviso(null)} style={{ color:'var(--t3)' }}><X size={13}/></button>
+          </div>
+        )}
+
         {loading && <p className="text-sm" style={{ color: 'var(--t3)' }}>Cargando…</p>}
 
         {/* Filtros */}
@@ -202,7 +275,8 @@ export default function AccesoDisposicion() {
             {[['todos', `Todos (${staff.length})`],
               ['admin', `Administradores (${conteo.admin})`],
               ['sub_admin', `Sub-admins (${conteo.sub_admin})`],
-              ['student', `Alumnos (${conteo.student})`]].map(([v, l]) =>
+              ['student', `Alumnos (${conteo.student})`],
+              ['retiradas', `Retiradas (${conteo.retiradas})`]].map(([v, l]) =>
                 <option key={v} value={v}>{l}</option>)}
           </select>
           {rolFiltro === 'student' && (
@@ -216,6 +290,7 @@ export default function AccesoDisposicion() {
 
         <p className="text-[11px]" style={{ color:'var(--t3)' }}>
           {filtradas.length} de {staff.length} cuentas
+          {conteo.retiradas > 0 && ` · ${conteo.retiradas} retirada(s)`}
         </p>
 
         <ProgressiveList items={filtradas} className="space-y-3"
@@ -225,27 +300,49 @@ export default function AccesoDisposicion() {
             const rows = accessByUser[a.id] ?? []
             const esAdmin = a.role === 'admin'
             const esAlumno = a.role === 'student'
+            const retirada = a.activo === false
             return (
               <div key={a.id} className="rounded-xl p-3.5 space-y-2.5"
-                style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
+                style={{
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--divider)',
+                  opacity: retirada ? 0.72 : 1,
+                }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{a.name}</p>
                     <p className="text-xs truncate" style={{ color: 'var(--t3)' }}>{a.email}</p>
                   </div>
                   <span className="badge flex-shrink-0"
-                    style={esAdmin
-                      ? { background:'var(--good)', color:'#fff', border:'1px solid var(--good)' }
-                      : esAlumno
-                        ? { background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--divider)' }
-                        : { background:'var(--info)', color:'#fff', border:'1px solid var(--info)' }}>
-                    {esAdmin ? 'Administrador' : esAlumno ? 'Alumno' : 'Sub-admin'}
+                    style={retirada
+                      ? { background:'var(--soft-bg)', color:'var(--t3)', border:'1px solid var(--divider)' }
+                      : esAdmin
+                        ? { background:'var(--good)', color:'#fff', border:'1px solid var(--good)' }
+                        : esAlumno
+                          ? { background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--divider)' }
+                          : { background:'var(--info)', color:'#fff', border:'1px solid var(--info)' }}>
+                    {retirada ? 'Retirada' : esAdmin ? 'Administrador' : esAlumno ? 'Alumno' : 'Sub-admin'}
                   </span>
                 </div>
 
-                {/* El alcance del administrador viene de su rol, no de filas de
-                    acceso: mostrarle casillas sugeriría que se le puede recortar. */}
-                {esAdmin ? (
+                {/* Una cuenta retirada no se esconde: se muestra tal cual quedó,
+                    para que conste quién fue dado de baja y se pueda deshacer. */}
+                {retirada ? (
+                  <div className="space-y-2.5">
+                    <p className="text-xs" style={{ color: 'var(--t3)' }}>
+                      Sin acceso a la plataforma. No puede iniciar sesión y sus sucursales y
+                      grupos le fueron retirados. Su correo original quedó libre para volver
+                      a darse de alta.
+                    </p>
+                    <button onClick={() => pedirAlta(a)}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-lg transition-all active:scale-95"
+                      style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
+                      <UserCheck size={13}/> Reincorporar
+                    </button>
+                  </div>
+                ) : esAdmin ? (
+                  /* El alcance del administrador viene de su rol, no de filas de
+                     acceso: mostrarle casillas sugeriría que se le puede recortar. */
                   <p className="text-xs" style={{ color: 'var(--t3)' }}>
                     Acceso total a todas las sucursales y grupos.
                   </p>
@@ -273,31 +370,29 @@ export default function AccesoDisposicion() {
                           <button onClick={() => toggleExpanded(a.id, suc)} style={{ color: 'var(--t3)' }}>
                             {isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
                           </button>
-                          <label className="flex items-center gap-2 flex-1 cursor-pointer text-sm"
-                            style={{ color: wholeChecked || groupRows.length ? 'var(--t1)' : 'var(--t2)' }}>
-                            <input type="checkbox" checked={wholeChecked} onChange={() => toggleWholeBranch(a.id, suc)}
-                              className="accent-emerald-500"/>
-                            {suc} {wholeChecked && <span className="text-xs" style={{ color:'var(--good)' }}>· toda la sucursal</span>}
-                            {!wholeChecked && groupRows.length > 0 && (
-                              <span className="text-xs" style={{ color:'var(--warn)' }}>· {groupRows.length} grupo(s)</span>
-                            )}
-                          </label>
+                          <NeonCheckbox className="flex-1"
+                            checked={wholeChecked}
+                            onChange={() => toggleWholeBranch(a.id, suc)}
+                            label={<>
+                              {suc}
+                              {wholeChecked && <span className="text-xs font-normal" style={{ color:'var(--good)' }}> · toda la sucursal</span>}
+                              {!wholeChecked && groupRows.length > 0 && (
+                                <span className="text-xs font-normal" style={{ color:'var(--warn)' }}> · {groupRows.length} grupo(s)</span>
+                              )}
+                            </>}/>
                         </div>
                         {isExpanded && (
-                          <div className="px-3 pb-2.5 pl-9 space-y-1">
+                          <div className="px-3 pb-2.5 pl-9 space-y-1.5">
                             {sucGroups.length === 0 && (
                               <p className="text-xs" style={{ color: 'var(--t3)' }}>Sin grupos en esta sucursal.</p>
                             )}
                             {sucGroups.map(g => {
                               const checked = wholeChecked || groupRows.some(r => r.groupId === g.id)
                               return (
-                                <label key={g.id} className="flex items-center gap-2 text-xs cursor-pointer"
-                                  style={{ color: 'var(--t2)' }}>
-                                  <input type="checkbox" checked={checked}
-                                    onChange={() => toggleGroup(a.id, suc, g.id)}
-                                    className="accent-emerald-500"/>
-                                  {g.name} — {g.subject}
-                                </label>
+                                <NeonCheckbox key={g.id}
+                                  checked={checked}
+                                  onChange={() => toggleGroup(a.id, suc, g.id)}
+                                  label={<span className="text-xs font-normal">{g.name} — {g.subject}</span>}/>
                               )
                             })}
                           </div>
@@ -305,6 +400,14 @@ export default function AccesoDisposicion() {
                       </div>
                     )
                   })}
+
+                  {/* La baja va al final y en tono de peligro: es la única acción
+                      de esta tarjeta que no se deshace con otro clic. */}
+                  <button onClick={() => pedirBaja(a)}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-lg transition-all active:scale-95 mt-1"
+                    style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>
+                    <UserMinus size={13}/> Dar de baja
+                  </button>
                 </div>
                 )}
               </div>
@@ -312,6 +415,61 @@ export default function AccesoDisposicion() {
           }}
         </ProgressiveList>
       </div>
+
+      {/* ── Confirmación ───────────────────────────────────── */}
+      {confirmacion && (
+        <ModalPortal maxWidth="max-w-sm" onClose={() => !procesando && setConfirmacion(null)}>
+          <div className="p-6 space-y-4">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
+              style={confirmacion.modo === 'baja'
+                ? { background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }
+                : { background:'var(--good-soft)', border:'1px solid var(--good-line)' }}>
+              {confirmacion.modo === 'baja'
+                ? <AlertTriangle size={20} style={{ color:'var(--bad)' }}/>
+                : <UserCheck size={20} style={{ color:'var(--good)' }}/>}
+            </div>
+
+            <div className="text-center">
+              <h2 className="text-base font-bold mb-1" style={{ color: 'var(--t1)' }}>
+                {confirmacion.modo === 'baja' ? '¿Dar de baja a este sub-admin?' : '¿Reincorporar esta cuenta?'}
+              </h2>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--t2)' }}>
+                <strong style={{ color: 'var(--t1)' }}>{confirmacion.name}</strong>
+                {' — '}{confirmacion.email}
+              </p>
+            </div>
+
+            <ul className="text-xs space-y-1.5 rounded-xl p-3" style={{ background:'var(--soft-bg)', color:'var(--t2)' }}>
+              {confirmacion.modo === 'baja' ? <>
+                <li>· Deja de poder iniciar sesión de inmediato y se cierra su sesión abierta.</li>
+                <li>· Se le retiran sus {confirmacion.accesos} acceso(s) de sucursal o grupo.</li>
+                <li>· Su correo queda libre para darlo de alta de nuevo.</li>
+                <li>· La cuenta no se borra: seguirá aquí como retirada y podrás reincorporarla.</li>
+              </> : <>
+                <li>· Vuelve a poder iniciar sesión con su correo y contraseña originales.</li>
+                <li>· Sus accesos NO regresan: hay que concedérselos otra vez.</li>
+              </>}
+            </ul>
+
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmacion(null)} disabled={procesando}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
+                style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
+                Cancelar
+              </button>
+              <button onClick={ejecutarConfirmacion} disabled={procesando}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
+                style={confirmacion.modo === 'baja'
+                  ? { background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }
+                  : { background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}>
+                {procesando
+                  ? 'Aplicando…'
+                  : confirmacion.modo === 'baja' ? 'Sí, dar de baja' : 'Sí, reincorporar'}
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   )
 }

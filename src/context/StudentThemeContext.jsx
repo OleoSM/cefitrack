@@ -28,6 +28,11 @@ export const TOKENS = {
     warnSoft: 'rgba(251,191,36,.14)',  badSoft: 'rgba(248,113,113,.14)',
     goodLine: 'rgba(52,211,153,.30)', infoLine: 'rgba(96,165,250,.30)',
     warnLine: 'rgba(251,191,36,.30)',  badLine: 'rgba(248,113,113,.30)',
+    /* Relleno mate: color pleno y opaco pensado para llevar texto blanco
+       encima. Aquí no valen los semánticos de arriba —son neón— porque el
+       blanco sobre ellos no llega al contraste mínimo. */
+    goodSolid: '#18795F', infoSolid: '#2F6BB0',
+    warnSolid: '#9C6210',  badSolid: '#B23A33',
     ddBg: 'rgba(255,255,255,.07)', ddPanel: '#12121e',
     panelBg: 'rgba(8,8,15,.96)', headerBg: 'rgba(5,5,10,.70)',
   },
@@ -46,6 +51,10 @@ export const TOKENS = {
     accent: '#881126', good: '#1f6b55', info: '#2b5f9e', warn: '#9a5a0d', bad: '#a52f2a',
     goodSoft: '#e2f1ea', infoSoft: '#e4ecf8', warnSoft: '#fbeedb', badSoft: '#fae7e5',
     goodLine: '#b6ddcd', infoLine: '#bcd2ee', warnLine: '#eed4ac', badLine: '#eec4c0',
+    /* Relleno mate: en las identidades claras coincide con el semántico,
+       que ya es sólido y profundo. */
+    goodSolid: '#1F6B55', infoSolid: '#2B5F9E',
+    warnSolid: '#9A5A0D',  badSolid: '#A52F2A',
     ddBg: '#ffffff', ddPanel: '#ffffff',
     panelBg: '#ffffff', headerBg: '#f4ecee',
   },
@@ -65,6 +74,10 @@ export const TOKENS = {
     accent: '#003366', good: '#1f6b55', info: '#2b5f9e', warn: '#8c6417', bad: '#a52f2a',
     goodSoft: '#e2f1ea', infoSoft: '#e4ecf8', warnSoft: '#f8eeda', badSoft: '#fae7e5',
     goodLine: '#b6ddcd', infoLine: '#bcd2ee', warnLine: '#e8d3a8', badLine: '#eec4c0',
+    /* Relleno mate: en las identidades claras coincide con el semántico,
+       que ya es sólido y profundo. */
+    goodSolid: '#1F6B55', infoSolid: '#2B5F9E',
+    warnSolid: '#8C6417',  badSolid: '#A52F2A',
     gold: '#CC9933',
     ddBg: '#ffffff', ddPanel: '#ffffff',
     panelBg: '#ffffff', headerBg: '#eef3f9',

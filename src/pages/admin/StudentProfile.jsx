@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   ArrowLeft, Mail, Phone, BookOpen, Calendar, TrendingUp,
-  BrainCircuit, FileText, Download, CheckCircle, AlertTriangle, QrCode,
+  FileText, Download, CheckCircle, AlertTriangle, QrCode,
   GraduationCap, Pencil,
 } from 'lucide-react'
 import {
@@ -12,13 +12,14 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend,
 } from 'recharts'
 import {
-  getReportsByStudent, getInsightByStudent, studentRadar, studentGradeTrend,
+  getReportsByStudent, studentRadar, studentGradeTrend,
   getStatusConfig, attendanceColors, getAttendanceColor, getSimulacrosByStudent,
 } from '../../data/mockData'
 import {
   fetchStudentById, fetchGroupById, fetchEvaluationsByStudent, fetchStudentAttendance,
 } from '../../lib/supabaseData'
 import { exportStudentReport, exportMonthlyReport } from '../../lib/exportReports'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import { useRef } from 'react'
 import clsx from 'clsx'
@@ -60,7 +61,6 @@ const TABS = [
   { id:'evaluaciones', label:'Evaluaciones', icon:BookOpen    },
   { id:'asistencias',  label:'Asistencias',  icon:Calendar    },
   { id:'reportes',     label:'Reportes',     icon:FileText    },
-  { id:'ia',           label:'Análisis IA',  icon:BrainCircuit },
   { id:'qr',           label:'Código QR',    icon:QrCode      },
 ]
 
@@ -76,11 +76,109 @@ const Val  = ({ children, className='' }) => (
     style={{ color:'var(--t1)' }}>{children}</p>
 )
 
+/* ── Iconos de estado de asistencia ────────────────────────────────
+   Set generado por Codex bajo la gramática de lucide-react que usa el resto
+   de la app: rejilla de 24, sin relleno, trazo de 2 y extremos redondeados.
+   La idea de sistema es un calendario común —la sesión, el día de clase—
+   con un símbolo breve dentro que dice qué pasó en ella: palomita, reloj,
+   aspa y documento validado. Al compartir base se leen como familia y no
+   como cuatro iconos sueltos. Heredan el color por `currentColor`, así que
+   sobre el relleno mate salen en blanco sin pasarles ningún color. */
+const HOJA_CALENDARIO = 'M7 3v2m10-2v2M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M3 9h18'
+
+const IconoEstado = ({ children, size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true">
+    <path d={HOJA_CALENDARIO}/>
+    {children}
+  </svg>
+)
+
+const ICONOS_ASISTENCIA = {
+  /* Palomita: la sesión se cumplió */
+  presente: (
+    <IconoEstado><path d="m8 15 2.5 2.5L16 12"/></IconoEstado>
+  ),
+  /* Reloj: llegó, pero tarde */
+  tardanza: (
+    <IconoEstado><circle cx="12" cy="15.5" r="4"/><path d="M12 13.5v2.25l1.5 1"/></IconoEstado>
+  ),
+  /* Aspa: la sesión no se cubrió */
+  ausente: (
+    <IconoEstado>
+      <line x1="9" y1="12.5" x2="15" y2="18.5"/>
+      <line x1="15" y1="12.5" x2="9" y2="18.5"/>
+    </IconoEstado>
+  ),
+  /* Documento validado: la falta va respaldada por un justificante */
+  justificado: (
+    <IconoEstado>
+      <path d="M8.5 12h5l2 2v5.5h-7zM13.5 12v2h2"/>
+      <path d="m10 16 1.25 1.25 2.5-2.5"/>
+    </IconoEstado>
+  ),
+}
+
+/* Relleno mate de cada estado. Es un token, nunca un color literal: cada
+   identidad (default / IPN / UNAM) publica el suyo, y los tres están
+   calibrados para llevar texto blanco encima. */
+const RELLENO_ASISTENCIA = {
+  presente:    'var(--good-solid)',
+  tardanza:    'var(--warn-solid)',
+  ausente:     'var(--bad-solid)',
+  justificado: 'var(--info-solid)',
+}
+
 export default function StudentProfile() {
   const { studentId } = useParams()
   const navigate = useNavigate()
   const { getAccent } = useGroupColors()
   const [tab, setTab] = useState('resumen')
+
+  /* ── Tira de pestañas deslizable ──────────────────────────────
+     Con el tabindex móvil del patrón WAI-ARIA el tabulador entra una sola
+     vez a la tira y son las flechas las que mueven entre pestañas: hay que
+     implementarlas o el teclado se queda sin poder cambiar de sección. */
+  const tabsRef = useRef(null)
+
+  const irAPestana = id => {
+    setTab(id)
+    // El navegador desplazaría el carril por su cuenta al enfocar; lo hace
+    // el efecto de abajo, que además respeta el margen de la píldora.
+    tabsRef.current?.querySelector(`[data-tab="${id}"]`)?.focus({ preventScroll:true })
+  }
+
+  const onTabKeyDown = e => {
+    const ids = TABS.map(t => t.id)
+    const i = ids.indexOf(tab)
+    const salto = { ArrowRight: 1, ArrowLeft: -1 }[e.key]
+    if (salto !== undefined) {
+      e.preventDefault()
+      irAPestana(ids[(i + salto + ids.length) % ids.length])
+    } else if (e.key === 'Home') {
+      e.preventDefault(); irAPestana(ids[0])
+    } else if (e.key === 'End') {
+      e.preventDefault(); irAPestana(ids[ids.length - 1])
+    }
+  }
+
+  /* Trae la pestaña activa al carril cuando queda fuera de vista. Mueve sólo
+     el scroll del contenedor —no `scrollIntoView`— para que la página nunca
+     dé un salto vertical al cambiar de sección en móvil. */
+  useEffect(() => {
+    const carril = tabsRef.current
+    const activa = carril?.querySelector(`[data-tab="${tab}"]`)
+    if (!carril || !activa) return
+    const c = carril.getBoundingClientRect()
+    const a = activa.getBoundingClientRect()
+    const aire = 8
+    if (a.left < c.left + aire) {
+      carril.scrollBy({ left: a.left - c.left - aire, behavior:'smooth' })
+    } else if (a.right > c.right - aire) {
+      carril.scrollBy({ left: a.right - c.right + aire, behavior:'smooth' })
+    }
+  }, [tab])
 
   /* ── Grade overrides (editable by admin, read by student) ───── */
   const [evalOverrides, setEvalOverrides] = useState(() => {
@@ -125,9 +223,8 @@ export default function StudentProfile() {
     return () => { vivo = false }
   }, [studentId])
 
-  // Simulacros e insights siguen siendo simulados; no hay tablas todavía.
+  // Los simulacros siguen siendo simulados; no hay tabla todavía.
   const rpts    = getReportsByStudent(studentId)
-  const insight = getInsightByStudent(studentId)
   const radar   = studentRadar[studentId]
   const trend   = studentGradeTrend[studentId]
 
@@ -215,8 +312,13 @@ export default function StudentProfile() {
                 <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}/>{cfg.label}
               </span>
             </div>
-            <div className="flex flex-wrap gap-4 mt-3 text-sm" style={{ color:'var(--t3)' }}>
-              <span className="flex items-center gap-1.5"><Mail size={13}/>{s.email}</span>
+            <div className="flex flex-wrap gap-4 mt-3 text-sm min-w-0" style={{ color:'var(--t3)' }}>
+              {/* Un correo institucional largo no parte por sí solo y en 411 px
+                  se salía de la tarjeta, donde `.card` lo recortaba. */}
+              <span className="flex items-center gap-1.5 min-w-0 max-w-full">
+                <Mail size={13} className="flex-shrink-0"/>
+                <span className="truncate">{s.email}</span>
+              </span>
             </div>
 
             {/* Quick stats */}
@@ -275,12 +377,24 @@ export default function StudentProfile() {
         </div>
       </div>
 
-      {/* ── Tabs ──────────────────────────────────────────────────── */}
-      <div className="flex gap-1 rounded-xl p-1 w-fit overflow-x-auto"
+      {/* ── Tabs ──────────────────────────────────────────────────────
+          La píldora se ajusta al contenido a partir de `sm`, donde las seis
+          pestañas caben; por debajo ocupa el ancho disponible y desliza. El
+          `w-fit` a secas hacía crecer el contenedor hasta el ancho de sus
+          botones, así que en móvil se desbordaba de la página en vez de
+          desplazarse por dentro, y `max-w-full` es lo que devuelve el carril
+          en tablets estrechas. `shrink-0` en cada botón evita que el flex los
+          comprima y parta las etiquetas en dos líneas. */}
+      <div ref={tabsRef} role="tablist" aria-label="Secciones del alumno"
+        className="flex gap-1 rounded-xl p-1 w-full max-w-full sm:w-fit
+                   scroll-carril snap-x scroll-px-1 scroll-smooth motion-reduce:scroll-auto"
         style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap"
+            data-tab={t.id} id={`pestana-${t.id}`} aria-controls="panel-alumno"
+            role="tab" aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1}
+            onKeyDown={onTabKeyDown}
+            className="flex shrink-0 snap-start items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap"
             style={tab === t.id
               ? { background:'white', color:'black', boxShadow:'0 2px 8px rgba(0,0,0,.35)' }
               : { color:'var(--t2)' }}
@@ -291,13 +405,25 @@ export default function StudentProfile() {
         ))}
       </div>
 
+      {/* Un solo panel para las seis secciones: como sólo se pinta la activa,
+          basta con que se anuncie etiquetado por la pestaña en curso. */}
+      {/* `min-w-0`: el panel es hijo de un contenedor en flujo normal, pero sus
+          nietos (rejillas y tablas) sí necesitan poder encoger. Sin esto una
+          tabla ancha empujaba el ancho del panel y aparecía la barra horizontal
+          de la página entera en vez de la del propio bloque. */}
+      <div id="panel-alumno" role="tabpanel" aria-labelledby={`pestana-${tab}`} className="min-w-0">
+
       {/* ══════════════════════════════════════════════════════════
           TAB: RESUMEN
       ══════════════════════════════════════════════════════════ */}
       {tab === 'resumen' && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 min-w-0">
 
-          <div className="card p-5">
+          {/* `min-w-0` en cada tarjeta con gráfica: Recharts mide el hueco y
+              escribe un ancho en píxeles en el <svg>, así que la aportación de
+              contenido mínimo de la celda se queda anclada al ancho anterior y
+              la rejilla no vuelve a encoger al girar el teléfono. */}
+          <div className="card p-5 min-w-0">
             <h3 className="section-title mb-4">Competencias</h3>
             {radar ? (
               <ResponsiveContainer width="100%" height={220}>
@@ -314,7 +440,7 @@ export default function StudentProfile() {
             )}
           </div>
 
-          <div className="card p-5 xl:col-span-2">
+          <div className="card p-5 min-w-0 xl:col-span-2">
             <h3 className="section-title mb-4">Evolución de Calificaciones</h3>
             {trend ? (
               <ResponsiveContainer width="100%" height={200}>
@@ -346,7 +472,7 @@ export default function StudentProfile() {
             )}
           </div>
 
-          <div className="card p-5">
+          <div className="card p-5 min-w-0">
             <h3 className="section-title mb-4">Asistencia General</h3>
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
@@ -359,9 +485,9 @@ export default function StudentProfile() {
             </ResponsiveContainer>
             <div className="grid grid-cols-2 gap-1.5 mt-2">
               {attPie.map((d, i) => (
-                <div key={d.name} className="flex items-center gap-1.5 text-xs">
+                <div key={d.name} className="flex items-center gap-1.5 text-xs min-w-0">
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i] }}/>
-                  <span style={{ color:'var(--t2)' }}>
+                  <span className="truncate" style={{ color:'var(--t2)' }}>
                     {d.name}: <strong style={{ color:'var(--t1)' }}>{d.value}</strong>
                   </span>
                 </div>
@@ -381,39 +507,67 @@ export default function StudentProfile() {
         }))
         return (
           <div className="card overflow-hidden">
-            <div className="px-5 py-3 flex items-center justify-between flex-shrink-0"
+            {/* La pista de edición y el título sumaban ~370 px en una caja de
+                339: sin `flex-wrap` el texto se salía y `.card` lo recortaba a
+                media frase. En teléfono la pista sobra —ahí no hay ratón que
+                pueda "hacer clic"— así que se retira por clase. */}
+            <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-2 flex-wrap"
               style={{ borderBottom:'1px solid var(--divider)', background:'var(--soft-bg)' }}>
               <h3 className="section-title">Historial de Evaluaciones</h3>
-              <span className="flex items-center gap-1.5 text-xs" style={{ color:'var(--t3)' }}>
+              <span className="hidden sm:flex items-center gap-1.5 text-xs" style={{ color:'var(--t3)' }}>
                 <Pencil size={11}/> Click en calificación para editar
               </span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            {/* El barrido horizontal sobre la tabla disparaba el gesto de
+                "atrás" del navegador al llegar al borde. */}
+            <div className="overflow-x-auto" style={{ overscrollBehaviorX:'contain' }}>
+              {/* Tres niveles de ancho. En teléfono la tabla cabe entera —sin
+                  Periodo ni Fecha, que se pliegan bajo la materia— y no hace
+                  falta desplazarla; de `sm` en adelante se le da un mínimo
+                  cómodo para que las columnas no se aplasten. */}
+              <table className="w-full min-w-0 sm:min-w-[480px] lg:min-w-[560px]">
                 <thead>
                   <tr style={{ borderBottom:'1px solid var(--divider)' }}>
-                    {['Materia','Tipo','Calificación','Periodo','Fecha'].map(h => (
-                      <th key={h} className="table-header">{h}</th>
-                    ))}
+                    <th className="table-header px-3 sm:px-4">Materia</th>
+                    <th className="table-header px-3 sm:px-4">Tipo</th>
+                    <th className="table-header px-3 sm:px-4">
+                      <span className="sm:hidden">Calif.</span>
+                      <span className="hidden sm:inline">Calificación</span>
+                    </th>
+                    <th className="table-header hidden sm:table-cell">Periodo</th>
+                    <th className="table-header hidden sm:table-cell">Fecha</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {effectiveEvals.map(e => (
+                {/* Regla de despliegue: no se vuelca el historial completo de
+                    golpe. Además, así la tabla tiene por fin estado vacío —
+                    antes un alumno sin evaluaciones mostraba una cabecera
+                    suelta sobre nada. */}
+                <ProgressiveList as="tbody" colSpan={5} items={effectiveEvals}
+                  sizes={{ mobile: 5, tablet: 10, desktop: 20 }}
+                  emptyLabel="Este alumno todavía no tiene evaluaciones capturadas.">
+                  {e => (
                     <tr key={e.id}
                       style={{ borderBottom:'1px solid var(--divider)' }}
                       onMouseEnter={ev => ev.currentTarget.style.background='var(--soft-bg)'}
                       onMouseLeave={ev => ev.currentTarget.style.background='transparent'}>
-                      <td className="table-cell font-medium" style={{ color:'var(--t1)' }}>
+                      <td className="table-cell px-3 sm:px-4 font-medium" style={{ color:'var(--t1)' }}>
                         {e.materia}
+                        {/* Fecha y periodo no desaparecen en teléfono: bajan
+                            aquí como línea secundaria, que es donde se leen sin
+                            robarle ancho a la calificación. */}
+                        <span className="block sm:hidden text-[11px] font-normal mt-0.5"
+                          style={{ color:'var(--t3)' }}>
+                          {e.fecha}{e.periodo ? ` · ${e.periodo}` : ''}
+                        </span>
                       </td>
-                      <td className="table-cell">
-                        <span className="badge text-[11px] px-2 py-0.5"
+                      <td className="table-cell px-3 sm:px-4">
+                        <span className="badge text-[11px] px-2 py-0.5 whitespace-nowrap"
                           style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
                           {e.tipo}
                         </span>
                       </td>
-                      <td className="table-cell">
-                        <div className="flex items-center gap-1.5">
+                      <td className="table-cell px-3 sm:px-4">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <EditableGrade evalId={e.id} value={e.calificacion} onSave={saveOverride}/>
                           <span className="text-xs" style={{ color:'var(--t3)' }}>/{e.calMax}</span>
                           {evalOverrides[e.id] !== undefined && (
@@ -424,11 +578,11 @@ export default function StudentProfile() {
                           )}
                         </div>
                       </td>
-                      <td className="table-cell" style={{ color:'var(--t2)' }}>{e.periodo}</td>
-                      <td className="table-cell text-xs" style={{ color:'var(--t3)' }}>{e.fecha}</td>
+                      <td className="table-cell hidden sm:table-cell" style={{ color:'var(--t2)' }}>{e.periodo}</td>
+                      <td className="table-cell hidden sm:table-cell text-xs" style={{ color:'var(--t3)' }}>{e.fecha}</td>
                     </tr>
-                  ))}
-                </tbody>
+                  )}
+                </ProgressiveList>
               </table>
             </div>
           </div>
@@ -440,16 +594,30 @@ export default function StudentProfile() {
       ══════════════════════════════════════════════════════════ */}
       {tab === 'asistencias' && (
         <div className="space-y-4">
+          {/* Conteo por estado. Relleno mate —color pleno y opaco del token,
+              sin alfa ni degradado— con el texto y el icono en blanco. Antes
+              usaba las clases neón de `attendanceColors`, que en IPN y UNAM
+              (página blanca) se veían fuera de registro. Ojo: ese mapa sigue
+              alimentando la lista de sesiones de abajo y otras pantallas, por
+              eso se deja intacto y aquí sólo se toma la etiqueta. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Object.entries(attCounts).map(([k, v]) => {
-              const c = attendanceColors[k]
-              return (
-                <div key={k} className={`stat-card ${c.bg} border ${c.border}`}>
-                  <p className={`text-2xl font-bold ${c.text}`}>{v}</p>
-                  <p className={`text-xs font-medium mt-0.5 ${c.text}`} style={{ opacity:.75 }}>{c.label}</p>
+            {Object.entries(attCounts).map(([k, v]) => (
+              <div key={k}
+                className="rounded-2xl p-5 transition-transform duration-300 hover:-translate-y-1"
+                style={{
+                  background: RELLENO_ASISTENCIA[k],
+                  color:'#ffffff',
+                  boxShadow:'0 1px 3px rgba(15,23,42,.22)',
+                }}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-2xl font-bold leading-none">{v}</p>
+                  <span style={{ opacity:.9 }}>{ICONOS_ASISTENCIA[k]}</span>
                 </div>
-              )
-            })}
+                <p className="text-xs font-medium mt-1.5" style={{ opacity:.85 }}>
+                  {attendanceColors[k].label}
+                </p>
+              </div>
+            ))}
           </div>
 
           <div className="card overflow-hidden">
@@ -457,31 +625,37 @@ export default function StudentProfile() {
               style={{ borderBottom:'1px solid var(--divider)', background:'var(--soft-bg)' }}>
               <h3 className="section-title">Registro de Asistencias (Abril 2026)</h3>
             </div>
-            <div className="divide-y max-h-96 overflow-y-auto"
-              style={{ '--tw-divide-opacity':1, borderColor:'var(--divider)' }}>
-              {att.map(a => {
+            <div className="max-h-96 overflow-y-auto p-2 sm:p-0">
+              <ProgressiveList className="divide-y" items={att}
+                sizes={{ mobile: 8, tablet: 14, desktop: 24 }}
+                emptyLabel="Todavía no hay sesiones registradas para este alumno.">
+              {a => {
                 const c = getAttendanceColor(a.status)
                 return (
                   <div key={a.id}
-                    className="flex items-center justify-between px-5 py-2.5 transition-colors"
+                    className="flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 transition-colors"
                     onMouseEnter={e => e.currentTarget.style.background='var(--soft-bg)'}
                     onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${c.bg}`}>
+                    {/* La fecha cede el ancho y la etiqueta de estado no: al
+                        revés, "Justificado" se partía en dos líneas y la fila
+                        crecía al doble de alto. */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${c.bg}`}>
                         <span className={`w-2 h-2 rounded-full ${c.dot}`}/>
                       </div>
-                      <span className="text-sm" style={{ color:'var(--t1)' }}>
+                      <span className="text-sm truncate" style={{ color:'var(--t1)' }}>
                         {new Date(a.date + 'T12:00').toLocaleDateString('es-MX', {
                           weekday:'short', day:'numeric', month:'short',
                         })}
                       </span>
                     </div>
-                    <span className={`badge ${c.bg} ${c.text} border ${c.border}`}>
+                    <span className={`badge flex-shrink-0 whitespace-nowrap ${c.bg} ${c.text} border ${c.border}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`}/>{c.label}
                     </span>
                   </div>
                 )
-              })}
+              }}
+              </ProgressiveList>
             </div>
           </div>
         </div>
@@ -500,22 +674,25 @@ export default function StudentProfile() {
           )}
           {rpts.map(r => (
             <div key={r.id} className="card p-5 space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
                     <FileText size={16} style={{ color:'var(--t2)' }}/>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-sm" style={{ color:'var(--t1)' }}>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm truncate" style={{ color:'var(--t1)' }}>
                       Reporte — {r.mes}
                     </h3>
-                    <p className="text-xs" style={{ color:'var(--t3)' }}>
+                    <p className="text-xs truncate" style={{ color:'var(--t3)' }}>
                       Generado por {r.generadoPor}
                     </p>
                   </div>
                 </div>
-                <button onClick={() => exportMonthlyReport(s, r)} className="btn-secondary text-xs py-1.5"><Download size={13}/>Descargar</button>
+                <button onClick={() => exportMonthlyReport(s, r)}
+                  className="btn-secondary text-xs py-1.5 flex-shrink-0 whitespace-nowrap">
+                  <Download size={13}/>Descargar
+                </button>
               </div>
 
               {/* Mini stats */}
@@ -583,95 +760,6 @@ export default function StudentProfile() {
       )}
 
       {/* ══════════════════════════════════════════════════════════
-          TAB: ANÁLISIS IA
-      ══════════════════════════════════════════════════════════ */}
-      {tab === 'ia' && (
-        <div className="space-y-4">
-          {insight ? (
-            <>
-              <div className={clsx(
-                'card p-5',
-                insight.riesgo === 'crítico' ? 'border-l-4 border-red-500' : 'border-l-4 border-amber-500'
-              )}>
-                <div className="flex items-center gap-3 mb-3">
-                  <BrainCircuit size={20}
-                    style={{ color: insight.riesgo === 'crítico' ? 'var(--bad)' : 'var(--warn)' }}/>
-                  <div>
-                    <h3 className="font-bold text-sm" style={{ color:'var(--t1)' }}>
-                      Análisis de Rendimiento — IA
-                    </h3>
-                    <span className="text-xs font-semibold uppercase"
-                      style={{ color: insight.riesgo === 'crítico' ? 'var(--bad)' : 'var(--warn)' }}>
-                      Nivel de riesgo: {insight.riesgo}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-sm leading-relaxed p-3 rounded-xl font-mono"
-                  style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
-                  {insight.patron}
-                </p>
-              </div>
-
-              <div className="card p-5">
-                <h3 className="section-title mb-4">Deficiencias Detectadas</h3>
-                <div className="space-y-4">
-                  {insight.deficiencias.map(d => (
-                    <div key={d.materia}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm font-semibold" style={{ color:'var(--t1)' }}>
-                          {d.materia}
-                        </span>
-                        <span className="text-sm font-bold"
-                          style={{ color: d.nivel < 40 ? 'var(--bad)' : d.nivel < 60 ? 'var(--warn)' : 'var(--info)' }}>
-                          {d.nivel}%
-                        </span>
-                      </div>
-                      <div className="w-full h-2 rounded-full overflow-hidden"
-                        style={{ background:'var(--soft-bg)' }}>
-                        <div className="h-full rounded-full transition-all"
-                          style={{
-                            width:`${d.nivel}%`,
-                            background: d.nivel < 40 ? 'var(--bad)' : d.nivel < 60 ? 'var(--warn)' : 'var(--info)',
-                          }}/>
-                      </div>
-                      <p className="text-xs mt-1" style={{ color:'var(--t3)' }}>{d.problema}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="card p-5">
-                <h3 className="section-title mb-3 flex items-center gap-2">
-                  <CheckCircle size={15} style={{ color:'var(--good)' }}/> Recomendaciones IA
-                </h3>
-                <ul className="space-y-2">
-                  {insight.recomendaciones.map((rec, i) => (
-                    <li key={i} className="flex items-start gap-2.5 px-4 py-2.5 rounded-xl"
-                      style={{ background:'var(--good-soft)', border:'1px solid var(--good-soft)' }}>
-                      <span className="font-bold text-sm flex-shrink-0" style={{ color:'var(--good)' }}>
-                        {i + 1}.
-                      </span>
-                      <span className="text-sm" style={{ color:'var(--t1)' }}>{rec}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </>
-          ) : (
-            <div className="card p-10 text-center">
-              <BrainCircuit size={36} className="mx-auto mb-3" style={{ color:'var(--good)' }}/>
-              <h3 className="font-bold text-sm mb-1" style={{ color:'var(--t1)' }}>
-                Sin alertas de IA
-              </h3>
-              <p className="text-sm" style={{ color:'var(--t2)' }}>
-                Este alumno tiene un rendimiento dentro de los parámetros esperados.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════
           TAB: CÓDIGO QR
       ══════════════════════════════════════════════════════════ */}
       {tab === 'qr' && (
@@ -720,6 +808,8 @@ export default function StudentProfile() {
           </div>
         </div>
       )}
+
+      </div>
     </div>
   )
 }

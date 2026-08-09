@@ -1,10 +1,10 @@
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import LoadingPage from '../LoadingPage'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, CalendarCheck, Users, BookOpen,
-  BrainCircuit, Upload, LogOut, ClipboardList, Trophy,
+  Upload, LogOut, ClipboardList, Trophy, Wallet,
   Bell, Menu, X, ChevronRight, ScrollText, TableProperties, SlidersHorizontal,
   Mail, CheckCircle2, FileText, AlertTriangle, FileCheck, ShieldCheck,
 } from 'lucide-react'
@@ -28,9 +28,9 @@ const SECCIONES = [
   ]},
   { titulo: 'Resultados', items: [
     { to:'/admin/rankings',     label:'Rankings',               icon:Trophy },
-    { to:'/admin/ia',           label:'Análisis IA',            icon:BrainCircuit },
   ]},
   { titulo: 'Administración', items: [
+    { to:'/admin/pagos',        label:'Pagos',                  icon:Wallet, adminOnly:true },
     { to:'/admin/terminos',     label:'T&C / Firmas',           icon:ScrollText },
     { to:'/admin/configuracion',label:'Configuración',          icon:SlidersHorizontal },
     { to:'/admin/configuracion/acceso', label:'Acceso y Disposición', icon:ShieldCheck, adminOnly:true },
@@ -50,8 +50,8 @@ const pageTitles = {
   '/admin/evaluaciones': 'Captura rápida de calificaciones',
   '/admin/registrar':    'Calificaciones',
   '/admin/asistencias':  'Pasar Lista',
-  '/admin/ia':           'Análisis con IA',
   '/admin/rankings':     'Rankings',
+  '/admin/pagos':        'Control de pagos',
   '/admin/terminos':     'T&C y Firmas',
   '/admin/configuracion':'Configuración',
   '/admin/configuracion/acceso':'Acceso y Disposición',
@@ -70,6 +70,22 @@ const activityColor = {
 function LayoutInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
+  const notifRef = useRef(null)
+
+  /* Cierre del panel de notificaciones sin cubrir la pantalla con un telón
+     invisible: se escucha el puntero en `document` y se comprueba si cayó
+     fuera. `pointerdown` cubre ratón y dedo con un solo escucha. */
+  useEffect(() => {
+    if (!notifOpen) return
+    const fuera  = e => { if (!notifRef.current?.contains(e.target)) setNotifOpen(false) }
+    const escape = e => { if (e.key === 'Escape') setNotifOpen(false) }
+    document.addEventListener('pointerdown', fuera)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', fuera)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [notifOpen])
   const { currentUser, logout } = useAuth()
   const { appearance, t } = useAdminTheme()
   const navigate    = useNavigate()
@@ -111,6 +127,9 @@ function LayoutInner() {
     '--warn-soft': t.warnSoft, '--bad-soft': t.badSoft,
     '--good-line': t.goodLine, '--info-line': t.infoLine,
     '--warn-line': t.warnLine, '--bad-line': t.badLine,
+    // Relleno mate: color pleno y opaco, siempre con texto blanco encima.
+    '--good-solid': t.goodSolid, '--info-solid': t.infoSolid,
+    '--warn-solid': t.warnSolid, '--bad-solid': t.badSolid,
     // Sombra con presencia: la anterior era tan tenue que las tarjetas se
     // perdían contra el fondo blanco y parecían flotar sin definición.
     '--card-shadow': t.light
@@ -309,8 +328,8 @@ function LayoutInner() {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="relative">
-              <button aria-label="Notificaciones" onClick={() => setNotifOpen(v => !v)}
+            <div className="relative" ref={notifRef}>
+              <button aria-label="Notificaciones" aria-expanded={notifOpen} onClick={() => setNotifOpen(v => !v)}
                 className="relative p-2 rounded-xl transition-colors active:scale-95"
                 style={{ color: t.sideT3, background: notifOpen ? 'rgba(255,255,255,.07)' : 'transparent' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.07)'}
@@ -319,15 +338,22 @@ function LayoutInner() {
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-400 rounded-full" aria-hidden />
               </button>
 
+              {/* Sin telón. Antes había un `fixed inset-0` invisible para
+                  detectar el clic fuera; con ratón no se nota, pero en un
+                  teléfono ese rectángulo se traga TODOS los toques: la página
+                  deja de desplazarse y cualquier roce cierra el panel. Se ve
+                  como si la pantalla se congelara. El cierre por clic fuera lo
+                  resuelve ahora un escucha en `document`, que no cubre nada. */}
               {notifOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-80 max-w-[85vw] rounded-2xl z-50 overflow-hidden animate-scale-in"
+                  <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl z-50 overflow-hidden animate-scale-in"
                     style={{ background:'var(--panel-bg)', border:'1px solid rgba(255,255,255,.12)', boxShadow:'0 24px 72px rgba(0,0,0,.60)' }}>
                     <div className="px-4 py-3" style={{ borderBottom:'1px solid rgba(255,255,255,.08)' }}>
                       <p className="text-sm font-bold" style={{ color:'var(--t1)' }}>Notificaciones</p>
                     </div>
-                    <div className="max-h-80 overflow-y-auto">
+                    {/* `overscroll-contain`: al llegar al final de la lista, el
+                        gesto no sigue arrastrando la página de detrás. */}
+                    <div className="max-h-80 overflow-y-auto overscroll-contain">
                       {recentActivity.map(a => {
                         const Icon = activityIcon[a.icon] ?? Bell
                         const color = activityColor[a.tipo] ?? 'var(--t2)'

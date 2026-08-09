@@ -125,17 +125,28 @@ function WeekPicker({ weekStart, onSelect, recordDates, t }) {
   const selStart = iso(weekStart), selEnd = iso(weekEnd)
 
   return (
-    <div ref={ref} className="relative">
-      <button onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition-all active:scale-95"
+    /* En teléfono ocupa la fila entera: el rótulo "Semana del 3 – 9 mar" no
+       cabe junto al título y quedaba partido a mitad de palabra. */
+    <div ref={ref} className="relative w-full sm:w-auto">
+      <button onClick={() => setOpen(o => !o)} aria-expanded={open}
+        className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition-all active:scale-95"
         style={{ background: t.ddBg, border: `1px solid ${t.cardBorder}`, color: t.t2 }}>
-        <Calendar size={13}/>
-        Semana del {label}
-        <ChevronDown size={13} className="transition-transform duration-200" style={{ transform: open ? 'rotate(180deg)' : 'none' }}/>
+        <Calendar size={13} className="flex-shrink-0"/>
+        <span className="truncate">Semana del {label}</span>
+        <ChevronDown size={13} className="flex-shrink-0 transition-transform duration-200" style={{ transform: open ? 'rotate(180deg)' : 'none' }}/>
       </button>
 
       {open && (
-        <div className="absolute z-50 right-0 mt-1.5 w-72 max-w-[calc(100vw-2.5rem)] rounded-xl p-3 animate-fade-in"
+        /* Hasta `sm` el calendario va EN FLUJO y a ancho completo: empuja la
+           semana hacia abajo en vez de flotar. Flotando no se veía —la tarjeta
+           que lo contiene recorta (`.card` lleva overflow:hidden) y en una sola
+           columna mide menos que el propio calendario, así que en teléfono
+           quedaba cortado por abajo; además, con el botón desplazado a su
+           propia línea, `right-0` sacaba el panel de 288 px por el borde
+           izquierdo de la pantalla. De `sm` en adelante sí flota anclado a la
+           derecha, y la tarjeta lo deja salir con `overflow-visible`. */
+        <div className="mt-1.5 w-full rounded-xl p-3 animate-fade-in
+                        sm:absolute sm:z-50 sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2.5rem)]"
           style={{ background: t.ddPanel, border: `1px solid ${t.cardBorder}`, boxShadow: '0 18px 48px rgba(0,0,0,.30)' }}>
           {/* Nav de mes */}
           <div className="flex items-center justify-between mb-2">
@@ -335,9 +346,12 @@ export default function MyAttendance() {
           </div>
         </div>
 
-        {/* Semana de 7 días con selector de calendario */}
-        <div className="card p-4 sm:p-5 xl:col-span-2">
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+        {/* Semana de 7 días con selector de calendario.
+            `overflow-visible` anula el recorte de `.card`: el calendario del
+            selector es más alto que esta tarjeta cuando la rejilla va a una
+            sola columna, y sin esto se veía cortado a media rejilla. */}
+        <div className="card overflow-visible p-4 sm:p-5 xl:col-span-2">
+          <div className="flex items-center justify-between gap-2 sm:gap-3 flex-wrap mb-4">
             <h2 className="section-title">Registro por Semana</h2>
             <WeekPicker weekStart={weekStart} onSelect={setWeekStart}
               recordDates={new Set(att.map(a => a.date))} t={t}/>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X, Plus, Save, AlertCircle, RefreshCw, Eye, EyeOff } from 'lucide-react'
 import { createStudent, updateStudent } from '../../lib/supabaseData'
-import { generarPassword, generarUsuario } from '../../lib/credentials'
+import { generarPassword, generarUsuario, DOMINIO_CORREO } from '../../lib/credentials'
 import ModalPortal from '../ui/ModalPortal'
 
 /**
@@ -32,7 +32,7 @@ export default function StudentFormModal({
   // Sugiere el correo a partir del nombre mientras no se haya escrito uno.
   const sugerirCorreo = () => {
     if (editing || form.email.trim() || !form.name.trim()) return
-    set('email', `${generarUsuario(form.name)}@edutrack.mx`)
+    set('email', `${generarUsuario(form.name)}@${DOMINIO_CORREO}`)
   }
 
   const handleSubmit = async e => {
@@ -82,7 +82,7 @@ export default function StudentFormModal({
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
               style={{ color: 'var(--t3)' }}>Usuario (correo de acceso)</label>
             <input required type="email" value={form.email} onChange={e => set('email', e.target.value)}
-              placeholder="ana.garcia@edutrack.mx" className="input-field"/>
+              placeholder={`ana.garcia@${DOMINIO_CORREO}`} className="input-field"/>
             <p className="text-[10px] mt-1" style={{ color: 'var(--t4)' }}>
               Con este correo inicia sesión el alumno.
             </p>

@@ -536,14 +536,28 @@ export async function fetchStaff() {
  * El personal sale de `profiles` —donde vive su identidad y a donde apunta la
  * tabla de permisos— y los alumnos de `students`, que es el padrón real y el
  * único sitio donde consta su grupo.
+ *
+ * Se llama a `list_cuentas_estado` y no a `list_cuentas` porque esta última
+ * esconde a quien tiene `activo = false`. Una cuenta retirada que desaparece de
+ * la lista se lee como un fallo del sistema: el administrador que acaba de dar
+ * de baja a alguien necesita ver que quedó dado de baja, no que se esfumó.
  */
 export async function fetchCuentas() {
-  const { data, error } = await supabase.rpc('list_cuentas')
+  const { data, error } = await supabase.rpc('list_cuentas_estado')
   if (error) throw error
   return data.map(c => ({
     id: c.id, name: c.name, email: c.email, role: c.role,
     grupoId: c.grupo_id, grupoNombre: c.grupo_nombre, sucursal: c.sucursal,
+    activo: c.activo !== false,
   }))
+}
+
+/* La base distingue los motivos del fallo; traducirlos todos a "¿correo ya
+   registrado?" obligaba a adivinar. */
+const MENSAJES_ALTA = {
+  email_already_exists:        'Ese correo ya está registrado en otra cuenta.',
+  solo_admin:                  'Solo un administrador puede crear cuentas de sub-admin.',
+  role_not_allowed_from_client:'Ese rol no se puede crear desde el panel.',
 }
 
 export async function createSubAdmin({ name, email, password }) {
@@ -553,10 +567,59 @@ export async function createSubAdmin({ name, email, password }) {
     p_password: password,
     p_role: 'sub_admin',
   })
-  if (error) return { ok: false, message: 'No se pudo crear el sub-admin (¿correo ya registrado?).' }
+  if (error) {
+    const clave = Object.keys(MENSAJES_ALTA).find(k => (error.message ?? '').includes(k))
+    return { ok: false, message: clave ? MENSAJES_ALTA[clave] : 'No se pudo crear el sub-admin.' }
+  }
   const row = data?.[0]
   if (!row) return { ok: false, message: 'No se pudo crear el sub-admin.' }
   return { ok: true, user: { id: row.id, name: row.name, email: row.email, role: row.role } }
+}
+
+/* ── Baja y reincorporación de sub-admins ──────────────────────────────────
+   La cuenta se RETIRA, no se borra. Ver la migración
+   20260808120000_baja_de_subadmins.sql para el razonamiento completo: borrar
+   se llevaría por delante el historial de qué sucursales tuvo esa persona y
+   dejaría viva su fila en la tabla heredada `users`, por la que
+   `login_user` seguiría dejándola entrar.
+
+   La retirada es una operación de la base, no del cliente: prohíbe la entrada
+   en auth.users, corta la sesión abierta, libera el correo con el prefijo
+   `retirada+` y borra sus accesos. */
+
+const MENSAJES_BAJA = {
+  solo_admin:          'Solo un administrador puede dar de baja una cuenta.',
+  solo_sub_admin:      'Solo se pueden retirar cuentas de sub-admin.',
+  no_puedes_retirarte: 'No puedes retirar tu propia cuenta.',
+  cuenta_ya_retirada:  'Esa cuenta ya estaba retirada.',
+  cuenta_ya_activa:    'Esa cuenta ya está activa.',
+  cuenta_no_encontrada:'La cuenta ya no existe.',
+  correo_ocupado:      'Su correo original lo ocupa ahora otra cuenta. Cámbialo antes de reincorporarla.',
+}
+
+const traducir = (error, porDefecto) => {
+  const clave = Object.keys(MENSAJES_BAJA).find(k => (error.message ?? '').includes(k))
+  return clave ? MENSAJES_BAJA[clave] : porDefecto
+}
+
+/** Retira la cuenta de un sub-admin. Devuelve cuántos accesos se le quitaron. */
+export async function desactivarSubAdmin(perfilId) {
+  const { data, error } = await supabase.rpc('desactivar_cuenta', { p_perfil_id: perfilId })
+  if (error) return { ok: false, message: traducir(error, 'No se pudo retirar la cuenta.') }
+  const row = data?.[0]
+  return {
+    ok: true,
+    email: row?.email ?? null,
+    accesosRetirados: row?.accesos_retirados ?? 0,
+  }
+}
+
+/** Reincorpora una cuenta retirada. Los accesos NO vuelven: se conceden de nuevo. */
+export async function reactivarSubAdmin(perfilId) {
+  const { data, error } = await supabase.rpc('reactivar_cuenta', { p_perfil_id: perfilId })
+  if (error) return { ok: false, message: traducir(error, 'No se pudo reincorporar la cuenta.') }
+  const row = data?.[0]
+  return { ok: true, email: row?.email ?? null }
 }
 
 export async function fetchSubAdminAccess(userId) {

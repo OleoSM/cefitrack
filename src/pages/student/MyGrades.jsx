@@ -14,6 +14,7 @@ import ProgressiveList from '../../components/ui/ProgressiveList'
 import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
+import KpiCard from '../../components/ui/KpiCard'
 
 /* Color personalizado por materia (línea de acento de cada card) */
 const MATERIA_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa', '#f472b6', '#22d3ee', '#fb7185', '#facc15']
@@ -137,28 +138,9 @@ export default function MyGrades() {
             label: scopeBajo6 > 0 ? 'Por debajo de 6' : 'Ninguna reprobada',
             bar: scopeEvals.length > 0 ? scopeBajo6 / scopeEvals.length : 0,
           },
-        ].map(({ icon: Icon, accent, value, label, bar }, i) => (
-          <div key={i} className="stat-card relative overflow-hidden">
-            {/* Franja de acento sólida. Antes era un halo radial que se
-                desvanecía a transparente: sobre el blanco de IPN/UNAM no se
-                percibe como color, sino como una mancha sucia. */}
-            <div className="absolute inset-y-0 left-0 w-1 pointer-events-none"
-              style={{ background: accent }}/>
-            <div className="relative flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ background: accent }}>
-                <Icon size={20} style={{ color: '#fff' }}/>
-              </div>
-              <div className="min-w-0">
-                <p className="text-2xl sm:text-3xl font-bold tabular-nums leading-none" style={{ color: accent }}>{value}</p>
-                <p className="text-xs mt-1.5 truncate" style={{ color: t.t3 }}>{label}</p>
-              </div>
-            </div>
-            <div className="relative h-1 rounded-full overflow-hidden mt-3.5" style={{ background: t.softBg }}>
-              <div className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${Math.round(bar * 100)}%`, background: accent }}/>
-            </div>
-          </div>
+        ].map(({ icon, value, label }, i) => (
+          <KpiCard key={i} icon={icon} value={value} label={label}
+            tone={i === 0 ? 'good' : i === 1 ? 'info' : scopeBajo6 > 0 ? 'warn' : 'good'} light={t.light}/>
         ))}
       </div>
 

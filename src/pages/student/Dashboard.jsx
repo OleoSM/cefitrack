@@ -14,6 +14,7 @@ import { promedioPonderado, rankingGrupo, statsAsistencia, esExamen, esTarea, ev
 import { fetchGroupMetrics } from '../../lib/supabaseData'
 import { useStudentTheme, esColorClaro } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
+import KpiCard from '../../components/ui/KpiCard'
 
 const PIE_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6']
 const MATERIA_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa', '#f472b6', '#22d3ee']
@@ -226,39 +227,21 @@ export default function StudentDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { icon: Zap,           label: 'Último Simulacro',  value: lastSim ? `${lastSim.aciertos}/${lastSim.total}` : '—',
-            sub: lastSim?.folio, color: 'bg-emerald-600',
+            sub: lastSim?.folio, tone: 'good',
             go: () => document.getElementById('prediccion')?.scrollIntoView({ behavior: 'smooth' }) },
           { icon: CalendarCheck, label: 'Asistencia',
             value: asis.pct === null ? '—' : `${asis.pct}%`,
             sub: asis.pct === null ? 'Sin listas aún' : `${asis.counts.presente} presentes`,
-            color: 'bg-blue-600', go: () => navigate('/student/asistencias') },
+            tone: 'info', go: () => navigate('/student/asistencias') },
           { icon: BookOpen,      label: 'Tareas Entregadas',
             value: s.assignmentsTotal > 0 ? `${s.assignmentsDone ?? 0}/${s.assignmentsTotal}` : '—',
             sub: s.assignmentsTotal > 0
               ? `${Math.round(s.assignmentsDone / s.assignmentsTotal * 100)}% completado`
               : 'Sin tareas asignadas',
-            color: 'bg-amber-500', go: () => navigate('/student/calificaciones') },
-        ].map(({ icon: Icon, label, value, sub, color, go }) => (
-          <button key={label} onClick={go}
-            className="stat-card text-left transition-all group w-full flex flex-col">
-            <div className="flex items-start justify-between w-full">
-              <div className={`w-9 h-9 rounded-xl ${color} flex items-center justify-center mb-3`}>
-                <Icon size={18} className="text-white"/>
-              </div>
-              {sub && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: t.softBg, color: t.t3, border: `1px solid ${t.cardBorder}` }}>
-                  {sub}
-                </span>
-              )}
-            </div>
-            <p className="text-xl sm:text-2xl font-bold tabular-nums" style={{ color: t.t1 }}>{value}</p>
-            <p className="text-xs mt-0.5" style={{ color: t.t3 }}>{label}</p>
-            <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold transition-colors"
-              style={{ color: t.light ? t.accent : 'rgba(255,255,255,.45)' }}>
-              Ver más <ArrowRight size={11} className="transition-transform group-hover:translate-x-0.5"/>
-            </span>
-          </button>
+            tone: 'warn', go: () => navigate('/student/calificaciones') },
+        ].map(({ icon, label, value, sub, tone, go }) => (
+          <KpiCard key={label} icon={icon} label={label} value={value} sub={sub}
+            tone={tone} onClick={go} light={t.light}/>
         ))}
       </div>
 

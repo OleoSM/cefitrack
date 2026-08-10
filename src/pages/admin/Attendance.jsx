@@ -26,7 +26,7 @@ const fmtDate = iso => new Date(`${iso}T00:00:00`).toLocaleDateString('es-MX', {
 const TOL_PRESETS = [5, 10, 15, 20]
 
 export default function Attendance() {
-  const { nombreDe } = useSucursales()
+  const { sucursales, nombreDe } = useSucursales()
   const { getAccent } = useGroupColors()
 
   const [groups,         setGroups]        = useState([])
@@ -35,6 +35,7 @@ export default function Attendance() {
   const [evaluations,    setEvaluations]   = useState([])  // para la columna de calificación del Excel
   const [view,           setView]          = useState('pick')  // 'pick' | 'scan'
   const [selectedGrp,    setSelectedGrp]   = useState(null)
+  const [sucursalFiltro, setSucursalFiltro] = useState('todas')
   const [selectedDate,   setSelectedDate]  = useState(todayISO())
   const [scanning,       setScanning]      = useState(false)
   const [camError,       setCamError]      = useState('')
@@ -387,6 +388,9 @@ export default function Attendance() {
      VIEW: GROUP PICKER
   ══════════════════════════════════════════════════════════════ */
   if (view === 'pick') {
+    const gruposVisibles = sucursalFiltro === 'todas'
+      ? groups
+      : groups.filter(g => g.sucursal === sucursalFiltro)
     return (
       <div className="w-full space-y-6">
         <div>
@@ -396,8 +400,23 @@ export default function Attendance() {
           </p>
         </div>
 
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>
+              Sucursal
+            </label>
+            <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)} className="input-field text-sm w-auto">
+              <option value="todas">Todas las sucursales</option>
+              {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          </div>
+          <p className="text-xs pb-2.5" style={{ color:'var(--t3)' }}>
+            {gruposVisibles.length} grupo(s)
+          </p>
+        </div>
+
         <div className="grid gap-3 sm:gap-4">
-          {groups.map(g => {
+          {gruposVisibles.map(g => {
             const count = students.filter(s => s.groupId === g.id).length
             const hasHistory = sessionIndex.some(s => s.groupId === g.id)
             return (
@@ -983,13 +1002,13 @@ export default function Attendance() {
               <table className="w-full min-w-0 sm:min-w-[420px]">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--divider)' }}>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest w-10"
+                    <th className="hidden sm:table-cell px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest w-10"
                       style={{ color: 'var(--t4)' }}>#</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color: 'var(--t4)' }}>Nombre del Alumno</th>
-                    <th className="pr-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color: 'var(--t4)' }}>Hora de llegada</th>
-                    <th className="pr-4 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest w-20"
+                    <th className="px-2 sm:px-4 py-2 text-left text-[9px] sm:text-[10px] font-bold uppercase tracking-normal sm:tracking-widest"
+                      style={{ color: 'var(--t4)' }}><span className="sm:hidden">Alumno</span><span className="hidden sm:inline">Nombre del Alumno</span></th>
+                    <th className="px-1 sm:pr-4 py-2 text-right text-[9px] sm:text-[10px] font-bold uppercase tracking-normal sm:tracking-widest"
+                      style={{ color: 'var(--t4)' }}><span className="sm:hidden">Hora</span><span className="hidden sm:inline">Hora de llegada</span></th>
+                    <th className="px-1 sm:pr-4 py-2 text-center text-[9px] sm:text-[10px] font-bold uppercase tracking-normal sm:tracking-widest w-16 sm:w-20"
                       style={{ color: 'var(--t4)' }}>Retardo</th>
                   </tr>
                 </thead>
@@ -1000,34 +1019,34 @@ export default function Attendance() {
                       style={{ borderBottom: '1px solid var(--divider)' }}
                       onMouseEnter={e => e.currentTarget.style.background= 'var(--t2)'}
                       onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                      <td className="px-4 py-3">
+                      <td className="hidden sm:table-cell px-4 py-3">
                         <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--t4)' }}>
                           {String(i + 1).padStart(2, '0')}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <AvatarAlumno student={entry.student} size={28}
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 max-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+                          <AvatarAlumno student={entry.student} size={24}
                             style={{ background:'var(--good-soft)', color:'var(--good)' }}/>
-                          <span className="text-sm font-medium truncate" style={{ color: 'var(--t1)' }}>
+                          <span className="text-xs sm:text-sm font-medium truncate min-w-0" style={{ color: 'var(--t1)' }}>
                             {entry.student.name}
                           </span>
                         </div>
                       </td>
-                      <td className="pr-4 py-3 text-right">
-                        <span className="font-mono text-xs font-semibold tabular-nums"
+                      <td className="px-1 sm:pr-4 py-2 sm:py-3 text-right">
+                        <span className="font-mono text-[10px] sm:text-xs font-semibold tabular-nums whitespace-nowrap"
                           style={{ color: retardos[entry.student.id] ? 'var(--warn)' : 'var(--t2)' }}>
                           {entry.time}
                         </span>
                       </td>
-                      <td className="pr-4 py-3 text-center">
+                      <td className="px-1 sm:pr-4 py-2 sm:py-3 text-center">
                         <button onClick={() => toggleRetardo(entry.student.id)}
                           role="switch" aria-checked={!!retardos[entry.student.id]}
                           title={retardos[entry.student.id] ? 'Con retardo — clic para quitar' : 'Marcar retardo'}
-                          className="relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 align-middle"
+                          className="relative inline-flex w-8 sm:w-9 h-[18px] sm:h-5 rounded-full transition-colors duration-200 align-middle"
                           style={{ background: retardos[entry.student.id] ? 'var(--warn)' : 'var(--t4)' }}>
-                          <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200"
-                            style={{ transform: retardos[entry.student.id] ? 'translateX(16px)' : 'translateX(0)' }}/>
+                          <span className="absolute top-0.5 left-0.5 w-3.5 sm:w-4 h-3.5 sm:h-4 rounded-full bg-white transition-transform duration-200"
+                            style={{ transform: retardos[entry.student.id] ? 'translateX(14px)' : 'translateX(0)' }}/>
                         </button>
                       </td>
                     </tr>

@@ -15,19 +15,20 @@ import ResetPasswordModal from '../../components/admin/ResetPasswordModal'
 import ConfirmDialog from '../../components/admin/ConfirmDialog'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
+import { useSucursales } from '../../hooks/useSucursales'
 
 const attColor   = r => r >= 90 ? 'var(--good)' : r >= 75 ? 'var(--info)' : 'var(--bad)'
 const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
 const COLUMNS = [
-  { key:'name',    label:'Alumno',     className:'flex-grow min-w-[110px] sm:min-w-[140px]' },
+  { key:'name',    label:'Alumno',     className:'flex-grow min-w-0 sm:min-w-[140px]' },
   { key:'group',   label:'Grupo',      className:'w-28 hidden sm:flex' },
   { key:'att',     label:'Asistencia', className:'w-36 hidden lg:flex' },
-  { key:'grade',   label:'Promedio',   className:'w-16 sm:w-24' },
+  { key:'grade',   label:'Promedio',   className:'w-12 sm:w-24' },
   { key:'tasks',   label:'Tareas',     className:'w-32 hidden xl:flex' },
   { key:'status',  label:'Estado',     className:'w-28 hidden sm:flex' },
   { key:'contact', label:'Contacto',   className:'w-40 hidden xl:flex' },
-  { key:'action',  label:'',           className:'w-20 sm:w-28 flex justify-end' },
+  { key:'action',  label:'',           className:'w-[4.5rem] sm:w-28 flex justify-end' },
 ]
 
 export default function Students() {
@@ -35,6 +36,7 @@ export default function Students() {
   const { getAccent } = useGroupColors()
   const { currentUser, allowedSucursales, canAccess } = useAuth()
   const isAdmin = currentUser?.role === 'admin'
+  const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
 
   const [students, setStudents]   = useState([])
   const [groups, setGroups]       = useState([])
@@ -66,8 +68,17 @@ export default function Students() {
   useEffect(() => { load() }, [load])
 
   const visibleGroups = isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id))
-  const sucursalOptions = isAdmin ? [...new Set(groups.map(g => g.sucursal).filter(Boolean))] : allowedSucursales
+  const sucursalOptions = catalogoSucursales
+    .filter(s => isAdmin || allowedSucursales.includes(s.id))
+    .map(s => s.id)
   const visibleGroupIds = new Set(visibleGroups.map(g => g.id))
+  const groupsInSucursal = sucursalFilter === 'all'
+    ? visibleGroups
+    : visibleGroups.filter(g => g.sucursal === sucursalFilter)
+
+  useEffect(() => {
+    if (groupFilter !== 'all' && !groupsInSucursal.some(g => g.id === groupFilter)) setGroup('all')
+  }, [sucursalFilter, groupFilter, groupsInSucursal])
 
   const filtered = students
     .filter(s => visibleGroupIds.has(s.groupId))
@@ -139,9 +150,9 @@ export default function Students() {
 
           {[
             { label:'Sucursal', value:sucursalFilter, setter:setSucursalFilter,
-              opts:[{v:'all',l: isAdmin ? 'Todas' : 'Mis sucursales'}, ...sucursalOptions.map(s=>({v:s,l:s}))] },
+              opts:[{v:'all',l: isAdmin ? 'Todas' : 'Mis sucursales'}, ...sucursalOptions.map(s=>({v:s,l:nombreDe(s)}))] },
             { label:'Grupo', value:groupFilter, setter:setGroup,
-              opts:[{v:'all',l:'Todos los grupos'}, ...visibleGroups.map(g=>({v:g.id,l:g.name}))] },
+              opts:[{v:'all',l:'Todos los grupos'}, ...groupsInSucursal.map(g=>({v:g.id,l:g.name}))] },
             { label:'Estado', value:statusFilter, setter:setStatus,
               opts:[{v:'all',l:'Todos'}, ...Object.entries(statusConfig).map(([k,v])=>({v:k,l:v.label}))] },
             { label:'Ordenar', value:sort, setter:setSort,
@@ -221,7 +232,7 @@ export default function Students() {
               cells={[
                 /* Alumno */
                 {
-                  className: 'flex-grow min-w-[140px]',
+                  className: 'flex-grow min-w-0 sm:min-w-[140px]',
                   content: (
                     <DataTableAvatar
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
@@ -265,11 +276,11 @@ export default function Students() {
                 },
                 /* Promedio */
                 {
-                  className: 'w-16 sm:w-24',
+                  className: 'w-12 sm:w-24',
                   content: s.avgGrade === null
                     ? <span className="text-sm" style={{ color:'var(--t4)' }}>—</span>
                     : (
-                      <span className={`text-base font-bold ${gradeColor(s.avgGrade)}`}>
+                      <span className={`text-sm sm:text-base font-bold ${gradeColor(s.avgGrade)}`}>
                         {s.avgGrade}
                       </span>
                     ),
@@ -319,9 +330,9 @@ export default function Students() {
                 },
                 /* Acciones */
                 {
-                  className: 'w-20 sm:w-28 flex justify-end',
+                  className: 'w-[4.5rem] sm:w-28 flex justify-end',
                   content: (
-                    <div className="flex items-center gap-0.5">
+                    <div className="flex items-center gap-0 sm:gap-0.5">
                       {[
                         { icon: Pencil,   title: 'Editar alumno',           hover: 'var(--info)', act: () => setFormFor({ student: s }) },
                         { icon: KeyRound, title: 'Restablecer contraseña',  hover: 'var(--warn)', act: () => setResetFor(s) },
@@ -329,11 +340,11 @@ export default function Students() {
                       ].map(({ icon: Icon, title, hover, act }) => (
                         <button key={title} title={title}
                           onClick={e => { e.stopPropagation(); act() }}
-                          className="p-1.5 rounded-lg transition-colors"
+                          className="p-1 sm:p-1.5 rounded-lg transition-colors"
                           style={{ color:'var(--t4)' }}
                           onMouseEnter={e => e.currentTarget.style.color = hover}
                           onMouseLeave={e => e.currentTarget.style.color = 'var(--t4)'}>
-                          <Icon size={13}/>
+                          <Icon className="w-3 h-3 sm:w-[13px] sm:h-[13px]"/>
                         </button>
                       ))}
                     </div>

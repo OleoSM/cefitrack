@@ -120,6 +120,7 @@ export async function fetchStudents() {
     status: s.status,
     termsStatus: s.terms_status,
     signedAt: s.signed_at,
+    signatureDataUrl: s.signature_data_url,
     waAdded: s.wa_added,
     sucursal: s.sucursal,
     pagoEstado: s.pago_estado,
@@ -151,6 +152,7 @@ export async function fetchStudentById(id) {
     status: data.status,
     termsStatus: data.terms_status,
     signedAt: data.signed_at,
+    signatureDataUrl: data.signature_data_url,
     waAdded: data.wa_added,
     sucursal: data.sucursal,
     pagoEstado: data.pago_estado,
@@ -171,11 +173,18 @@ export async function fetchGroupById(id) {
     : null
 }
 
-export async function signTerms(studentId) {
-  const { data, error } = await supabase.rpc('sign_terms', { p_student_id: studentId })
+export async function signTerms(studentId, signatureDataUrl) {
+  const { data, error } = await supabase.rpc('sign_terms', {
+    p_student_id: studentId,
+    p_signature_data_url: signatureDataUrl,
+  })
   if (error) throw error
   const row = data?.[0]
-  return row ? { termsStatus: row.terms_status, signedAt: row.signed_at } : null
+  return row ? {
+    termsStatus: row.terms_status,
+    signedAt: row.signed_at,
+    signatureDataUrl: row.signature_data_url,
+  } : null
 }
 
 /** Revierte la firma de términos de un alumno (Gestión de T&C). */

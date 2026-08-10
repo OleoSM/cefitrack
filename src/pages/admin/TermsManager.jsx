@@ -7,6 +7,8 @@ import {
   Shield, AlertTriangle, Search, Eye, RefreshCw,
 } from 'lucide-react'
 import clsx from 'clsx'
+import KpiCard from '../../components/ui/KpiCard'
+import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
 
 const VERSION_MOCK = { version: '1.0', updatedAt: '31 de mayo de 2026', updatedBy: 'Prof. Mario Sánchez' }
 
@@ -58,14 +60,11 @@ export default function TermsManager() {
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label:'Total alumnos', value: list.length, color:'var(--t1)', border:'var(--card-border)' },
-          { label:'Firmados',      value: signed,       color:'var(--good)',               border:'var(--good-line)' },
-          { label:'Pendientes',    value: pending,      color:'var(--warn)',               border:'var(--warn-line)' },
-        ].map(({ label, value, color, border }) => (
-          <div key={label} className="stat-card" style={{ borderColor: border }}>
-            <p className="text-2xl sm:text-3xl font-bold" style={{ color }}>{value}</p>
-            <p className="text-xs mt-1 font-medium" style={{ color:'var(--t3)' }}>{label}</p>
-          </div>
+          { label:'Total alumnos', value:list.length, icon:Shield, tone:'neutral' },
+          { label:'Firmados', value:signed, icon:CheckCircle2, tone:'good' },
+          { label:'Pendientes', value:pending, icon:Clock, tone:'warn' },
+        ].map(kpi => (
+          <KpiCard key={kpi.label} {...kpi}/>
         ))}
       </div>
 
@@ -100,8 +99,8 @@ export default function TermsManager() {
       </div>
 
       {/* Barra de búsqueda + filtro */}
-      <div className="flex gap-2">
-        <div className="flex-1 flex items-center gap-2 px-3 rounded-xl"
+      <FilterBar activos={(search ? 1 : 0) + (filter !== 'todos' ? 1 : 0)}>
+        <div className="flex-1 min-w-[180px] flex items-center gap-2 px-3 rounded-xl"
           style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
           <Search size={14} style={{ color:'var(--t3)', flexShrink:0 }}/>
           <input
@@ -121,7 +120,7 @@ export default function TermsManager() {
           <option value="firmado">Firmados</option>
           <option value="pendiente">Pendientes</option>
         </select>
-      </div>
+      </FilterBar>
 
       {/* Tabla de alumnos */}
       <div className="card overflow-hidden">
@@ -140,13 +139,9 @@ export default function TermsManager() {
           <span>Acciones</span>
         </div>
 
-        {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm" style={{ color:'var(--t3)' }}>
-            Sin resultados
-          </div>
-        )}
-
-        {filtered.map((s, i) => {
+        <ProgressiveList items={filtered} sizes={{ mobile:5, tablet:10, desktop:15 }}
+          emptyLabel="Sin resultados">
+        {(s, i) => {
           const isSigned = s.termsStatus === 'firmado'
           return (
             <div key={s.id}
@@ -224,7 +219,8 @@ export default function TermsManager() {
               </div>
             </div>
           )
-        })}
+        }}
+        </ProgressiveList>
       </div>
 
       {/* Modal: ver firma — por portal, si no se posiciona contra el contenedor de página */}

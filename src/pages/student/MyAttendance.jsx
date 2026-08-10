@@ -4,9 +4,10 @@ import { attendanceColors, getAttendanceColor } from '../../data/mockData'
 import { statsAsistencia } from '../../lib/studentMetrics'
 import { useStudentData } from '../../hooks/useStudentData'
 import ProgressiveList from '../../components/ui/ProgressiveList'
+import KpiCard from '../../components/ui/KpiCard'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
-import { CheckCircle2, Clock, XCircle, ShieldAlert, Calendar, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, ShieldAlert, Calendar, CalendarCheck, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 
 const PIE_COLORS = ['#34d399', '#fbbf24', '#f87171', '#60a5fa']
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -281,17 +282,10 @@ export default function MyAttendance() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {Object.entries(counts).map(([k, v]) => {
           const c = attendanceColors[k]
+          const tone = k === 'presente' ? 'good' : k === 'tardanza' ? 'warn' : k === 'ausente' ? 'bad' : 'info'
           return (
-            <div key={k} className={`stat-card border ${c.border}`}>
-              <div className="flex items-center justify-between">
-                <span className={`w-2.5 h-2.5 rounded-full ${c.dot}`}/>
-                <span className={`text-xs font-semibold ${c.text}`}>
-                  {stats.total > 0 ? ((v / stats.total) * 100).toFixed(0) : 0}%
-                </span>
-              </div>
-              <p className={`text-2xl sm:text-3xl font-bold mt-2 tabular-nums ${c.text}`}>{v}</p>
-              <p className={`text-xs sm:text-sm font-medium mt-0.5 ${c.text}`}>{c.label}</p>
-            </div>
+            <KpiCard key={k} icon={CalendarCheck} value={v} label={c.label} tone={tone} light={t.light}
+              sub={`${stats.total > 0 ? ((v / stats.total) * 100).toFixed(0) : 0}% del total`}/>
           )
         })}
       </div>

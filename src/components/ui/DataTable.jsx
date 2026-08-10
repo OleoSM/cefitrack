@@ -43,7 +43,7 @@ export const DataTable = forwardRef(function DataTable(
         Antes cada uno tenía el suyo, así que al desplazar la tabla las filas
         se movían y el encabezado no: las columnas quedaban desalineadas.
       */}
-      <div className="w-full overflow-x-auto">
+      <div className="w-full overflow-x-auto overscroll-x-contain">
         {/*
           Solo `min-w-full`: con `w-max` el ancho se calculaba sobre el contenido
           máximo, así que la columna flexible se estiraba al nombre completo y
@@ -51,7 +51,7 @@ export const DataTable = forwardRef(function DataTable(
           aun con las columnas ocultas por breakpoint no cabe, el scroll
           horizontal del padre mueve encabezado y filas a la vez.
         */}
-        <div className="min-w-full">
+        <div className="min-w-full text-[clamp(0.68rem,2.7vw,0.875rem)]">
 
           {/* Encabezado.
               `gap`: las celdas iban pegadas una junto a otra, sin separación
@@ -60,7 +60,7 @@ export const DataTable = forwardRef(function DataTable(
               —el caso reportado: la barra de avance y su porcentaje contra la
               columna vecina—. Se separa menos en móvil que en escritorio,
               porque ahí cada píxel cuenta para que las columnas quepan. */}
-          <div className="flex items-center gap-2 sm:gap-3 px-5 py-2.5 sticky top-0 z-10"
+          <div className="flex items-center gap-1 sm:gap-3 px-3 sm:px-5 py-2 sm:py-2.5 sticky top-0 z-10"
             style={{
               background: 'var(--header-bg)',
               backdropFilter: 'blur(12px)',
@@ -69,7 +69,7 @@ export const DataTable = forwardRef(function DataTable(
             }}>
             {columns.map(col => (
               <div key={col.key}
-                className={`text-[11px] font-bold uppercase tracking-wider select-none items-center ${cellClass(col.className)}`}
+                className={`text-[9px] sm:text-[11px] font-bold uppercase tracking-normal sm:tracking-wider select-none items-center ${cellClass(col.className)}`}
                 style={{ color:'var(--t2)' }}>
                 {col.label}
               </div>
@@ -108,7 +108,7 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
       onClick={onClick}
       onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
       data-fila=""
-      className={`flex items-center gap-2 sm:gap-3 px-5 py-2.5 min-h-[46px] transition-colors duration-150 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`flex items-center gap-1 sm:gap-3 px-3 sm:px-5 py-2 sm:py-2.5 min-h-[44px] sm:min-h-[46px] transition-colors duration-150 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
       style={{ borderBottom:'1px solid var(--divider)', ...rowStyle }}
       /* `filter: brightness()` está prohibido por la regla de color: sobre
          fondo claro aclara la fila hasta el blanco. El realce es el fondo
@@ -116,7 +116,7 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-bg)' }}
       onMouseLeave={e => { e.currentTarget.style.background = '' }}>
       {cells.map((cell, i) => (
-        <div key={i} className={cellClass(cell.className)}>
+        <div key={i} data-table-cell className={`${cellClass(cell.className)} [&_svg]:max-w-[14px] [&_svg]:max-h-[14px] sm:[&_svg]:max-w-none sm:[&_svg]:max-h-none`}>
           {cell.content}
         </div>
       ))}
@@ -127,17 +127,17 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
 /* ── Avatar cell helper (member-list pattern) ──────────────── */
 export function DataTableAvatar({ initials, statusColor, name, sub, accentColor, avatarSrc }) {
   return (
-    <div className="flex items-center gap-2.5 overflow-hidden">
+    <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-hidden min-w-0">
       {/* Avatar con punto de estado. Si el alumno eligió una imagen se muestra
           ésa: es como se reconoce a sí mismo en su portal, y verla aquí ayuda
           a asociar rápido a la persona. Las iniciales quedan de respaldo. */}
       <div className="relative flex-shrink-0">
         {avatarSrc ? (
           <img src={avatarSrc} alt="" loading="lazy"
-            className="w-8 h-8 rounded-full object-cover"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover"
             style={{ border:'1px solid var(--card-border)' }}/>
         ) : (
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-300"
+        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[9px] sm:text-[11px] font-bold transition-all duration-300"
           style={accentColor
             ? { background:`${accentColor}30`, color: accentColor, border:`1px solid ${accentColor}60`, boxShadow:`0 0 10px ${accentColor}30` }
             : { background:'var(--soft-bg)', color:'var(--t1)', border:'1px solid var(--card-border)' }
@@ -152,8 +152,8 @@ export function DataTableAvatar({ initials, statusColor, name, sub, accentColor,
       </div>
       {/* Name + sub */}
       <div className="min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color:'var(--t1)' }}>{name}</p>
-        {sub && <p className="text-[11px] truncate" style={{ color:'var(--t3)' }}>{sub}</p>}
+        <p className="text-xs sm:text-sm font-semibold truncate" style={{ color:'var(--t1)' }}>{name}</p>
+        {sub && <p className="text-[9px] sm:text-[11px] truncate" style={{ color:'var(--t3)' }}>{sub}</p>}
       </div>
     </div>
   )
@@ -162,7 +162,7 @@ export function DataTableAvatar({ initials, statusColor, name, sub, accentColor,
 /* ── Badge cell helper ─────────────────────────────────────── */
 export function DataTableBadge({ label, dot, bg, color, border }) {
   return (
-    <span className={`badge ${bg} ${color} border ${border}`}>
+    <span className={`badge text-[9px] sm:text-xs px-1.5 sm:px-2 ${bg} ${color} border ${border}`}>
       {dot && <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />}
       {label}
     </span>
@@ -181,7 +181,7 @@ export function DataTableBar({ value, max = 100, color, label }) {
         style={{ background:'var(--soft-bg)' }}>
         <div className="h-full rounded-full transition-all" style={{ width:`${pct}%`, background: color }} />
       </div>
-      <span className="text-xs font-semibold flex-shrink-0" style={{ color:'var(--t2)' }}>
+      <span className="text-[10px] sm:text-xs font-semibold flex-shrink-0" style={{ color:'var(--t2)' }}>
         {label}
       </span>
     </div>

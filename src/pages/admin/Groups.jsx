@@ -204,6 +204,7 @@ export default function Groups() {
   const navigate      = useNavigate()
   const { getAccent } = useGroupColors()
   const { currentUser, allowedSucursales, canAccess } = useAuth()
+  const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
   const isAdmin = currentUser?.role === 'admin'
 
   const [groups, setGroups]     = useState([])
@@ -235,9 +236,9 @@ export default function Groups() {
   useEffect(() => { load() }, [load])
 
   const visibleGroups = isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id))
-  const sucursalOptions = isAdmin
-    ? [...new Set(groups.map(g => g.sucursal).filter(Boolean))]
-    : allowedSucursales
+  const sucursalOptions = catalogoSucursales
+    .filter(s => isAdmin || allowedSucursales.includes(s.id))
+    .map(s => s.id)
   const filteredGroups = sucursal === 'todas' ? visibleGroups : visibleGroups.filter(g => g.sucursal === sucursal)
   const filteredStudents = students.filter(s => filteredGroups.some(g => g.id === s.groupId))
 
@@ -284,7 +285,7 @@ export default function Groups() {
       <div className="flex items-center gap-2 flex-wrap">
         <Filter size={14} style={{ color:'var(--t3)' }} />
         <FilterSelect value={sucursal} onChange={setSucursal}
-          options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:s }))]} />
+          options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:nombreDe(s) }))]} />
         {isAdmin && (
           <button onClick={() => setFormFor({ group: null })} className="btn-primary ml-auto">
             <Plus size={14}/> Nuevo grupo
@@ -302,7 +303,7 @@ export default function Groups() {
       {/* Summary */}
       <div data-kpi-grid className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
         <KpiCard icon={BookOpen} label="Total Grupos" tone="neutral" value={filteredGroups.length}
-          sub={sucursal === 'todas' ? 'Todas las sucursales' : `Sucursal ${sucursal}`} />
+          sub={sucursal === 'todas' ? 'Todas las sucursales' : `Sucursal ${nombreDe(sucursal)}`} />
         <KpiCard icon={Users} label="Total Alumnos" tone="info" value={filteredStudents.length}
           sub={`En ${filteredGroups.length} grupo(s)`} />
         <KpiCard icon={TrendingUp} label="Promedio Global" tone="good" value={globalAvg}

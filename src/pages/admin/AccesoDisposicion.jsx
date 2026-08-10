@@ -16,11 +16,11 @@ import ProgressiveList from '../../components/ui/ProgressiveList'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import ModalPortal from '../../components/ui/ModalPortal'
 
-// Las sucursales salen de los grupos reales; antes estaban escritas a mano
-// y no reflejaban las que existen en la base.
+// Las sucursales salen del catálogo oficial. Una sede sin grupos también debe
+// aparecer para que se pueda conceder acceso antes de abrir su primer grupo.
 
 export default function AccesoDisposicion() {
-  const { nombreDe } = useSucursales()
+  const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
   const { currentUser } = useAuth()
   const isAdmin = currentUser?.role === 'admin'
 
@@ -30,8 +30,7 @@ export default function AccesoDisposicion() {
   const [loading, setLoading]         = useState(true)
   const [expanded, setExpanded]       = useState(new Set())
 
-  // Sucursales derivadas de los grupos existentes en BD.
-  const sucursales = [...new Set(groups.map(g => g.sucursal).filter(Boolean))].sort()
+  const sucursales = catalogoSucursales.map(s => s.id)
 
   const [form, setForm] = useState({ name: '', email: '' })
   const [creating, setCreating] = useState(false)
@@ -51,6 +50,14 @@ export default function AccesoDisposicion() {
   const [rolFiltro, setRolFiltro] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [grupoFiltro, setGrupoFiltro] = useState('todos')
+  const [sucursalFiltro, setSucursalFiltro] = useState('todas')
+  const gruposFiltrables = sucursalFiltro === 'todas'
+    ? groups
+    : groups.filter(g => g.sucursal === sucursalFiltro)
+
+  useEffect(() => {
+    if (grupoFiltro !== 'todos' && !gruposFiltrables.some(g => g.id === grupoFiltro)) setGrupoFiltro('todos')
+  }, [sucursalFiltro, grupoFiltro, gruposFiltrables])
 
   const conteo = {
     admin:     staff.filter(a => a.role === 'admin').length,
@@ -63,7 +70,10 @@ export default function AccesoDisposicion() {
     const porRol = rolFiltro === 'todos'
       || (rolFiltro === 'retiradas' ? a.activo === false : a.role === rolFiltro)
     return porRol
-      && (rolFiltro !== 'student' || grupoFiltro === 'todos' || a.grupoId === grupoFiltro)
+      && (sucursalFiltro === 'todas' || a.sucursal === sucursalFiltro
+          || (a.role === 'sub_admin' && (accessByUser[a.id] ?? []).some(x => x.sucursal === sucursalFiltro)))
+      && (grupoFiltro === 'todos' || a.grupoId === grupoFiltro
+          || (a.role === 'sub_admin' && (accessByUser[a.id] ?? []).some(x => x.groupId === grupoFiltro)))
       && (q === '' || a.name.toLowerCase().includes(q) || (a.email ?? '').toLowerCase().includes(q))
   })
 
@@ -281,13 +291,16 @@ export default function AccesoDisposicion() {
               ['retiradas', `Retiradas (${conteo.retiradas})`]].map(([v, l]) =>
                 <option key={v} value={v}>{l}</option>)}
           </select>
-          {rolFiltro === 'student' && (
-            <select value={grupoFiltro} onChange={e => setGrupoFiltro(e.target.value)}
-              className="input-field text-sm w-auto">
-              <option value="todos">Todos los grupos</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          )}
+          <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)}
+            className="input-field text-sm w-auto">
+            <option value="todas">Todas las sucursales</option>
+            {catalogoSucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
+          <select value={grupoFiltro} onChange={e => setGrupoFiltro(e.target.value)}
+            className="input-field text-sm w-auto">
+            <option value="todos">Todos los grupos</option>
+            {gruposFiltrables.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
         </div>
 
         <p className="text-[11px]" style={{ color:'var(--t3)' }}>
@@ -376,7 +389,7 @@ export default function AccesoDisposicion() {
                             checked={wholeChecked}
                             onChange={() => toggleWholeBranch(a.id, suc)}
                             label={<>
-                              {suc}
+                              {nombreDe(suc)}
                               {wholeChecked && <span className="text-xs font-normal" style={{ color:'var(--good)' }}> · toda la sucursal</span>}
                               {!wholeChecked && groupRows.length > 0 && (
                                 <span className="text-xs font-normal" style={{ color:'var(--warn)' }}> · {groupRows.length} grupo(s)</span>

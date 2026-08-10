@@ -5,7 +5,7 @@ import {
   Plus, Minus, Trash2, Check, ChevronDown, ChevronRight,
   UserPlus, X, GraduationCap, Maximize2, SlidersHorizontal,
   ArrowLeft, Calendar, Shield, Users, Clock,
-  Save, AlertTriangle, RotateCw, Download,
+  Save, AlertTriangle, RotateCw, Download, Pencil,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
@@ -19,6 +19,8 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { useAdminTheme } from '../../context/AdminThemeContext'
 import { folioEX, folioEXD } from '../../lib/folios'
+import { supabase } from '../../lib/supabaseClient'
+import { useSucursales } from '../../hooks/useSucursales'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -91,6 +93,9 @@ function scoreBg(v) {
 
 function GroupPicker({ groups, students, loading, onSelect }) {
   const { getAccent } = useGroupColors()
+  const { sucursales } = useSucursales()
+  const [sucursal, setSucursal] = useState('todas')
+  const gruposVisibles = sucursal === 'todas' ? groups : groups.filter(g => g.sucursal === sucursal)
 
   return (
     <div className="space-y-6">
@@ -99,6 +104,19 @@ function GroupPicker({ groups, students, loading, onSelect }) {
         <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
           Selecciona el grupo para abrir su lista de registro.
         </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>
+            Sucursal
+          </label>
+          <select value={sucursal} onChange={e => setSucursal(e.target.value)} className="input-field text-sm w-auto">
+            <option value="todas">Todas las sucursales</option>
+            {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
+        </div>
+        <p className="text-xs pb-2.5" style={{ color:'var(--t3)' }}>{gruposVisibles.length} grupo(s)</p>
       </div>
 
       {!loading && groups.length === 0 && (
@@ -110,7 +128,7 @@ function GroupPicker({ groups, students, loading, onSelect }) {
       )}
 
       <div className="grid gap-4">
-        {groups.map(g => {
+        {gruposVisibles.map(g => {
           const grpStudents = students.filter(s => s.groupId === g.id)
           const accent      = getAccent(g.id)
 
@@ -522,9 +540,16 @@ function AddSubjectModal({ onAdd, onClose }) {
 // HEADER DE SECCIÓN (collapse/expand con +/-)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemoveItem }) {
+function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemoveItem, onRename }) {
   const hc = useHC()
   const c = color ?? (hc ? '#64748b' : 'var(--t2)')
+  const [editingLabel, setEditingLabel] = useState(false)
+  const [labelDraft, setLabelDraft] = useState(label)
+  const commitLabel = () => {
+    const next = labelDraft.trim()
+    setEditingLabel(false)
+    if (next && next !== label) onRename?.(next)
+  }
   return (
     <th colSpan={cols} style={{
       textAlign:'center', padding:'5px 6px', fontWeight:800, fontSize:10,
@@ -547,7 +572,22 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
           {collapsed ? '+' : '−'}
         </button>
 
-        <span style={{ cursor:'default' }}>{label}</span>
+        {editingLabel ? (
+          <input value={labelDraft} autoFocus onChange={e=>setLabelDraft(e.target.value)}
+            onBlur={commitLabel}
+            onKeyDown={e=>{ if(e.key==='Enter') commitLabel(); if(e.key==='Escape') setEditingLabel(false) }}
+            style={{ width:120, padding:'2px 5px', borderRadius:5, textAlign:'center',
+              color:hc?'#0f172a':'#ffffff', background:hc?'#ffffff':'#171724',
+              border:'1px solid rgba(255,255,255,.55)', outline:'none' }}/>
+        ) : <span style={{ cursor:'default' }}>{label}</span>}
+
+        {onRename && !editingLabel && (
+          <button type="button" onClick={()=>{ setLabelDraft(label); setEditingLabel(true) }}
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/20"
+            title={`Editar ${label}`} aria-label={`Editar ${label}`}>
+            <Pencil size={10}/>
+          </button>
+        )}
 
         {/* Añadir columna */}
         {onAdd && !collapsed && (
@@ -567,6 +607,123 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
         )}
       </span>
     </th>
+  )
+}
+
+function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52, rowSpan, style: extraStyle }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const inputRef = useRef(null)
+  const textColor = light ? '#0f172a' : '#ffffff'
+
+  useEffect(() => { if (!editing) setDraft(value) }, [value, editing])
+
+  const startEditing = () => {
+    setDraft(value)
+    setEditing(true)
+    setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select() }, 20)
+  }
+  const commit = () => {
+    const next = draft.trim()
+    setEditing(false)
+    if (next && next !== value) onChange(next)
+  }
+
+  return (
+    <th rowSpan={rowSpan} style={{ minWidth, padding:'4px 2px', textAlign:'center', fontSize:9,
+      fontWeight:700, color:textColor, borderRight:'1px solid var(--divider)', ...extraStyle }}>
+      {editing ? (
+        <input ref={inputRef} value={draft} onChange={e=>setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e=>{ if(e.key==='Enter') commit(); if(e.key==='Escape') setEditing(false) }}
+          aria-label={`Editar nombre de ${value}`}
+          style={{ width:Math.max(42,minWidth-6), padding:'2px 3px', textAlign:'center',
+            borderRadius:4, outline:'none', background:light?'#ffffff':'#171724',
+            color:textColor, border:`1px solid ${light?'#475569':'rgba(255,255,255,.55)'}` }}/>
+      ) : (
+        <span className="flex items-center justify-center gap-1 px-0.5">
+          <span className="truncate" title={value}>{value}</span>
+          <button type="button" onClick={startEditing} title={`Editar ${value}`}
+            aria-label={`Editar nombre de ${value}`}
+            className="shrink-0 rounded flex items-center justify-center transition-opacity hover:opacity-70"
+            style={{ color:textColor, width:22, height:22 }}>
+            <Pencil size={10}/>
+          </button>
+          {onRemove && (
+            <button type="button" onClick={onRemove} title={`Eliminar ${value}`}
+              aria-label={`Eliminar ${value}`}
+              className="shrink-0 rounded flex items-center justify-center"
+              style={{ color:'var(--bad)', width:22, height:22 }}>
+              <X size={11}/>
+            </button>
+          )}
+        </span>
+      )}
+    </th>
+  )
+}
+
+function FocusFilter({ options, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+  const selected = options.find(option => option.id === value) ?? options[0]
+
+  useEffect(() => {
+    if (!open) return
+    const close = event => { if (!rootRef.current?.contains(event.target)) setOpen(false) }
+    const escape = event => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('pointerdown', close)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', close)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [open])
+
+  return (
+    <div ref={rootRef} className="relative w-full sm:w-auto">
+      <button type="button" onClick={()=>setOpen(v=>!v)} aria-expanded={open}
+        aria-haspopup="listbox"
+        className="w-full sm:w-[230px] min-h-11 rounded-xl px-3.5 flex items-center gap-2 text-left"
+        style={{ background:'var(--panel-bg)', border:'1px solid var(--card-border)',
+          color:'var(--t1)', boxShadow:open?'0 10px 30px rgba(0,0,0,.18)':'none' }}>
+        <SlidersHorizontal size={15} style={{ color:'var(--accent)', flexShrink:0 }}/>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[9px] font-bold uppercase tracking-widest" style={{ color:'var(--t3)' }}>Ver</span>
+          <span className="block text-xs font-bold truncate">{selected?.label}</span>
+        </span>
+        <ChevronDown size={15} className={clsx('transition-transform', open && 'rotate-180')}/>
+      </button>
+
+      {open && (
+        <div role="listbox" aria-label="Seleccionar contenido de la tabla"
+          className="absolute left-0 right-0 sm:right-auto sm:w-[300px] top-[calc(100%+8px)] z-40 rounded-2xl p-2"
+          style={{ background:'var(--panel-bg)', border:'1px solid var(--card-border)',
+            boxShadow:'0 22px 60px rgba(0,0,0,.32)', color:'var(--t1)' }}>
+          <p className="px-2.5 pt-1.5 pb-2 text-[10px] font-bold uppercase tracking-widest"
+            style={{ color:'var(--t3)' }}>Contenido de la tabla</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-[min(360px,55vh)] overflow-y-auto">
+            {options.map(option => {
+              const active = option.id === value
+              return (
+                <button key={option.id} type="button" role="option" aria-selected={active}
+                  onClick={()=>{ onChange(option.id); setOpen(false) }}
+                  className="min-h-10 rounded-xl px-3 flex items-center gap-2 text-left text-xs font-semibold"
+                  style={{ background:active?'var(--soft-bg)':'transparent',
+                    color:active?'var(--t1)':'var(--t2)',
+                    border:`1px solid ${active?'var(--accent)':'transparent'}` }}>
+                  <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
+                    style={{ border:`1.5px solid ${active?'var(--accent)':'var(--t4)'}` }}>
+                    {active && <span className="w-2 h-2 rounded-full" style={{ background:'var(--accent)' }}/>}
+                  </span>
+                  <span className="truncate">{option.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -706,6 +863,18 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const [subjects,      setSubjects]      = useState([])
   const [simCount,      setSimCount]      = useState(10)
   const [onlineCount,   setOnlineCount]   = useState(5)
+  const [tableFocus,    setTableFocus]    = useState('summary')
+  const [activeSim,     setActiveSim]     = useState(1)
+  const simNamesKey = `siga_registro_sim_headers_${group.id}`
+  const [simHeaderNames, setSimHeaderNames] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(simNamesKey) || '{}') }
+    catch { return {} }
+  })
+  const customHeadersKey = `siga_registro_headers_${group.id}`
+  const [customHeaders, setCustomHeaders] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(customHeadersKey) || '{}') }
+    catch { return {} }
+  })
   const [cells,         setCells]         = useState({})
   const [attendance,    setAttendance]    = useState({})
   const [cargandoHoja,  setCargandoHoja]  = useState(true)
@@ -733,6 +902,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const [showLeaveModal,setShowLeaveModal]= useState(false)
   const [saveFlash,     setSaveFlash]     = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // { id, name } | null
+
+  useEffect(() => {
+    if (activeSim > simCount) setActiveSim(Math.max(1, simCount))
+  }, [activeSim, simCount])
 
   const { getAccent } = useGroupColors()
   const { t: adminT } = useAdminTheme()
@@ -864,6 +1037,28 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
   useEffect(() => { cargarHoja() }, [cargarHoja])
 
+  /* La hoja deja de ser una fotografía tomada al entrar: cualquier pase de
+     lista o calificación guardada desde otra pantalla vuelve a consultar el
+     grupo y actualiza filas, porcentajes y garantía sin recargar la página. */
+  useEffect(() => {
+    let timer
+    const refresh = () => {
+      clearTimeout(timer)
+      timer = setTimeout(cargarHoja, 250)
+    }
+    const channel = supabase
+      .channel(`registro-grupo-${group.id}`)
+      .on('postgres_changes', { event:'*', schema:'public', table:'evaluations' }, refresh)
+      .on('postgres_changes', { event:'*', schema:'public', table:'attendance_records' }, refresh)
+      .on('postgres_changes', { event:'*', schema:'public', table:'attendance_sessions', filter:`group_id=eq.${group.id}` }, refresh)
+      .on('postgres_changes', { event:'*', schema:'public', table:'registro_columnas', filter:`group_id=eq.${group.id}` }, refresh)
+      .subscribe()
+    return () => {
+      clearTimeout(timer)
+      supabase.removeChannel(channel)
+    }
+  }, [group.id, cargarHoja])
+
   /* Guardado por celda, con espera para no disparar una escritura por tecla. */
   const timersCelda = useRef({})
   useEffect(() => () => Object.values(timersCelda.current).forEach(clearTimeout), [])
@@ -920,7 +1115,34 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   // La asistencia es espejo de Pasar Lista: aquí no se edita.
   const toggleAtt = () => {}
   const toggleSection = id => setCollapsed(p=>({...p,[id]:!p[id]}))
+  const simHeaderName = (n, field) => simHeaderNames[n]?.[field]
+    || (field === 'score' ? folioEX(n) : field === 'task' ? 'TAREA' : 'ANLS.')
+  const renameSimHeader = (n, field, value) => {
+    setSimHeaderNames(prev => {
+      const next = { ...prev, [n]: { ...prev[n], [field]: value } }
+      localStorage.setItem(simNamesKey, JSON.stringify(next))
+      return next
+    })
+  }
+  const headerName = (key, fallback) => customHeaders[key] || fallback
+  const renameHeader = (key, value) => {
+    setCustomHeaders(prev => {
+      const next = { ...prev, [key]:value }
+      localStorage.setItem(customHeadersKey, JSON.stringify(next))
+      return next
+    })
+  }
   const resetCollapsed = () => setCollapsed({})
+
+  const showSummary = tableFocus === 'all' || tableFocus === 'summary'
+  const showDocs = tableFocus === 'all' || tableFocus === 'docs'
+  const showSubject = id => tableFocus === 'all' || tableFocus === `subject:${id}`
+  const showSims = tableFocus === 'all' || tableFocus === 'sims'
+  const showOnline = tableFocus === 'all' || tableFocus === 'online'
+  const showAttendance = tableFocus === 'all' || tableFocus === 'attendance' || tableFocus === 'summary'
+  const visibleSims = tableFocus === 'sims'
+    ? [activeSim]
+    : Array.from({ length:simCount }, (_,i)=>i+1)
   const plegarTodo = () => setCollapsed({ docs: true, sims: true, online: true,
     ...Object.fromEntries(subjects.map(x => [x.id, true])) })
 
@@ -932,6 +1154,23 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     { id:'sims',   label:'Simulacros' },
     { id:'online', label:'Exámenes digitales' },
   ], [subjects])
+  const focusOptions = useMemo(() => [
+    { id:'summary', label:'Resumen' },
+    { id:'docs', label:'Documentos' },
+    ...subjects.map(s => ({ id:`subject:${s.id}`, label:s.name })),
+    { id:'sims', label:'Simulacros' },
+    { id:'online', label:'Digitales' },
+    { id:'attendance', label:'Asistencia' },
+    { id:'all', label:'Todas' },
+  ], [subjects])
+
+  const selectFocus = id => {
+    setTableFocus(id)
+    const sectionId = id.startsWith('subject:') ? id.slice(8) : id
+    if (['docs','sims','online'].includes(sectionId) || id.startsWith('subject:')) {
+      setCollapsed(prev => ({ ...prev, [sectionId]:false }))
+    }
+  }
 
   /* En vertical la hoja abría con las materias desplegadas: cuarenta columnas
      que obligaban a un barrido horizontal largo antes de encontrar nada. Fuera
@@ -996,11 +1235,15 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const exportListExcel = async () => {
     const XLSX = await import('xlsx')
 
-    const header = ['#', 'Alumno', 'Pago', 'Garantía', 'Firma Gar.', 'Firma T&C', 'Examen Gral']
-    subjects.forEach(subj => subj.cols.forEach(col => header.push(`${subj.name} — ${col.name}`)))
-    for (let n = 1; n <= simCount; n++) header.push(folioEX(n), `${folioEX(n)} Tarea`, `${folioEX(n)} Análisis`)
-    for (let n = 1; n <= onlineCount; n++) header.push(folioEXD(n))
-    header.push('% Asistencia')
+    const header = ['#', headerName('student','Alumno'), headerName('payment','Pago'),
+      headerName('guarantee','Garantía'), headerName('doc_guarantee','Firma Gar.'),
+      headerName('doc_terms','Firma T&C'), headerName('doc_exam','Examen Gral.')]
+    subjects.forEach(subj => subj.cols.forEach(col =>
+      header.push(`${subj.name} — ${headerName(`col:${col.id}`,col.name)}`)))
+    for (let n = 1; n <= simCount; n++) header.push(
+      simHeaderName(n, 'score'), simHeaderName(n, 'task'), simHeaderName(n, 'analysis'))
+    for (let n = 1; n <= onlineCount; n++) header.push(headerName(`online:${n}`,folioEXD(n)))
+    header.push(headerName('attendance','% Asistencia'))
 
     const rows = students.map((s, idx) => {
       const sc  = cells[s.id] || {}
@@ -1066,7 +1309,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
      254 px a 132, y en un teléfono de 411 px quedan ~247 px de zona de registro
      en vez de ~125: la diferencia entre ver una columna y ver tres. */
   const W = isMobile
-    ? { num:0,  name:132, pago:96,  gar:84 }   // teléfono
+    ? { num:0,  name:116, pago:82,  gar:76 }   // teléfono
     : esCompacto
       ? { num:0,  name:168, pago:104, gar:88 } // tableta
       : { num:44, name:210, pago:114, gar:92 } // portátil y monitor
@@ -1110,7 +1353,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
           en dos filas: ~90 px de los 411 de alto de un teléfono apaisado, justo
           en el modo que se abre para ver MÁS hoja. */}
       {[{v:stats.total,l:'Total',c:'var(--t2)'},{v:stats.conGar,l:'Con garantía',c:'var(--good)'},{v:stats.sinGar,l:'Sin garantía',c:'var(--bad)'}].map(({v,l,c})=>(
-        <div key={l} className={clsx('text-center px-3 py-1 rounded-lg', compactoFS && 'hidden')}
+        <div key={l} className={clsx('text-center px-3 py-1 rounded-lg', esCompacto && 'hidden')}
           style={{ background: 'var(--card-bg)' }}>
           <span className="text-base font-black mr-1" style={{ color:c }}>{v}</span>
           <span className="text-[10px]" style={{ color: 'var(--t3)' }}>{l}</span>
@@ -1203,6 +1446,26 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   )
 
   // ── Tabla ────────────────────────────────────────────────────────────────────
+  const focusBar = (
+    <div className="mb-3 flex flex-col sm:flex-row sm:items-start gap-2">
+      <FocusFilter options={focusOptions} value={tableFocus} onChange={selectFocus}/>
+      {tableFocus === 'sims' && (
+        <div className="flex flex-1 items-center gap-1.5 overflow-x-auto pb-1 sm:pt-1" aria-label="Simulacro activo">
+          {Array.from({length:simCount},(_,i)=>i+1).map(n => (
+            <button key={n} type="button" onClick={()=>setActiveSim(n)}
+              aria-pressed={activeSim===n}
+              className="shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold"
+              style={{ background:activeSim===n ? HC.sims : 'var(--soft-bg)',
+                color:activeSim===n ? '#ffffff' : 'var(--t2)',
+                border:`1px solid ${activeSim===n ? HC.sims : 'var(--card-border)'}` }}>
+              {simHeaderName(n,'score')}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   const thText     = hcMode ? '#0f172a'              : 'var(--t3)'
   const thTextSub  = hcMode ? '#475569'              : 'var(--t3)'
   const rowEvenBg  = hcMode ? HC.rowEven             : '#0c0c16'
@@ -1224,8 +1487,15 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         overscrollBehaviorX:'contain',
         ...(isFullscreen
           ? { flex:1, minHeight:0 }
-          : { maxHeight:'calc(100vh - 208px)' }) }}>
-        <table style={{ borderCollapse:'collapse', minWidth:'max-content', fontSize:12, background: hcMode ? 'var(--card-bg)' : 'transparent' }}>
+          : { maxHeight:isMobile?'max(320px, calc(100dvh - 300px))':'calc(100vh - 208px)' }) }}>
+        <table style={{
+          borderCollapse:'collapse',
+          /* Ocupa el contenedor en vistas pequeñas (Resumen, Documentos o un
+             solo simulacro), pero conserva su ancho intrínseco y el scroll
+             cuando una materia o la vista Todas tienen muchas columnas. */
+          width:'100%', minWidth:'max-content',
+          fontSize:12, background: hcMode ? 'var(--card-bg)' : 'transparent',
+        }}>
           <thead style={{ position:'sticky', top:0, zIndex:5 }}>
 
             {/* ── Fila 1: headers de sección ── */}
@@ -1234,16 +1504,27 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
               {!esCompacto && (
                 <th rowSpan={2} style={{ ...thStickyStyle(L.num), minWidth:W.num, textAlign:'center', padding:'8px 4px', fontSize:10, fontWeight:700, color: hcMode ? '#1e293b' : 'var(--t3)' }}>#</th>
               )}
-              <th rowSpan={2} style={{ ...thStickyStyle(L.name), minWidth:W.name, textAlign:'left', padding:'8px 12px', fontSize:10, fontWeight:700, color: hcMode ? '#1e293b' : 'var(--t3)' }}>ALUMNO</th>
+              <EditableColumnHeader rowSpan={2} minWidth={W.name} light={hcMode}
+                value={headerName('student','ALUMNO')} onChange={v=>renameHeader('student',v)}
+                style={{ ...thStickyStyle(L.name), textAlign:'left', padding:'8px 12px' }}/>
               {/* PAGO y GARANTÍA: NO sticky */}
-              <th rowSpan={2} style={{ minWidth:W.pago, textAlign:'center', padding:'8px 4px', fontSize:10, fontWeight:700, color: hcMode ? HC.pago : 'var(--t3)', background: hcMode ? `${HC.pago}14` : solidBg, borderBottom: hcMode ? `3px solid ${HC.pago}` : '1px solid rgba(255,255,255,.09)', borderLeft: hcMode ? `2px solid ${HC.pago}70` : 'none', borderRight: hcMode ? `2px solid ${HC.pago}70` : 'none' }}>PAGO</th>
-              <th rowSpan={2} style={{ minWidth:W.gar,  textAlign:'center', padding:'8px 4px', fontSize:10, fontWeight:700, color: hcMode ? HC.gar  : 'var(--t3)', background: hcMode ? `${HC.gar}14`  : solidBg, borderBottom: hcMode ? `3px solid ${HC.gar}`  : '1px solid rgba(255,255,255,.09)', borderLeft: hcMode ? `2px solid ${HC.gar}70`  : 'none', borderRight: hcMode ? `2px solid ${HC.gar}70`  : 'none' }}>GARANTÍA</th>
+              {showSummary && <>
+                <EditableColumnHeader rowSpan={2} minWidth={W.pago} light={hcMode}
+                  value={headerName('payment','PAGO')} onChange={v=>renameHeader('payment',v)}
+                  style={{ background:hcMode?`${HC.pago}14`:solidBg, borderBottom:`3px solid ${HC.pago}` }}/>
+                <EditableColumnHeader rowSpan={2} minWidth={W.gar} light={hcMode}
+                  value={headerName('guarantee','GARANTÍA')} onChange={v=>renameHeader('guarantee',v)}
+                  style={{ background:hcMode?`${HC.gar}14`:solidBg, borderBottom:`3px solid ${HC.gar}` }}/>
+              </>}
 
-              <SectionHeader label="DOCUMENTOS" cols={collapsed['docs']?1:3} collapsed={!!collapsed['docs']} onToggle={()=>toggleSection('docs')}/>
+              {showDocs && <SectionHeader label={headerName('section:docs','DOCUMENTOS')}
+                onRename={v=>renameHeader('section:docs',v)} cols={collapsed['docs']?1:3}
+                collapsed={!!collapsed['docs']} onToggle={()=>toggleSection('docs')}/>}
 
-              {subjects.map(subj => (
+              {subjects.filter(subj=>showSubject(subj.id)).map(subj => (
                 <SectionHeader key={subj.id}
-                  label={subj.name.toUpperCase()} color={subj.color}
+                  label={headerName(`section:${subj.id}`,subj.name.toUpperCase())} color={subj.color}
+                  onRename={v=>renameHeader(`section:${subj.id}`,v)}
                   cols={collapsed[subj.id] ? 1 : subj.cols.length+1}
                   collapsed={!!collapsed[subj.id]}
                   onToggle={()=>toggleSection(subj.id)}
@@ -1252,53 +1533,53 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                 />
               ))}
 
-              <SectionHeader label="SIMULACROS (EX)" color="var(--warn)"
-                cols={collapsed['sims']?1:simCount*3+1}
+              {showSims && <SectionHeader label={headerName('section:sims','SIMULACROS (EX)')}
+                onRename={v=>renameHeader('section:sims',v)} color="var(--warn)"
+                cols={collapsed['sims']?1:visibleSims.length*3+1}
                 collapsed={!!collapsed['sims']}
                 onToggle={()=>toggleSection('sims')}
                 onAdd={()=>setSimCount(n=>n+1)}
                 onRemoveItem={()=>setSimCount(n=>Math.max(1,n-1))}
-              />
-              <SectionHeader label="EXÁMENES DIGITALES (EXD)" color="#5D3E90"
+              />}
+              {showOnline && <SectionHeader label={headerName('section:online','EXÁMENES DIGITALES (EXD)')}
+                onRename={v=>renameHeader('section:online',v)} color="#5D3E90"
                 cols={collapsed['online']?1:onlineCount+1}
                 collapsed={!!collapsed['online']}
                 onToggle={()=>toggleSection('online')}
                 onAdd={()=>setOnlineCount(n=>n+1)}
                 onRemoveItem={()=>setOnlineCount(n=>Math.max(1,n-1))}
-              />
-              <SectionHeader label="ASISTENCIAS" color="var(--good)" cols={1} collapsed={false} onToggle={()=>{}}/>
+              />}
+              {showAttendance && <SectionHeader label={headerName('section:attendance','ASISTENCIAS')}
+                onRename={v=>renameHeader('section:attendance',v)} color="var(--good)"
+                cols={1} collapsed={false} onToggle={()=>{}}/>}
             </tr>
 
             {/* ── Fila 2: nombres de columna ── */}
             <tr style={{ background: solidBg }}>
               {/* Documentos */}
-              {collapsed['docs']
+              {showDocs && (collapsed['docs']
                 ? <th style={{ minWidth:52, fontSize:10, color: hcMode ? HC.docs : 'var(--t4)', textAlign:'center', borderRight: hcMode ? `2px solid ${HC.docs}70` : '1px solid rgba(255,255,255,.06)' }}>···</th>
-                : ['Firma\nGar.','Firma\nT&C','Examen\nGral'].map(l => (
-                    <th key={l} style={{ minWidth:52, padding:'4px 2px', textAlign:'center', fontSize:9, fontWeight:700,
-                      color: hcMode ? HC.docs : 'var(--t3)',
-                      background: hcMode ? `${HC.docs}0d` : `${HC.docs}0a`,
-                      borderRight: `1px solid ${HC.docs}${hcMode ? '50' : '40'}`,
-                      borderBottom: `${hcMode ? 2 : 1}px solid ${HC.docs}${hcMode ? '80' : '60'}`,
-                      boxShadow: !hcMode ? `0 1px 6px ${HC.docs}30` : 'none',
-                      whiteSpace:'pre-line', lineHeight:1.2 }}>{l}</th>
+                : [
+                    ['doc_guarantee','Firma Gar.'],
+                    ['doc_terms','Firma T&C'],
+                    ['doc_exam','Examen Gral.'],
+                  ].map(([key,fallback]) => (
+                    <EditableColumnHeader key={key} minWidth={68} light={hcMode}
+                      value={headerName(key,fallback)} onChange={v=>renameHeader(key,v)}
+                      style={{ background:hcMode?`${HC.docs}0d`:`${HC.docs}0a`,
+                        borderBottom:`${hcMode?2:1}px solid ${HC.docs}${hcMode?'80':'60'}` }}/>
                   ))
-              }
+              )}
 
               {/* Materias */}
-              {subjects.map(subj => {
+              {subjects.filter(subj=>showSubject(subj.id)).map(subj => {
                 if (collapsed[subj.id]) return <th key={subj.id} style={{ minWidth:52, fontSize:10, color: 'var(--t4)', textAlign:'center', borderRight: '1px solid var(--divider)' }}>···</th>
                 return [
                   ...subj.cols.map(col => (
-                    <th key={`${subj.id}_${col.id}`} className="group relative"
-                      style={{ minWidth:64, padding:'4px 2px', textAlign:'center', fontSize:9, fontWeight:700,
-                        color:col.t==='tarea'?'var(--warn)':'var(--t3)', borderRight: '1px solid var(--divider)' }}>
-                      <span className="block truncate max-w-[60px] mx-auto" title={col.name}>{col.name}</span>
-                      <button onClick={()=>removeCol(subj.id,col.id)}
-                        className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <X size={9} style={{ color:'var(--bad-line)' }}/>
-                      </button>
-                    </th>
+                    <EditableColumnHeader key={`${subj.id}_${col.id}`} minWidth={76} light={hcMode}
+                      value={headerName(`col:${col.id}`,col.name)}
+                      onChange={v=>renameHeader(`col:${col.id}`,v)}
+                      onRemove={()=>removeCol(subj.id,col.id)}/>
                   )),
                   <th key={`${subj.id}_add`} style={{ minWidth:26, borderRight: '1px solid var(--divider)' }}>
                     <button onClick={()=>setAddColModal(subj.id)} className="mx-auto flex items-center justify-center w-4 h-4 rounded hover:bg-white/15" title="Añadir columna">
@@ -1309,29 +1590,35 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
               })}
 
               {/* Simulacros */}
-              {collapsed['sims']
+              {showSims && (collapsed['sims']
                 ? <th style={{ minWidth:52, textAlign:'center', fontSize:10, color: 'var(--t4)' }}>···</th>
-                : [...Array.from({length:simCount},(_,i)=>i+1).flatMap(n=>[
-                    <th key={`s${n}sc`} style={{ minWidth:52, padding:'4px 2px', textAlign:'center', fontSize:9, fontWeight:700, color: 'var(--t3)' }}>{folioEX(n)}</th>,
-                    <th key={`s${n}t`}  style={{ minWidth:46, padding:'4px 2px', textAlign:'center', fontSize:9, fontWeight:700, color:'var(--warn)' }}>TAREA</th>,
-                    <th key={`s${n}a`}  style={{ minWidth:46, padding:'4px 2px', textAlign:'center', fontSize:9, fontWeight:700, color: 'var(--t4)' }}>ANÁL.</th>,
+                : [...visibleSims.flatMap(n=>[
+                    <EditableColumnHeader key={`s${n}sc`} minWidth={58} light={hcMode}
+                      value={simHeaderName(n,'score')} onChange={v=>renameSimHeader(n,'score',v)}/>,
+                    <EditableColumnHeader key={`s${n}t`} minWidth={54} light={hcMode}
+                      value={simHeaderName(n,'task')} onChange={v=>renameSimHeader(n,'task',v)}/>,
+                    <EditableColumnHeader key={`s${n}a`} minWidth={54} light={hcMode}
+                      value={simHeaderName(n,'analysis')} onChange={v=>renameSimHeader(n,'analysis',v)}/>,
                   ]),
                   <th key="sims_sp" style={{ minWidth:26 }}/>
                 ]
-              }
+              )}
 
               {/* Online */}
-              {collapsed['online']
+              {showOnline && (collapsed['online']
                 ? <th style={{ minWidth:52, textAlign:'center', fontSize:10, color: 'var(--t4)' }}>···</th>
                 : [...Array.from({length:onlineCount},(_,i)=>i+1).map(n=>(
-                    <th key={`on${n}`} style={{ minWidth:52, padding:'4px 2px', textAlign:'center', fontSize:9, fontWeight:700, color: 'var(--t3)' }}>{folioEXD(n)}</th>
+                    <EditableColumnHeader key={`on${n}`} minWidth={64} light={hcMode}
+                      value={headerName(`online:${n}`,folioEXD(n))}
+                      onChange={v=>renameHeader(`online:${n}`,v)}/>
                   )),
                   <th key="online_sp" style={{ minWidth:26 }}/>
                 ]
-              }
+              )}
 
               {/* Asistencias */}
-              <th style={{ minWidth:88, padding:'4px 8px', textAlign:'center', fontSize:9, fontWeight:700, color: 'var(--t3)' }}>% ASIST.</th>
+              {showAttendance && <EditableColumnHeader minWidth={88} light={hcMode}
+                value={headerName('attendance','% ASIST.')} onChange={v=>renameHeader('attendance',v)}/>}
             </tr>
           </thead>
 
@@ -1342,7 +1629,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
               return (
                 <tr key={s.id}
-                  style={{ height:40, background:rowBg }}
+                  style={{ height:isMobile?48:40, background:rowBg }}
                   onMouseEnter={e=>e.currentTarget.style.background=rowHoverBg}
                   onMouseLeave={e=>e.currentTarget.style.background=rowBg}
                   className="group transition-colors duration-75">
@@ -1381,27 +1668,27 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                   </td>
 
                   {/* Pago — NO sticky */}
-                  <PaymentCell value={s.pago} onChange={v=>setPago(s.id,v)}
+                  {showSummary && <PaymentCell value={s.pago} onChange={v=>setPago(s.id,v)}
                     tdStyle={{ minWidth:W.pago, background: hcMode ? `${HC.pago}06` : rowBg, border: `1px solid ${HC.pago}${hcMode ? '45' : '40'}`, boxShadow: !hcMode ? `0 0 6px ${HC.pago}25` : 'none', verticalAlign:'middle' }}
-                  />
+                  />}
 
                   {/* Garantía — NO sticky */}
-                  <GuaranteeBadge studentId={s.id} cells={sc} attendance={attendance} simCount={simCount}
+                  {showSummary && <GuaranteeBadge studentId={s.id} cells={sc} attendance={attendance} simCount={simCount}
                     bg={rowBg} sc={HC.gar}
-                  />
+                  />}
 
                   {/* Documentos */}
-                  {collapsed['docs']
+                  {showDocs && (collapsed['docs']
                     ? <td style={{ minWidth:52, background: hcMode ? `${HC.docs}06` : rowBg }}/>
                     : <>
                         <CheckCell checked={s.firmaGar} onChange={()=>toggleCheck(s.id,'firmaGar')} bg={rowBg} sc={HC.docs}/>
                         <CheckCell checked={s.firmaTyC} onChange={()=>toggleCheck(s.id,'firmaTyC')} bg={rowBg} sc={HC.docs}/>
                         <CheckCell checked={s.exGral}   onChange={()=>toggleCheck(s.id,'exGral')}   bg={rowBg} sc={HC.docs}/>
                       </>
-                  }
+                  )}
 
                   {/* Materias */}
-                  {subjects.map(subj => {
+                  {subjects.filter(subj=>showSubject(subj.id)).map(subj => {
                     if(collapsed[subj.id]) return <td key={subj.id} style={{ minWidth:52, background: hcMode ? `${subj.color}06` : rowBg }}/>
                     return [
                       ...subj.cols.map(col=>(
@@ -1416,29 +1703,29 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                   })}
 
                   {/* Simulacros */}
-                  {collapsed['sims']
+                  {showSims && (collapsed['sims']
                     ? <td style={{ minWidth:52, background: hcMode ? `${HC.sims}06` : rowBg }}/>
-                    : [...Array.from({length:simCount},(_,i)=>i+1).flatMap(n=>[
+                    : [...visibleSims.flatMap(n=>[
                         <ScoreCell key={`sim_${n}_sc`} compact value={sc[`sim_${n}`]} onChange={v=>setCell(s.id,`sim_${n}`,v)} sc={HC.sims}/>,
                         <CheckCell key={`sim_${n}_t`} checked={!!sc[`sim_${n}_tarea`]} onChange={()=>setCell(s.id,`sim_${n}_tarea`,!sc[`sim_${n}_tarea`])} bg={rowBg} sc={HC.sims}/>,
                         <CheckCell key={`sim_${n}_a`} checked={!!sc[`sim_${n}_analisis`]} onChange={()=>setCell(s.id,`sim_${n}_analisis`,!sc[`sim_${n}_analisis`])} bg={rowBg} sc={HC.sims}/>,
                       ]),
                       <td key="sims_sp" style={{ minWidth:26, background: hcMode ? `${HC.sims}04` : rowBg }}/>,
                     ]
-                  }
+                  )}
 
                   {/* Online */}
-                  {collapsed['online']
+                  {showOnline && (collapsed['online']
                     ? <td style={{ minWidth:52, background: hcMode ? `${HC.online}06` : rowBg }}/>
                     : [...Array.from({length:onlineCount},(_,i)=>i+1).map(n=>(
                         <ScoreCell key={`on_${n}`} compact value={sc[`on_${n}`]} onChange={v=>setCell(s.id,`on_${n}`,v)} sc={HC.online}/>
                       )),
                       <td key="online_sp" style={{ minWidth:26, background: hcMode ? `${HC.online}04` : rowBg }}/>,
                     ]
-                  }
+                  )}
 
                   {/* Asistencias */}
-                  <AttSummaryCell studentId={s.id} attendance={attendance} onClick={()=>setAttModal(s.id)}/>
+                  {showAttendance && <AttSummaryCell studentId={s.id} attendance={attendance} onClick={()=>setAttModal(s.id)}/>}
                 </tr>
               )
             })}
@@ -1569,6 +1856,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         </div>
         {/* Contenido */}
         <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', overflow:'hidden', padding:'12px 16px 8px' }}>
+          {focusBar}
           {tableEl}
           {legend}
         </div>
@@ -1605,6 +1893,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     <HCCtx.Provider value={hcMode}>
       <div className="space-y-3">
         {toolbar}
+        {focusBar}
         {tableEl}
         {legend}
 

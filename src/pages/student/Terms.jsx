@@ -6,7 +6,9 @@ import {
   Upload, Trash2, Check, AlertTriangle, Download, FileSignature,
 } from 'lucide-react'
 import clsx from 'clsx'
-import { downloadStampedPdf, downloadBlankPdf } from '../../lib/termsPdf'
+import { downloadStampedPdf } from '../../lib/termsPdf'
+
+const TERMS_PDF_URL = '/docs/terminos-condiciones-ecoems-universidad.pdf'
 
 // ── Canvas de firma ──────────────────────────────────────────────────────────
 function SignaturePad({ onCapture, disabled }) {
@@ -83,8 +85,8 @@ function SignaturePad({ onCapture, disabled }) {
         )}
         <canvas
           ref={canvasRef}
-          className="block w-full"
-          style={{ height: 156, touchAction:'none', cursor: disabled ? 'not-allowed' : 'crosshair' }}
+          className="block w-full min-h-[180px] sm:min-h-[220px]"
+          style={{ height: 'clamp(180px, 32vw, 240px)', touchAction:'none', cursor: disabled ? 'not-allowed' : 'crosshair' }}
           onMouseDown={start} onMouseMove={move} onMouseUp={stop} onMouseLeave={stop}
           onTouchStart={start} onTouchMove={move} onTouchEnd={stop}
         />
@@ -239,12 +241,16 @@ export default function Terms() {
   const [privRead,   setPrivRead]   = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [handSignedFile, setHandSignedFile] = useState(null) // { name, file } — firmado a mano, no persiste en Supabase todavía
+  const handSignedUrl = handSignedFile?.file ? URL.createObjectURL(handSignedFile.file) : null
+
+  useEffect(() => () => { if (handSignedUrl) URL.revokeObjectURL(handSignedUrl) }, [handSignedUrl])
 
   // Sincroniza el estado de firma con lo registrado en la BD.
   useEffect(() => {
     if (!s) return
     const isSigned = s.termsStatus === 'firmado'
     setSigned(isSigned)
+    if (s.signatureDataUrl) setSignature(s.signatureDataUrl)
     setTcRead(r => r || isSigned)
     setPrivRead(r => r || isSigned)
     setSignedAt(s.signedAt
@@ -254,7 +260,7 @@ export default function Terms() {
 
   if (!s) return null
 
-  const hasSignature = !!signature || !!handSignedFile
+  const hasSignature = !!signature
   const canSign = hasSignature && !!curpFile && !!ineFile && tcRead && privRead && !signed
 
   const checklist = [
@@ -262,7 +268,7 @@ export default function Terms() {
     { ok: privRead,     label:'Aviso de Privacidad leído' },
     { ok: !!curpFile,   label:'CURP subida' },
     { ok: !!ineFile,    label:'INE del tutor subida' },
-    { ok: hasSignature, label:'Firma digital o PDF firmado a mano' },
+    { ok: hasSignature, label:'Firma digital capturada' },
   ]
 
   const handleDownloadStamped = () => {
@@ -273,7 +279,10 @@ export default function Terms() {
   }
 
   const handleDownloadBlank = () => {
-    downloadBlankPdf({ studentName: s.name, tcText: TC_TEXT, privText: PRIV_TEXT })
+    const link = document.createElement('a')
+    link.href = TERMS_PDF_URL
+    link.download = 'TERMINOS_Y_CONDICIONES_ECOEMS_Y_UNIVERSIDAD.pdf'
+    link.click()
   }
 
   const handleSign = async () => {
@@ -281,7 +290,7 @@ export default function Terms() {
     setSubmitting(true)
     try {
       // Persiste la firma en Supabase (students.terms_status / signed_at)
-      const res = await signTerms(s.id)
+      const res = await signTerms(s.id, signature)
       const when = res?.signedAt ? new Date(res.signedAt) : new Date()
       setSigned(true)
       setSignedAt(when.toLocaleDateString('es-MX', {
@@ -301,7 +310,7 @@ export default function Terms() {
   ]
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="w-full max-w-6xl mx-auto space-y-5">
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -348,14 +357,14 @@ export default function Terms() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl" style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
+      <div className="flex gap-1 p-1 rounded-xl overflow-x-auto scroll-carril" style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
         {TABS.map(t => {
           const Icon = t.icon
           const active = tab === t.id
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={clsx(
-                'flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all',
+                'flex-1 min-w-[96px] flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all',
                 active ? 'bg-white text-black' : 'hover:text-white/70'
               )}
               style={{ color: active ? '#000' : 'var(--t3)' }}>
@@ -369,9 +378,25 @@ export default function Terms() {
 
       {/* ── Tab T&C ──────────────────────────────────────────────── */}
       {tab === 'tc' && (
-        <div className="card p-5 space-y-4">
-          <div className="max-h-64 overflow-y-auto pr-1 text-xs leading-relaxed" style={{ color:'var(--t2)', whiteSpace:'pre-line' }}>
-            {TC_TEXT}
+        <div className="card p-3 sm:p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="section-title">Términos y Condiciones ECOEMS y Universidad</h2>
+              <p className="text-xs mt-1" style={{ color:'var(--t3)' }}>Documento oficial vigente proporcionado por CEFIMAT.</p>
+            </div>
+            <a href={TERMS_PDF_URL} download="TERMINOS_Y_CONDICIONES_ECOEMS_Y_UNIVERSIDAD.pdf"
+              className="btn-secondary justify-center text-xs flex-shrink-0">
+              <Download size={13}/> Descargar PDF
+            </a>
+          </div>
+          <div className="rounded-xl overflow-hidden" style={{ border:'1px solid var(--card-border)', background:'var(--soft-bg)' }}>
+            <object data={TERMS_PDF_URL} type="application/pdf"
+              className="block w-full h-[62vh] min-h-[420px] sm:min-h-[620px]">
+              <div className="p-8 text-center">
+                <p className="text-sm" style={{ color:'var(--t3)' }}>Tu navegador no puede mostrar el PDF aquí.</p>
+                <a href={TERMS_PDF_URL} target="_blank" rel="noreferrer" className="btn-primary inline-flex mt-3">Abrir documento</a>
+              </div>
+            </object>
           </div>
           {!tcRead
             ? (
@@ -442,6 +467,11 @@ export default function Terms() {
                 <p className="text-[11px]" style={{ color:'var(--t4)' }}>
                   Firmado el {signedAt}
                 </p>
+                <button onClick={handleDownloadStamped}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all active:scale-95"
+                  style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
+                  <Download size={13}/> Descargar Términos con mi firma
+                </button>
               </div>
             )}
             {signed && !signature && (
@@ -480,6 +510,17 @@ export default function Terms() {
                     </button>
                     <HandSignedUpload file={handSignedFile} onChange={setHandSignedFile}/>
                   </div>
+                  {handSignedUrl && (
+                    <div className="rounded-xl overflow-hidden" style={{ border:'1px solid var(--good-line)', background:'var(--soft-bg)' }}>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2" style={{ borderBottom:'1px solid var(--divider)' }}>
+                        <span className="text-xs font-semibold truncate" style={{ color:'var(--good)' }}>{handSignedFile.name}</span>
+                        <button onClick={() => setHandSignedFile(null)} className="text-xs" style={{ color:'var(--bad)' }}>Quitar</button>
+                      </div>
+                      <object data={handSignedUrl} type="application/pdf" className="block w-full h-[52vh] min-h-[360px]">
+                        <p className="p-4 text-xs" style={{ color:'var(--t3)' }}>Vista previa no disponible.</p>
+                      </object>
+                    </div>
+                  )}
                   <p className="text-[10px]" style={{ color:'var(--t4)' }}>
                     Descarga, fírmalo a mano y vuelve a subirlo aquí. El PDF que subas se adjunta a tu registro localmente por ahora —
                     la subida permanente a almacenamiento seguro está pendiente de habilitarse por el administrador.

@@ -83,7 +83,7 @@ function MetodoBadge({ metodo, compacto = false }) {
 }
 
 export default function Pagos() {
-  const { nombreDe } = useSucursales()
+  const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
   const { currentUser } = useAuth()
   const isAdmin = currentUser?.role === 'admin'
 
@@ -118,9 +118,7 @@ export default function Pagos() {
   useEffect(() => { if (isAdmin) cargar() }, [isAdmin, cargar])
 
   /* Sucursales y grupos derivados de los datos reales, nunca escritos a mano. */
-  const sucursales = useMemo(
-    () => [...new Set(filas.map(f => f.sucursal).filter(Boolean))].sort(),
-    [filas])
+  const sucursales = useMemo(() => catalogoSucursales.map(s => s.id), [catalogoSucursales])
 
   const grupos = useMemo(() => {
     const vistos = new Map()
@@ -334,7 +332,7 @@ export default function Pagos() {
               const met = [...(metodosPorPlan[f.planId] ?? [])]
               return (
                 <DataTableRow key={f.studentId} onClick={() => setDetalle(f.studentId)} cells={[
-                  { className: 'flex-grow min-w-[130px]', content: (
+                  { className: 'flex-grow min-w-[110px] sm:min-w-[130px]', content: (
                     <DataTableAvatar initials={iniciales(f.studentName)} name={f.studentName}
                       avatarSrc={f.avatarSrc}
                       sub={[f.groupName, nombreDe(f.sucursal)].filter(Boolean).join(' · ') || 'Sin grupo'}/>
@@ -354,7 +352,7 @@ export default function Pagos() {
                       {f.planId ? mxn(f.pagado) : '—'}
                     </span>
                   )},
-                  { className: 'w-28 sm:w-40', content: f.planId ? (
+                  { className: 'w-24 sm:w-40', content: f.planId ? (
                     <DataTableBar value={f.porcentaje ?? 0} max={100}
                       color={colorAvance(f.porcentaje)}
                       label={`${f.porcentaje ?? 0}%`}/>

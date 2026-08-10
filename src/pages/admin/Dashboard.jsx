@@ -17,6 +17,7 @@ import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useAuth } from '../../context/AuthContext'
 import KpiCard from '../../components/ui/KpiCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
+import { useSucursales } from '../../hooks/useSucursales'
 
 function FilterSelect({ value, onChange, options, style }) {
   return (
@@ -136,6 +137,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { currentUser, allowedSucursales, canAccess } = useAuth()
   const { getAccent } = useGroupColors()
+  const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
   const isAdmin = currentUser?.role === 'admin'
 
   const [groups, setGroups]           = useState([])
@@ -164,9 +166,9 @@ export default function Dashboard() {
     () => isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id)),
     [isAdmin, canAccess, groups]
   )
-  const sucursalOptions = isAdmin
-    ? [...new Set(groups.map(g => g.sucursal).filter(Boolean))]
-    : allowedSucursales
+  const sucursalOptions = catalogoSucursales
+    .filter(s => isAdmin || allowedSucursales.includes(s.id))
+    .map(s => s.id)
 
   const [sucursal, setSucursal] = useState('todas')
   const [grupoId, setGrupoId]   = useState('todos')
@@ -241,7 +243,7 @@ export default function Dashboard() {
       <div className="flex items-center gap-2 flex-wrap">
         <Filter size={14} style={{ color: 'var(--t3)' }} />
         <FilterSelect value={sucursal} onChange={handleSucursalChange}
-          options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:s }))]} />
+          options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:nombreDe(s) }))]} />
         <FilterSelect value={grupoId} onChange={setGrupoId}
           options={[{ value:'todos', label:'Todos los grupos' }, ...groupsInSucursal.map(g => ({ value:g.id, label:g.name }))]} />
       </div>

@@ -528,9 +528,9 @@ export default function StudentProfile() {
               <table className="w-full min-w-0 sm:min-w-[480px] lg:min-w-[560px]">
                 <thead>
                   <tr style={{ borderBottom:'1px solid var(--divider)' }}>
-                    <th className="table-header px-3 sm:px-4">Materia</th>
-                    <th className="table-header px-3 sm:px-4">Tipo</th>
-                    <th className="table-header px-3 sm:px-4">
+                    <th className="table-header px-2 sm:px-4 text-[9px] sm:text-[11px]">Materia</th>
+                    <th className="table-header px-2 sm:px-4 text-[9px] sm:text-[11px]">Tipo</th>
+                    <th className="table-header px-2 sm:px-4 text-[9px] sm:text-[11px]">
                       <span className="sm:hidden">Calif.</span>
                       <span className="hidden sm:inline">Calificación</span>
                     </th>
@@ -550,7 +550,7 @@ export default function StudentProfile() {
                       style={{ borderBottom:'1px solid var(--divider)' }}
                       onMouseEnter={ev => ev.currentTarget.style.background='var(--soft-bg)'}
                       onMouseLeave={ev => ev.currentTarget.style.background='transparent'}>
-                      <td className="table-cell px-3 sm:px-4 font-medium" style={{ color:'var(--t1)' }}>
+                      <td className="table-cell px-2 sm:px-4 text-xs sm:text-sm font-medium max-w-0 break-words" style={{ color:'var(--t1)' }}>
                         {e.materia}
                         {/* Fecha y periodo no desaparecen en teléfono: bajan
                             aquí como línea secundaria, que es donde se leen sin
@@ -560,13 +560,13 @@ export default function StudentProfile() {
                           {e.fecha}{e.periodo ? ` · ${e.periodo}` : ''}
                         </span>
                       </td>
-                      <td className="table-cell px-3 sm:px-4">
-                        <span className="badge text-[11px] px-2 py-0.5 whitespace-nowrap"
+                      <td className="table-cell px-2 sm:px-4">
+                        <span className="badge text-[9px] sm:text-[11px] px-1 sm:px-2 py-0.5 max-w-full truncate"
                           style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
                           {e.tipo}
                         </span>
                       </td>
-                      <td className="table-cell px-3 sm:px-4">
+                      <td className="table-cell px-2 sm:px-4 text-xs sm:text-sm">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <EditableGrade evalId={e.id} value={e.calificacion} onSave={saveOverride}/>
                           <span className="text-xs" style={{ color:'var(--t3)' }}>/{e.calMax}</span>

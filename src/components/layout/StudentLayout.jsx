@@ -6,6 +6,7 @@ import { useState, useEffect, Suspense } from 'react'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
 import { StudentThemeProvider, useStudentTheme } from '../../context/StudentThemeContext'
+import { useSucursales } from '../../hooks/useSucursales'
 
 const nav = [
   { to:'/student',                label:'Mi Panel',       icon:LayoutDashboard, exact:true },
@@ -28,6 +29,7 @@ function LayoutInner() {
   const navigate = useNavigate()
   const { appearance, t } = useStudentTheme()
   const { student, group: grp } = useStudentData()
+  const { nombreDe } = useSucursales()
   const initials = student?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'AL'
 
   const handleLogout = () => { logout(); navigate('/login') }
@@ -127,7 +129,10 @@ function LayoutInner() {
             style={{ background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.12)' }}>
             <p className="text-[9px] font-bold uppercase tracking-widest mb-1 text-white/40">Alumno</p>
             <p className="text-white text-sm font-semibold leading-tight">{student.name}</p>
-            <p className="text-xs mt-0.5 text-white/50">{grp?.name} — {grp?.subject}</p>
+            <p className="text-xs mt-0.5 text-white/60">
+              {[grp?.sucursal ? nombreDe(grp.sucursal) : null, grp?.name].filter(Boolean).join(' · ')}
+            </p>
+            {grp?.subject && <p className="text-[10px] mt-0.5 text-white/45 truncate">{grp.subject}</p>}
           </div>
         )}
 

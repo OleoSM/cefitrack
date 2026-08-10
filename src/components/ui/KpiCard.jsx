@@ -44,11 +44,11 @@ const TONOS = {
 }
 
 export default function KpiCard({
-  icon: Icon, value, label, sub, pill, tone = 'neutral', onClick, className = '',
+  icon: Icon, value, label, sub, pill, tone = 'neutral', onClick, className = '', light,
 }) {
   const { t } = useAdminTheme()
   const par = TONOS[tone] ?? TONOS.neutral
-  const accent = t?.light ? par.claro : par.oscuro
+  const accent = (light ?? t?.light) ? par.claro : par.oscuro
 
   const Root = onClick ? 'button' : 'div'
 

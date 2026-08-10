@@ -7,6 +7,7 @@ import {
 import { DataTable, DataTableRow, DataTableAvatar } from '../../components/ui/DataTable'
 import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
 import ModalPortal from '../../components/ui/ModalPortal'
+import { useSucursales } from '../../hooks/useSucursales'
 
 // Las cuatro categorías autorizadas por CEFIMAT (requisito EVA-01).
 // Las anteriores (Examen Parcial, Proyecto, Examen Final, Quíz, Práctica) se retiran.
@@ -153,6 +154,7 @@ const COLUMNS = [
 export default function Evaluations() {
   const [showModal, setShowModal] = useState(false)
   const [query, setQuery]         = useState('')
+  const [sucursalFilter, setSucursal] = useState('all')
   const [groupFilter, setGroup]   = useState('all')
   const [typeFilter, setType]     = useState('all')
 
@@ -161,6 +163,7 @@ export default function Evaluations() {
   const [groups, setGroups]           = useState([])
   const [loading, setLoading]         = useState(true)
   const [loadError, setLoadError]     = useState(null)
+  const { sucursales, nombreDe } = useSucursales()
 
   const load = useCallback(async () => {
     try {
@@ -178,6 +181,14 @@ export default function Evaluations() {
 
   useEffect(() => { load() }, [load])
 
+  const groupsInSucursal = sucursalFilter === 'all'
+    ? groups
+    : groups.filter(g => g.sucursal === sucursalFilter)
+
+  useEffect(() => {
+    if (groupFilter !== 'all' && !groupsInSucursal.some(g => g.id === groupFilter)) setGroup('all')
+  }, [sucursalFilter, groupFilter, groupsInSucursal])
+
   const handleDelete = async id => {
     setEvaluations(prev => prev.filter(e => e.id !== id))
     try { await deleteEvaluation(id) } catch { load() }
@@ -186,9 +197,11 @@ export default function Evaluations() {
   const filtered = evaluations.filter(e => {
     const s = students.find(st => st.id === e.studentId)
     if (!s) return false
+    const group = groups.find(g => g.id === s.groupId)
     const q = query.toLowerCase()
     return (s.name.toLowerCase().includes(q) || e.materia.toLowerCase().includes(q))
       && (groupFilter === 'all' || s.groupId === groupFilter)
+      && (sucursalFilter === 'all' || group?.sucursal === sucursalFilter)
       && (typeFilter  === 'all' || e.tipo === typeFilter)
   })
 
@@ -200,7 +213,7 @@ export default function Evaluations() {
 
       {/* Toolbar */}
       <FilterBar
-        activos={[groupFilter, typeFilter].filter(v => v !== 'all').length + (query ? 1 : 0)}
+        activos={[sucursalFilter, groupFilter, typeFilter].filter(v => v !== 'all').length + (query ? 1 : 0)}
         acciones={
           <button onClick={() => setShowModal(true)} disabled={students.length === 0} className="btn-primary">
             <Plus size={14}/> <span className="hidden sm:inline">Agregar evaluación</span>
@@ -215,8 +228,10 @@ export default function Evaluations() {
           </div>
 
           {[
+            { label:'Sucursal', value:sucursalFilter, setter:setSucursal,
+              opts:[{v:'all',l:'Todas las sucursales'}, ...sucursales.map(s=>({v:s.id,l:nombreDe(s.id)}))] },
             { label:'Grupo', value:groupFilter, setter:setGroup,
-              opts:[{v:'all',l:'Todos los grupos'}, ...groups.map(g=>({v:g.id,l:g.name}))] },
+              opts:[{v:'all',l:'Todos los grupos'}, ...groupsInSucursal.map(g=>({v:g.id,l:g.name}))] },
             { label:'Tipo', value:typeFilter, setter:setType,
               opts:[{v:'all',l:'Todos los tipos'}, ...tipos.map(t=>({v:t,l:t}))] },
           ].map(({ label, value, setter, opts }) => (
@@ -256,7 +271,7 @@ export default function Evaluations() {
           return (
             <DataTableRow key={e.id} cells={[
               {
-                className: 'flex-grow min-w-[180px]',
+                className: 'flex-grow min-w-[120px] sm:min-w-[180px]',
                 content: <DataTableAvatar
                   initials={s?.name.split(' ').slice(0,2).map(n=>n[0]).join('') ?? '?'}
                   avatarSrc={s?.avatarSrc}
@@ -277,9 +292,9 @@ export default function Evaluations() {
                 ),
               },
               {
-                className: 'w-28',
+                className: 'w-20 sm:w-28',
                 content: (
-                  <span className={`inline-flex items-center justify-center min-w-10 h-7 px-1.5 rounded-lg text-sm font-bold border ${gc.bg} ${gc.text} ${gc.border}`}>
+                  <span className={`inline-flex items-center justify-center min-w-8 sm:min-w-10 h-6 sm:h-7 px-1 sm:px-1.5 rounded-lg text-xs sm:text-sm font-bold border ${gc.bg} ${gc.text} ${gc.border}`}>
                     {e.calMax === 10 ? e.calificacion : `${e.calificacion}/${e.calMax}`}
                   </span>
                 ),

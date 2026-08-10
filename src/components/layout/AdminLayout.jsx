@@ -271,9 +271,20 @@ function LayoutInner() {
 
         {/* User footer */}
         <div className="relative px-3 py-3">
-          <div className="flex items-center gap-3 px-2 py-2 rounded-xl transition-colors"
-            onMouseEnter={e => e.currentTarget.style.background='var(--card-bg)'}
-            onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+          <div
+            className="flex items-center gap-3 px-2 py-2 rounded-xl border border-transparent transition-colors"
+            onMouseEnter={e => {
+              e.currentTarget.style.background = identity
+                ? 'rgba(255,255,255,.10)'
+                : 'var(--card-bg)'
+              e.currentTarget.style.borderColor = identity
+                ? 'rgba(255,255,255,.14)'
+                : 'transparent'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.borderColor = 'transparent'
+            }}>
             <div className="relative flex-shrink-0">
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
                 style={{
@@ -294,7 +305,7 @@ function LayoutInner() {
               className="p-1.5 rounded-lg transition-colors"
               style={{ color: t.sideT3 }}
               onMouseEnter={e => { e.currentTarget.style.color='rgba(248,113,113,.9)'; e.currentTarget.style.background='rgba(239,68,68,.10)' }}
-              onMouseLeave={e => { e.currentTarget.style.color='var(--t3)'; e.currentTarget.style.background='transparent' }}>
+              onMouseLeave={e => { e.currentTarget.style.color=t.sideT3; e.currentTarget.style.background='transparent' }}>
               <LogOut size={14} />
             </button>
           </div>

@@ -200,7 +200,7 @@ export default function GroupDetail() {
                     content: <span className="text-xs font-mono" style={{ color:'var(--t3)' }}>{i+1}</span>,
                   },
                   {
-                    className: 'flex-grow min-w-[140px]',
+                    className: 'flex-grow min-w-[110px] sm:min-w-[140px]',
                     content: <DataTableAvatar
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                       avatarSrc={s.avatarSrc}
@@ -218,7 +218,7 @@ export default function GroupDetail() {
                   {
                     className: 'w-16 sm:w-20',
                     content: Number.isFinite(s.avgGrade)
-                      ? <span className={`text-base font-bold ${gradeClass(s.avgGrade)}`}>{s.avgGrade}</span>
+                      ? <span className={`text-sm sm:text-base font-bold ${gradeClass(s.avgGrade)}`}>{s.avgGrade}</span>
                       : <span className="text-sm" style={{ color:'var(--t3)' }}>—</span>,
                   },
                   {

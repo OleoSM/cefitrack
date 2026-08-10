@@ -19,19 +19,36 @@ import { supabase } from './supabaseClient'
 /* ── Catálogo de formas de pago ──────────────────────────────────────────────
    Un único sitio donde vive la lista. La base tiene el mismo CHECK; si alguna
    vez se añade una forma más, se cambia en los dos y no en quince JSX. */
-export const METODOS = ['tarjeta', 'efectivo', 'transferencia']
+export const METODOS = ['tarjeta_credito', 'tarjeta_debito', 'efectivo', 'transferencia']
 
 export const METODO_LABEL = {
-  tarjeta: 'Tarjeta',
+  tarjeta_credito: 'Tarjeta de crédito',
+  tarjeta_debito: 'Tarjeta de débito',
   efectivo: 'Efectivo',
   transferencia: 'Transferencia',
+}
+
+/* Etiqueta corta para las insignias de la tabla, donde el nombre completo no
+   cabe en la columna de formas. */
+export const METODO_LABEL_CORTO = {
+  tarjeta_credito: 'Crédito',
+  tarjeta_debito: 'Débito',
+  efectivo: 'Efectivo',
+  transferencia: 'Transfer.',
 }
 
 /* Colores identificadores de cada forma de pago: sólidos y opacos, pensados
    para llevar texto blanco encima. Nada de alfa — ver la regla de color al
    inicio de index.css. */
+/* Crédito y débito comparten el azul a propósito: ambas son cobro con tarjeta
+   y conviene que se lean como una familia frente al efectivo o la
+   transferencia. Se distinguen por icono y etiqueta, no por tono. Inventar un
+   segundo azul aquí habría exigido un token nuevo en las tres identidades
+   (regla 5 de la cabecera de index.css) para separar dos cosas que en realidad
+   son parientes. */
 export const METODO_COLOR = {
-  tarjeta: 'var(--info-solid)',
+  tarjeta_credito: 'var(--info-solid)',
+  tarjeta_debito: 'var(--info-solid)',
   efectivo: 'var(--good-solid)',
   transferencia: 'var(--warn-solid)',
 }

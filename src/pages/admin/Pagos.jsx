@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
   Wallet, Search, Plus, Trash2, Pencil, X, Building2, Users,
-  CreditCard, Banknote, ArrowLeftRight, CheckCircle2, AlertTriangle,
+  CreditCard, WalletCards, Banknote, ArrowLeftRight, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useSucursales } from '../../hooks/useSucursales'
 import {
   DataTable, DataTableRow, DataTableAvatar, DataTableBar,
 } from '../../components/ui/DataTable'
@@ -13,7 +14,7 @@ import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
 import ModalPortal from '../../components/ui/ModalPortal'
 import {
   fetchResumenPagos, fetchPagos, guardarPlan, registrarPago, borrarPago,
-  METODOS, METODO_LABEL, METODO_COLOR, mxn, etiquetaMes, claveMes,
+  METODOS, METODO_LABEL, METODO_LABEL_CORTO, METODO_COLOR, mxn, etiquetaMes, claveMes,
   calendarioPlan, pagosSinMes, estadoDe, ESTADO_LABEL, ESTADO_COLOR,
 } from '../../lib/pagosData'
 
@@ -34,14 +35,18 @@ import {
  *    tocan de vez en cuando, sí son selects.
  *
  *  · Las sucursales NO están escritas a mano: salen de los grupos que existen
- *    en la base. Está pendiente el renombrado de CN1/CN2/CN3 a nombres propios
+ *    en la base, y su nombre para mostrar sale del catálogo `sucursales`
  *    y esta pantalla debe seguirlo sin tocar código.
  */
 
 /* Los iconos de forma de pago se declaran una vez: aparecen en la tabla, en el
    calendario, en la lista de movimientos y en el formulario. */
 const METODO_ICON = {
-  tarjeta: CreditCard,
+  /* Crédito y débito comparten color por ser la misma familia, así que el
+     icono es lo que los separa de un vistazo: la tarjeta para el crédito y
+     la terminal para el débito, que es como se cobra en mostrador. */
+  tarjeta_credito: CreditCard,
+  tarjeta_debito: WalletCards,
   efectivo: Banknote,
   transferencia: ArrowLeftRight,
 }
@@ -72,12 +77,13 @@ function MetodoBadge({ metodo, compacto = false }) {
   return (
     <span className="badge" style={{ background: METODO_COLOR[metodo], color: '#fff' }}>
       <Icon size={11} />
-      {!compacto && METODO_LABEL[metodo]}
+      {!compacto && METODO_LABEL_CORTO[metodo]}
     </span>
   )
 }
 
 export default function Pagos() {
+  const { nombreDe } = useSucursales()
   const { currentUser } = useAuth()
   const isAdmin = currentUser?.role === 'admin'
 
@@ -225,7 +231,7 @@ export default function Pagos() {
               <Building2 size={10} className="inline mr-1 -mt-0.5"/> Sucursal
             </label>
             <div className="flex flex-wrap gap-1.5">
-              {[{ v: 'todas', l: 'Todas' }, ...sucursales.map(s => ({ v: s, l: s }))].map(o => (
+              {[{ v: 'todas', l: 'Todas' }, ...sucursales.map(s => ({ v: s, l: nombreDe(s) }))].map(o => (
                 <Chip key={o.v} activo={sucursal === o.v} onClick={() => setSucursal(o.v)}>
                   {o.l}
                 </Chip>
@@ -331,7 +337,7 @@ export default function Pagos() {
                   { className: 'flex-grow min-w-[130px]', content: (
                     <DataTableAvatar initials={iniciales(f.studentName)} name={f.studentName}
                       avatarSrc={f.avatarSrc}
-                      sub={[f.groupName, f.sucursal].filter(Boolean).join(' · ') || 'Sin grupo'}/>
+                      sub={[f.groupName, nombreDe(f.sucursal)].filter(Boolean).join(' · ') || 'Sin grupo'}/>
                   )},
                   { className: 'w-28 hidden lg:flex', content: (
                     <span className="text-xs truncate" style={{ color: 'var(--t2)' }}>

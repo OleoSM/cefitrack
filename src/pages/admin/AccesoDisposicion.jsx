@@ -5,6 +5,7 @@ import {
   UserMinus, UserCheck, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useSucursales } from '../../hooks/useSucursales'
 import {
   fetchCuentas, createSubAdmin, fetchGroups,
   fetchSubAdminAccess, grantSubAdminAccess, revokeSubAdminAccess,
@@ -19,6 +20,7 @@ import ModalPortal from '../../components/ui/ModalPortal'
 // y no reflejaban las que existen en la base.
 
 export default function AccesoDisposicion() {
+  const { nombreDe } = useSucursales()
   const { currentUser } = useAuth()
   const isAdmin = currentUser?.role === 'admin'
 
@@ -352,7 +354,7 @@ export default function AccesoDisposicion() {
                   <p className="text-xs" style={{ color: 'var(--t3)' }}>
                     {a.grupoNombre
                       ? <>Grupo <strong style={{ color:'var(--t2)' }}>{a.grupoNombre}</strong>
-                          {a.sucursal ? ` · ${a.sucursal}` : ''} · sólo ve su propia información.</>
+                          {a.sucursal ? ` · ${nombreDe(a.sucursal)}` : ''} · sólo ve su propia información.</>
                       : 'Sin grupo asignado.'}
                   </p>
                 ) : (

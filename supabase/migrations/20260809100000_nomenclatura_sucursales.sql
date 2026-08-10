@@ -1,11 +1,9 @@
 -- ════════════════════════════════════════════════════════════════════════════
 --  NOMENCLATURA DE SUCURSALES Y TURNOS
---  PREPARADA, NO APLICADA. Revisar y aprobar antes de ejecutar.
+--  APROBADA Y APLICADA el 2026-08-09.
 --
---  Vive en supabase/pendientes/ y NO en supabase/migrations/ a propósito: la
---  CLI de Supabase aplica todo lo que encuentra en migrations/, y esto no debe
---  irse a producción por accidente. Cuando se apruebe, se mueve a migrations/
---  con su marca de tiempo y se aplica.
+--  Estuvo en supabase/pendientes/ mientras se revisaba, para que la CLI no la
+--  ejecutara por accidente. Aprobada, se movió aquí.
 -- ════════════════════════════════════════════════════════════════════════════
 --
 --  EL PROBLEMA
@@ -35,8 +33,6 @@
 --  que siguen funcionando sin tocarlas. Lo que cambia es el dominio de valores:
 --  de un CHECK a una clave foránea contra el catálogo.
 -- ════════════════════════════════════════════════════════════════════════════
-
-begin;
 
 -- ── 1. Catálogo de sucursales ───────────────────────────────────────────────
 create table if not exists public.sucursales (
@@ -133,17 +129,22 @@ comment on column public.groups.turno_id is
   'Turno del catálogo. Nulo mientras no se le asigne uno: hay grupos cuyo horario real no coincide con ningún turno de la tabla.';
 
 -- ── 5. Migración de los datos existentes ────────────────────────────────────
--- Mapeo confirmado por el usuario el 2026-08-08: los cuatro grupos son de
--- Neza 1. El turno sale de cruzar `institucion` con `schedule`:
---   g1  ipn    'Lunes a Viernes 10:00 a 12:00' → UN-1 (coincide exacto)
---   g13 unam   'Lunes/Viernes 10:00 a 1:00'    → UN-1 (aproximado, ver AVISO)
---   g14 unam   'Lunes a Viernes 16:00 - 18:00' → UN-2 (grupo de PRUEBA, ver AVISO)
---   g15 ecoems '3 a 4:30'                      → CN-2 (coincide, y el grupo ya
---                                                 se llamaba "CN-2 (2027)")
+-- Mapeo confirmado por el usuario: las cuatro sucursales son Neza 1, Neza 2,
+-- Arenal y Churubusco, y por ahora TODOS los grupos dependen de Neza 1.
 update public.groups set sucursal = 'neza1' where id in ('g1','g13','g14','g15');
+
+-- El turno se asigna SOLO donde el horario coincide de verdad con uno del
+-- catálogo. Los otros dos quedan en null a propósito: inventarles un turno
+-- sería fabricar un dato que nadie ha decidido, y encima uno que después
+-- nadie distinguiría de un dato real.
+--   g1  ipn    'Lunes a Viernes 10:00 a 12:00' → UN-1, coincide exacto
+--   g15 ecoems '3 a 4:30'                      → CN-2, coincide, y el grupo ya
+--                                                se llamaba "CN-2 (2027)"
+--   g13 unam   'Lunes/Viernes 10:00 a 1:00'    → NULL. Ningún turno de
+--                                                universidad termina a la 1:00.
+--   g14 unam   'Lunes a Viernes 16:00 - 18:00' → NULL. Grupo de PRUEBA, y no
+--                                                hay turno de 16:00 a 18:00.
 update public.groups set turno_id = 'neza1-UN-1' where id = 'g1';
-update public.groups set turno_id = 'neza1-UN-1' where id = 'g13';
-update public.groups set turno_id = 'neza1-UN-2' where id = 'g14';
 update public.groups set turno_id = 'neza1-CN-2' where id = 'g15';
 
 -- El alumno hereda la sucursal de su grupo. Es la fuente de verdad: la columna
@@ -192,7 +193,6 @@ create policy turnos_lectura on public.turnos
 
 grant select on public.sucursales, public.turnos to authenticated;
 
-commit;
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  COMPROBACIONES tras aplicar (deben devolver 0 filas cada una)

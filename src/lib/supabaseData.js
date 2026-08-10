@@ -777,3 +777,36 @@ export async function fetchCredencialesAlumno(studentId) {
   const row = data?.[0]
   return row ? { email: row.email, password: row.password } : null
 }
+
+/* ── Catálogo de sucursales y turnos ─────────────────────────────────────────
+   Sustituyen a la lista 'CN1' | 'CN2' | 'CN3' que estaba escrita a mano en el
+   código. Aquellos códigos mezclaban dos cosas: eran la sucursal, pero en la
+   nomenclatura oficial CN-1..CN-4 son los HORARIOS de ECOEMS dentro de Neza 1.
+   Ahora `groups.sucursal` y `students.sucursal` apuntan por clave foránea a
+   `sucursales.id`, así que ya no vale inventarse un valor.
+
+   Son catálogos pequeños y estables: cuatro plazas y veinticinco turnos. */
+export async function fetchSucursales() {
+  const { data, error } = await supabase
+    .from('sucursales')
+    .select('id, nombre, administracion')
+    .eq('activa', true)
+    .order('orden')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function fetchTurnos() {
+  const { data, error } = await supabase
+    .from('turnos')
+    .select('id, sucursal_id, codigo, nivel, dias, hora_inicio, hora_fin')
+    .eq('activo', true)
+    .order('sucursal_id')
+    .order('orden')
+  if (error) throw error
+  return (data ?? []).map(t => ({
+    id: t.id, sucursalId: t.sucursal_id, codigo: t.codigo,
+    nivel: t.nivel, dias: t.dias,
+    horario: `${t.hora_inicio.slice(0, 5)}–${t.hora_fin.slice(0, 5)}`,
+  }))
+}

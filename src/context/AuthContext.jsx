@@ -5,7 +5,11 @@ import {
 
 const AuthContext = createContext(null)
 
-const SUCURSALES = ['CN1', 'CN2', 'CN3']
+/* Antes aqui vivia ['CN1','CN2','CN3'] escrito a mano. Esos codigos ya no
+   existen: la nomenclatura oficial los usa para los HORARIOS de Neza 1, no
+   para las sucursales. La lista se lee del catalogo, que es la unica fuente
+   de verdad desde que `groups.sucursal` es clave foranea. */
+import { fetchSucursales } from '../lib/supabaseData'
 const SESSION_KEY = 'edutrack_session'
 
 /**
@@ -33,6 +37,19 @@ function readStoredSession() {
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(readStoredSession)
+  const [catalogo, setCatalogo] = useState([])
+
+  /* El catálogo de sucursales sólo hace falta cuando hay sesión: sin ella no
+     hay nada que filtrar, y pedirlo en la pantalla de login sería una consulta
+     que siempre sobra. */
+  useEffect(() => {
+    if (!currentUser) { setCatalogo([]); return }
+    let vivo = true
+    fetchSucursales()
+      .then(rows => { if (vivo) setCatalogo(rows) })
+      .catch(() => { /* la interfaz cae a lista vacía; no bloquea la sesión */ })
+    return () => { vivo = false }
+  }, [currentUser?.id])
 
   const persist = (user) => {
     setCurrentUser(user)
@@ -85,9 +102,14 @@ export function AuthProvider({ children }) {
     persist(null)
   }
 
+  /* El administrador alcanza TODAS las sucursales, así que su lista es el
+     catálogo entero; el sub-admin, sólo aquellas donde tiene acceso concedido.
+     Mientras el catálogo viaja, un admin ve la lista vacía por un instante: es
+     preferible a servirle una lista escrita a mano que se quedaría obsoleta la
+     próxima vez que se abra una plaza. */
   const allowedSucursales =
     currentUser?.role === 'admin'
-      ? SUCURSALES
+      ? catalogo.map(s => s.id)
       : [...new Set((currentUser?.access ?? []).map(a => a.sucursal))]
 
   const canAccess = (sucursal, groupId) => {

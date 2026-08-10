@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
+import { useSucursales } from '../../hooks/useSucursales'
 import { Html5Qrcode } from 'html5-qrcode'
 import * as XLSX from 'xlsx'
 import { getLastSimulacro } from '../../data/mockData'
@@ -25,6 +26,7 @@ const fmtDate = iso => new Date(`${iso}T00:00:00`).toLocaleDateString('es-MX', {
 const TOL_PRESETS = [5, 10, 15, 20]
 
 export default function Attendance() {
+  const { nombreDe } = useSucursales()
   const { getAccent } = useGroupColors()
 
   const [groups,         setGroups]        = useState([])
@@ -754,7 +756,7 @@ export default function Attendance() {
         </button>
         <ChevronRight size={12} style={{ color: 'var(--t4)' }}/>
         <span className="text-sm font-semibold" style={{ color: accentColor }}>
-          {grp?.sucursal ? `${grp.sucursal} - ${grp.name}` : grp?.name}
+          {grp?.sucursal ? `${nombreDe(grp.sucursal)} - ${grp.name}` : grp?.name}
         </span>
         <span className="text-xs hidden sm:inline" style={{ color: 'var(--t4)' }}>· {grp?.subject}</span>
         {finished && (

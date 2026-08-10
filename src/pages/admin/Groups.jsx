@@ -16,6 +16,7 @@ import { logoInstitucion, INSTITUCIONES, estiloLogo } from '../../lib/institucio
 import { useAdminTheme } from '../../context/AdminThemeContext'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { useAuth } from '../../context/AuthContext'
+import { useSucursales } from '../../hooks/useSucursales'
 
 function FilterSelect({ value, onChange, options }) {
   return (
@@ -49,6 +50,7 @@ const COLORES = ['#2B5F9E','#2F6B41','#8A5A12','#5D3E90','#94356B','#1C6474']
 
 function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
   const { t: temaAdmin } = useAdminTheme()
+  const { sucursales: catalogoSucursales } = useSucursales()
   const editing = !!group
   const [form, setForm] = useState({
     name:     group?.name ?? '',
@@ -56,7 +58,7 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
     schedule: group?.schedule ?? '',
     room:     group?.room ?? '',
     color:    group?.color ?? COLORES[0],
-    sucursal: group?.sucursal ?? (sucursales[0] ?? ''),
+    sucursal: group?.sucursal ?? '',
     institucion: group?.institucion ?? null,
   })
   const [saving, setSaving] = useState(false)
@@ -114,11 +116,19 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
               style={{ color:'var(--t3)' }}>Sucursal</label>
-            <input value={form.sucursal} onChange={e=>set('sucursal',e.target.value)}
-              placeholder="Ej. CN1" className="input-field" list="sucursales-existentes"/>
-            <datalist id="sucursales-existentes">
-              {sucursales.map(s => <option key={s} value={s}/>)}
-            </datalist>
+            {/* Selector, ya no texto libre. `groups.sucursal` pasó a ser clave
+                foránea contra el catálogo: un valor escrito a mano —una errata,
+                un código viejo tipo CN1— ya no se guarda, revienta al enviar.
+                Con la lista cerrada el error no se puede cometer. */}
+            <select value={form.sucursal} onChange={e=>set('sucursal', e.target.value)}
+              className="input-field">
+              {catalogoSucursales.length === 0 && (
+                <option value="">Cargando sucursales…</option>
+              )}
+              {catalogoSucursales.map(s => (
+                <option key={s.id} value={s.id}>{s.nombre}</option>
+              ))}
+            </select>
           </div>
 
           <div>

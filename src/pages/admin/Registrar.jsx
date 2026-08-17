@@ -434,7 +434,7 @@ function AttendanceModal({ studentId, studentName, attendance, onChange, onClose
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl overflow-hidden"
-        style={{ background:'rgba(10,10,18,.98)', border: '1px solid var(--card-border)' }}
+        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)' }}
         onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--card-border)' }}>
           <div>
@@ -446,14 +446,14 @@ function AttendanceModal({ studentId, studentName, attendance, onChange, onClose
               Reflejo de Pasar Lista. Para corregir un día, entra ahí.
             </p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10"><X size={15} style={{ color: 'var(--t3)' }}/></button>
+          <button onClick={onClose} aria-label="Cerrar asistencia" className="w-11 h-11 flex items-center justify-center rounded-lg"><X size={15} style={{ color: 'var(--t3)' }}/></button>
         </div>
 
         <div className="flex gap-1 px-5 pt-3 pb-2 overflow-x-auto">
           {MONTHS_ES.map((m,i) => (
             <button key={m} onClick={() => setMonth(i)}
-              className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-              style={{ background:month===i?'white':'var(--soft-bg)', color:month===i?'#000':'var(--t3)' }}>
+              className="flex-shrink-0 min-h-11 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={{ background:month===i?'var(--accent)':'var(--soft-bg)', color:month===i?'var(--accent-contrast)':'var(--t3)' }}>
               {m}
             </button>
           ))}
@@ -502,22 +502,22 @@ function AddColModal({ subjName, onAdd, onClose }) {
   const [name,setName]=useState(''); const [type,setType]=useState('actividad')
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'rgba(10,10,18,.98)', border: '1px solid var(--card-border)' }} onClick={e=>e.stopPropagation()}>
+      <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)' }} onClick={e=>e.stopPropagation()}>
         <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Añadir columna — {subjName}</p>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre (ej: TAREA 4)"
-          className="input-dark w-full" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),type)}/>
+          className="input-dark w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),type)}/>
         <div className="flex gap-2">
           {['actividad','tarea'].map(t=>(
-            <button key={t} onClick={()=>setType(t)} className="flex-1 py-2 rounded-xl text-xs font-bold transition-all"
-              style={{ background:type===t?'white':'var(--soft-bg)', color:type===t?'#000':'var(--t3)' }}>
+            <button key={t} onClick={()=>setType(t)} className="flex-1 min-h-11 py-2 rounded-xl text-xs font-bold transition-all"
+              style={{ background:type===t?'var(--accent)':'var(--soft-bg)', color:type===t?'var(--accent-contrast)':'var(--t3)' }}>
               {t.charAt(0).toUpperCase()+t.slice(1)}
             </button>
           ))}
         </div>
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 rounded-xl text-xs font-semibold" style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>Cancelar</button>
+          <button onClick={onClose} className="flex-1 min-h-11 py-2 rounded-xl text-xs font-semibold" style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>Cancelar</button>
           <button onClick={()=>name.trim()&&onAdd(name.trim(),type)} disabled={!name.trim()}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40" style={{ background:'white', color:'#000' }}>Añadir</button>
+            className="flex-1 min-h-11 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40" style={{ background:'var(--accent)', color:'var(--accent-contrast)' }}>Añadir</button>
         </div>
       </div>
     </div>
@@ -531,20 +531,20 @@ function AddSubjectModal({ onAdd, onClose }) {
   const [color,setColor]=useState(COLORS[0])
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'rgba(10,10,18,.98)', border: '1px solid var(--card-border)' }} onClick={e=>e.stopPropagation()}>
+      <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)' }} onClick={e=>e.stopPropagation()}>
         <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Nueva sección</p>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre de la sección"
-          className="input-dark w-full" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),color)} autoFocus/>
+          className="input-dark w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),color)} autoFocus/>
         <div className="flex gap-2 flex-wrap">
           {COLORS.map(c=>(
-            <button key={c} onClick={()=>setColor(c)} className="w-6 h-6 rounded-full transition-all active:scale-90"
-              style={{ background:c, outline:color===c?'2px solid white':'none', outlineOffset:2 }}/>
+            <button key={c} onClick={()=>setColor(c)} aria-label={`Elegir color ${c}`} className="w-11 h-11 rounded-full transition-all active:scale-90"
+              style={{ background:c, outline:color===c?'3px solid var(--accent)':'none', outlineOffset:2 }}/>
           ))}
         </div>
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 rounded-xl text-xs font-semibold" style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>Cancelar</button>
+          <button onClick={onClose} className="flex-1 min-h-11 py-2 rounded-xl text-xs font-semibold" style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>Cancelar</button>
           <button onClick={()=>name.trim()&&onAdd(name.trim(),color)} disabled={!name.trim()}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40" style={{ background:'white', color:'#000' }}>Añadir</button>
+            className="flex-1 min-h-11 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40" style={{ background:'var(--accent)', color:'var(--accent-contrast)' }}>Añadir</button>
         </div>
       </div>
     </div>
@@ -1065,7 +1065,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     } finally {
       setCargandoHoja(false)
     }
-  }, [group.id])
+  }, [group.id, groupStudents])
 
   useEffect(() => { cargarHoja() }, [cargarHoja])
 
@@ -1810,15 +1810,15 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
         <div className="flex gap-3">
           <button onClick={() => setDeleteConfirm(null)}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
+            className="flex-1 min-h-11 py-2.5 rounded-xl text-sm font-semibold transition-all"
             style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}
             onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
-            onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
+            onMouseLeave={e => e.currentTarget.style.background= 'var(--soft-bg)'}>
             Cancelar
           </button>
           <button
             onClick={() => { removeStudent(deleteConfirm.id); setDeleteConfirm(null) }}
-            className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all"
+            className="flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-all"
             style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}
             onMouseEnter={e => e.currentTarget.style.background='var(--bad-line)'}
             onMouseLeave={e => e.currentTarget.style.background='var(--bad-soft)'}>
@@ -1850,19 +1850,19 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         </div>
         <div className="space-y-2">
           <button onClick={() => confirmLeave(true)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all"
-            style={{ background:'white', color:'black' }}>
+            className="w-full min-h-11 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all"
+            style={{ background:'var(--accent)', color:'var(--accent-contrast)' }}>
             <Save size={13}/> Guardar borrador y salir
           </button>
           <button onClick={() => confirmLeave(false)}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
+            className="w-full min-h-11 py-2.5 rounded-xl text-sm font-semibold transition-all"
             style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}
             onMouseEnter={e => e.currentTarget.style.background='var(--bad-line)'}
             onMouseLeave={e => e.currentTarget.style.background='var(--bad-soft)'}>
             Descartar cambios y salir
           </button>
           <button onClick={() => setShowLeaveModal(false)}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
+            className="w-full min-h-11 py-2.5 rounded-xl text-sm font-semibold transition-all"
             style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
             Seguir editando
           </button>
@@ -1917,7 +1917,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         {addColModal && <AddColModal subjName={subjects.find(s=>s.id===addColModal)?.name??''} onAdd={(n,t)=>addCol(addColModal,n,t)} onClose={()=>setAddColModal(null)}/>}
         {addSubjModal && <AddSubjectModal onAdd={addSubject} onClose={()=>setAddSubjModal(false)}/>}
         {showAddStudent && <StudentFormModal groups={[group]} defaultGroupId={group.id}
-          onClose={()=>setShowAddStudent(false)} onSaved={cred=>{setShowAddStudent(false);if(cred)setLastCred(cred);onDataChange?.()}}/>}
+          onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
         {deleteModal}
         {leaveModal}
@@ -1938,6 +1938,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         {attModal && <AttendanceModal studentId={attModal} studentName={students.find(s=>s.id===attModal)?.name??''} attendance={attendance} onChange={toggleAtt} onClose={()=>setAttModal(null)}/>}
         {addColModal && <AddColModal subjName={subjects.find(s=>s.id===addColModal)?.name??''} onAdd={(n,t)=>addCol(addColModal,n,t)} onClose={()=>setAddColModal(null)}/>}
         {addSubjModal && <AddSubjectModal onAdd={addSubject} onClose={()=>setAddSubjModal(false)}/>}
+        {showAddStudent && <StudentFormModal groups={[group]} defaultGroupId={group.id}
+          onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
+        {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
         {deleteModal}
         {leaveModal}
       </div>
@@ -1965,13 +1968,18 @@ export default function Registrar() {
 
   useEffect(() => { cargar() }, [cargar])
 
+  const selectedStudents = useMemo(
+    () => selectedGroup ? students.filter(s => s.groupId === selectedGroup.id) : [],
+    [students, selectedGroup],
+  )
+
   if (!selectedGroup) {
     return <GroupPicker groups={groups} students={students} loading={loading} onSelect={setSelectedGroup}/>
   }
   return (
     <RegisterTable
       group={selectedGroup}
-      groupStudents={students.filter(s => s.groupId === selectedGroup.id)}
+      groupStudents={selectedStudents}
       onBack={() => setSelectedGroup(null)}
       onDataChange={cargar}
     />

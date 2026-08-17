@@ -743,8 +743,10 @@ table tbody tr:hover { background: var(--soft-bg); }
 [data-filter-bar] button { max-width: 100%; }
 
 /* También protege los modales heredados que aún no usan ModalPortal. */
-.fixed.inset-0.items-center.justify-center > div:not([class*="absolute"]) {
+.fixed.inset-0.items-center.justify-center > div:not([class*="absolute"]):not([class*="max-w-"]) {
   max-width: calc(100vw - 2rem);
+}
+.fixed.inset-0.items-center.justify-center > div:not([class*="absolute"]) {
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;
   overscroll-behavior: contain;

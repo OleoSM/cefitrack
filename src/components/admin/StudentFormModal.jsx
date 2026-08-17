@@ -42,21 +42,25 @@ export default function StudentFormModal({
   const handleSubmit = async e => {
     e.preventDefault()
     setSaving(true); setError(null)
+    try {
+      const sucursal = groups.find(g => g.id === form.groupId)?.sucursal ?? null
+      const selectedGroup = groups.find(g => g.id === form.groupId)
+      const tutor = { name: form.tutorName || null, email: form.tutorEmail || null, phone: form.tutorPhone || null, whatsapp: form.tutorWhatsapp || null }
+      const extra = { personalEmail:form.personalEmail || null, whatsapp:form.whatsapp || null,
+        universidadArea:selectedGroup?.curso === 'universidad' ? Number(form.universidadArea)||null : null }
 
-    const sucursal = groups.find(g => g.id === form.groupId)?.sucursal ?? null
-    const selectedGroup = groups.find(g => g.id === form.groupId)
-    const tutor = { name: form.tutorName || null, email: form.tutorEmail || null, phone: form.tutorPhone || null, whatsapp: form.tutorWhatsapp || null }
-    const extra = { personalEmail:form.personalEmail || null, whatsapp:form.whatsapp || null,
-      universidadArea:selectedGroup?.curso === 'universidad' ? Number(form.universidadArea)||null : null }
+      const res = editing
+        ? await updateStudent({ id: student.id, name: form.name, email: form.email, groupId: form.groupId, tutor, sucursal, ...extra })
+        : await createStudent({ name: form.name, email: form.email, groupId: form.groupId, password: form.password, tutor, sucursal, ...extra })
 
-    const res = editing
-      ? await updateStudent({ id: student.id, name: form.name, email: form.email, groupId: form.groupId, tutor, sucursal, ...extra })
-      : await createStudent({ name: form.name, email: form.email, groupId: form.groupId, password: form.password, tutor, sucursal, ...extra })
-
-    setSaving(false)
-    if (!res.ok) { setError(res.message); return }
-    onSaved(editing ? null : { nombre: form.name, usuario: form.email, password: form.password })
-    onClose()
+      if (!res.ok) { setError(res.message); return }
+      await onSaved?.(editing ? null : { nombre: form.name, usuario: form.email, password: form.password })
+      onClose()
+    } catch (err) {
+      setError(err?.message || 'No fue posible guardar el alumno. Intenta nuevamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const campo = (label, key, props = {}) => (
@@ -68,13 +72,14 @@ export default function StudentFormModal({
   )
 
   return (
-    <ModalPortal onClose={onClose} maxWidth="max-w-lg" scrollable>
+    <ModalPortal onClose={saving ? undefined : onClose} maxWidth="max-w-lg" scrollable>
         <div className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
           style={{ borderBottom: '1px solid var(--card-border)', background:'var(--card-bg)' }}>
           <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
             {editing ? `Editar alumno — ${student.name}` : 'Nuevo Alumno'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors"
+          <button type="button" onClick={onClose} disabled={saving} aria-label="Cerrar formulario"
+            className="w-11 h-11 flex items-center justify-center rounded-lg transition-colors disabled:opacity-40"
             style={{ color: 'var(--t3)' }}
             onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
             onMouseLeave={e => e.currentTarget.style.color='var(--t3)'}>
@@ -95,7 +100,7 @@ export default function StudentFormModal({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {campo('Correo personal', 'personalEmail', { type:'email', placeholder:'alumno@gmail.com' })}
             {campo('WhatsApp del alumno', 'whatsapp', { type:'tel', placeholder:'55 0000 0000' })}
           </div>
@@ -104,15 +109,15 @@ export default function StudentFormModal({
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
                 style={{ color: 'var(--t3)' }}>Contraseña</label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap sm:flex-nowrap gap-2">
                 <input required type={showPass ? 'text' : 'password'} value={form.password}
-                  onChange={e => set('password', e.target.value)} className="input-field flex-1 font-mono"/>
+                  onChange={e => set('password', e.target.value)} className="input-field flex-[1_1_180px] min-w-0 font-mono"/>
                 <button type="button" onClick={() => setShowPass(v => !v)} title="Mostrar/ocultar"
-                  className="btn-secondary px-3">
+                  className="btn-secondary min-w-11 min-h-11 px-3">
                   {showPass ? <EyeOff size={14}/> : <Eye size={14}/>}
                 </button>
                 <button type="button" onClick={() => set('password', generarPassword())} title="Generar otra"
-                  className="btn-secondary px-3">
+                  className="btn-secondary min-w-11 min-h-11 px-3">
                   <RefreshCw size={14}/>
                 </button>
               </div>
@@ -144,7 +149,7 @@ export default function StudentFormModal({
               style={{ color: 'var(--t4)' }}>Contacto del tutor (opcional)</p>
             <div className="space-y-3">
               {campo('Nombre del tutor', 'tutorName', { placeholder:'Ej. Carmen López' })}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {campo('Correo', 'tutorEmail', { type:'email', placeholder:'carmen@gmail.com' })}
                 {campo('Teléfono', 'tutorPhone', { placeholder:'555-0101' })}
               </div>
@@ -160,9 +165,10 @@ export default function StudentFormModal({
             </div>
           )}
 
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
+          <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 flex flex-col-reverse sm:flex-row gap-3"
+            style={{background:'var(--panel-bg)',borderTop:'1px solid var(--divider)'}}>
+            <button type="button" onClick={onClose} disabled={saving} className="btn-secondary min-h-11 flex-1 justify-center disabled:opacity-40">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary min-h-11 flex-1 justify-center">
               {editing ? <Save size={14}/> : <Plus size={14}/>}
               {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear alumno'}
             </button>

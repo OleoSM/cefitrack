@@ -27,7 +27,7 @@ export default function ModalPortal({
   }, [onClose])
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
       style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
       onClick={onClose}>
       <div role="dialog" aria-modal="true"

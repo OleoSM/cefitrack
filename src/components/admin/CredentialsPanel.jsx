@@ -1,5 +1,6 @@
 import { KeyRound, X, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
+import ModalPortal from '../ui/ModalPortal'
 
 /**
  * Muestra las credenciales recién generadas. Es la única oportunidad de verlas:
@@ -21,7 +22,8 @@ export default function CredentialsPanel({ cred, onClose }) {
   }
 
   return (
-    <div className="card p-4" style={{ borderColor:'var(--warn-line)' }}>
+    <ModalPortal onClose={onClose} maxWidth="max-w-xl">
+    <div className="p-4 sm:p-5" style={{ borderColor:'var(--warn-line)' }}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <KeyRound size={14} style={{ color:'var(--warn)' }}/>
@@ -29,7 +31,7 @@ export default function CredentialsPanel({ cred, onClose }) {
             Credenciales de {cred.nombre}
           </span>
         </div>
-        <button onClick={onClose} className="p-1 rounded-lg" style={{ color: 'var(--t3)' }}>
+        <button onClick={onClose} aria-label="Cerrar credenciales" className="w-11 h-11 flex items-center justify-center rounded-lg" style={{ color: 'var(--t3)' }}>
           <X size={14}/>
         </button>
       </div>
@@ -52,15 +54,16 @@ export default function CredentialsPanel({ cred, onClose }) {
         ))}
       </div>
 
-      <div className="flex items-center justify-between gap-3 mt-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-3">
         <p className="text-[11px]" style={{ color: 'var(--t3)' }}>
           Anótalas ahora: la contraseña se guarda cifrada y no podrá consultarse
           después, sólo generarse de nuevo. Se entra con el correo, no con el nombre.
         </p>
-        <button onClick={copy} className="btn-secondary text-xs py-1.5 flex-shrink-0">
+        <button onClick={copy} className="btn-secondary min-h-11 text-xs py-1.5 flex-shrink-0">
           {copied ? <><Check size={12}/> Copiado</> : <><Copy size={12}/> Copiar</>}
         </button>
       </div>
     </div>
+    </ModalPortal>
   )
 }

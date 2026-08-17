@@ -527,7 +527,13 @@ export default function Attendance() {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
       <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+        role="dialog" aria-modal="true"
+        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)', position:'relative' }}>
+        <button onClick={() => startTolerance(null)} aria-label="Cerrar y continuar sin cronómetro"
+          className="absolute right-3 top-3 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+          style={{color:'var(--t2)',background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
+          <X size={16}/>
+        </button>
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
           style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
           <RotateCw size={20} style={{ color:'var(--warn)' }}/>
@@ -592,8 +598,8 @@ export default function Attendance() {
               buildRecords(),
             ).then(refreshIndex).catch(() => {})
             goBack(true)
-          }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
-            style={{ background:'white', color:'black' }}>
+          }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-110 hover:-translate-y-0.5"
+            style={{ background:'var(--good)', color:'#fff', boxShadow:'0 8px 22px var(--good-soft)' }}>
             Guardar borrador y salir
           </button>
           <button onClick={() => { deleteSessionDb(selectedGrp, selectedDate).then(refreshIndex).catch(() => {}); goBack(true) }}
@@ -750,10 +756,10 @@ export default function Attendance() {
             <Play size={13}/> Comenzar pase de lista
           </button>
           <button onClick={() => startTolerance(null)}
-            className="w-full py-2 text-xs font-semibold transition-colors"
-            style={{ color: 'var(--t3)' }}
-            onMouseEnter={e => e.currentTarget.style.color= 'var(--t2)'}
-            onMouseLeave={e => e.currentTarget.style.color= 'var(--t3)'}>
+            className="w-full py-2.5 rounded-xl text-xs font-semibold transition-all hover:-translate-y-0.5"
+            style={{ color:'var(--t1)', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor='var(--accent)'}
+            onMouseLeave={e => e.currentTarget.style.borderColor='var(--card-border)'}>
             Continuar sin cronómetro
           </button>
         </div>
@@ -995,11 +1001,11 @@ export default function Attendance() {
                 </p>
               </div>
             ) : (
-              <div className="w-full overflow-x-auto">
+              <div className="responsive-table-wrap">
               {/* Sin ancho minimo en telefono: forzaba barrido horizontal desde el
                   primer pixel contra los ~379 px utiles. De `sm` en adelante se
                   recupera, que es donde el minimo si aporta. */}
-              <table className="w-full min-w-0 sm:min-w-[420px]">
+              <table className="responsive-table w-full min-w-0 sm:min-w-[420px]">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--divider)' }}>
                     <th className="hidden sm:table-cell px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest w-10"

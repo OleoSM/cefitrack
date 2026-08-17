@@ -79,7 +79,7 @@ export function FilterBar({ activos = 0, children, acciones = null }) {
   const plegable = isMobile
 
   return (
-    <div className="card p-3 sm:p-4">
+    <div data-filter-bar className="card p-3 sm:p-4 min-w-0 max-w-full">
       {plegable && (
         <div className="flex items-center gap-2">
           <button onClick={() => setAbierto(a => !a)}
@@ -97,7 +97,7 @@ export function FilterBar({ activos = 0, children, acciones = null }) {
       )}
 
       {(!plegable || abierto) && (
-        <div className={`flex flex-wrap gap-3 items-end ${plegable ? 'mt-3' : ''}`}>
+        <div className={`flex flex-wrap gap-3 items-end min-w-0 ${plegable ? 'mt-3' : ''}`}>
           {children}
           {!plegable && acciones}
         </div>

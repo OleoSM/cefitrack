@@ -79,11 +79,11 @@ function darkenSignature(dataUrl) {
   })
 }
 
-export async function downloadStampedPdf({ studentName, tcText, privText, signatureDataUrl, signedAt }) {
+export async function downloadStampedPdf({ studentName, tcText, privText, signatureDataUrl, signedAt, termsPdfUrl = OFFICIAL_TERMS_URL }) {
   if (!signatureDataUrl) throw new Error('signature_required')
 
   const { PDFDocument, rgb } = await import('pdf-lib')
-  const source = await fetch(OFFICIAL_TERMS_URL)
+  const source = await fetch(termsPdfUrl)
   if (!source.ok) throw new Error('terms_pdf_unavailable')
   const pdf = await PDFDocument.load(await source.arrayBuffer())
   const pages = pdf.getPages()

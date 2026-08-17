@@ -692,6 +692,97 @@ table tbody tr:hover { background: var(--soft-bg); }
 [data-theme-light] .page-title    { color: var(--t1); }
 [data-theme-light] .badge         { font-weight: 700; }
 
+/* Tablas y modales mantienen separación y contraste en todas las identidades. */
+[data-datatable] [data-fila]:nth-child(even) { background: var(--soft-bg) !important; }
+[data-datatable] [data-table-cell] + [data-table-cell] { border-left: 1px solid var(--divider); padding-left: clamp(.3rem,1vw,.75rem); }
+[data-datatable] [data-table-cell] { min-width: 0; overflow: hidden; }
+[data-datatable] [data-table-cell] p, [data-datatable] [data-table-cell] span { max-width: 100%; }
+[role="dialog"] { color: var(--t1); }
+[role="dialog"] .card, [role="dialog"] > div { border-color: var(--card-border); }
+@media (max-width: 700px) {
+  [data-datatable] [data-table-cell] { font-size: clamp(.58rem, 2.25vw, .75rem); }
+  [data-datatable] [data-table-cell] + [data-table-cell] { padding-left: .25rem; }
+  main { min-width: 0; max-width: 100vw; }
+  main > div, main .card { min-width: 0; max-width: 100%; }
+  main table { font-size: clamp(.6rem, 2.3vw, .78rem); }
+  main th, main td { overflow-wrap: anywhere; }
+}
+
+/* Contrato transversal de layout para alumno y docente. */
+.responsive-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.responsive-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.responsive-table thead { background: var(--header-bg); }
+.responsive-table th + th,
+.responsive-table td + td { border-left: 1px solid var(--divider); }
+.responsive-table tbody tr:nth-child(even) { background: var(--soft-bg); }
+.responsive-table tbody tr { border-bottom: 1px solid var(--divider); }
+
+.filter-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .65rem;
+  width: 100%;
+  min-width: 0;
+  padding: .75rem;
+  border-radius: 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+.filter-toolbar > * { min-width: 0; max-width: 100%; }
+
+[data-filter-bar] input,
+[data-filter-bar] select,
+[data-filter-bar] button { max-width: 100%; }
+
+/* También protege los modales heredados que aún no usan ModalPortal. */
+.fixed.inset-0.items-center.justify-center > div:not([class*="absolute"]) {
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 700px) {
+  [data-kpi-grid] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  [data-filter-bar] > div,
+  [data-filter-bar] label,
+  [data-filter-bar] select { width: 100%; min-width: 0 !important; }
+  .filter-toolbar > label,
+  .filter-toolbar > div,
+  .filter-toolbar > select { width: 100%; min-width: 0 !important; max-width: none !important; }
+  .filter-toolbar > button { flex: 1 1 auto; justify-content: center; margin-left: 0 !important; }
+  .responsive-table { table-layout: fixed; }
+  .responsive-table .table-header,
+  .responsive-table .table-cell { padding: .55rem .4rem; font-size: clamp(.6rem, 2.4vw, .78rem); }
+  .responsive-table .badge { padding: .2rem .4rem; font-size: .58rem; }
+  .page-title { font-size: clamp(1.25rem, 6vw, 1.5rem); }
+  .stat-card { padding: .85rem; }
+  .btn-primary, .btn-secondary { min-height: 44px; }
+}
+
+@media (max-width: 420px) {
+  [data-kpi-grid] { gap: .55rem !important; }
+  [data-kpi-grid] .card, [data-kpi-grid] .stat-card { padding: .75rem; }
+  .responsive-table .table-header,
+  .responsive-table .table-cell { padding-inline: .3rem; }
+}
+
+@media (max-width: 420px) {
+  [data-kpi-grid] { grid-template-columns: minmax(0, 1fr) !important; }
+  [data-kpi-grid] > *:last-child:nth-child(odd) { grid-column: auto; }
+  [data-kpi-grid] .h-\[100px\] { height: auto; min-height: 108px; }
+}
+
+.nav-item { min-height: 44px; }
+
 /* Separación de filas dentro de tablas en identidad clara: el divider por sí
    solo no bastaba para distinguir una fila de la siguiente sobre blanco. */
 [data-theme-light] [data-datatable] [class*="border-b"],

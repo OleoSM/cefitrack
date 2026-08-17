@@ -1,12 +1,14 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings } from 'lucide-react'
+import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings, Bell } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
 import { useState, useEffect, Suspense } from 'react'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
 import { StudentThemeProvider, useStudentTheme } from '../../context/StudentThemeContext'
 import { useSucursales } from '../../hooks/useSucursales'
+import { fetchNotificaciones, marcarLeida } from '../../lib/comunicacionesData'
+import { supabase } from '../../lib/supabaseClient'
 
 const nav = [
   { to:'/student',                label:'Mi Panel',       icon:LayoutDashboard, exact:true },
@@ -24,6 +26,8 @@ const GRID_OVERLAY = {
 
 function LayoutInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
   const { pathname } = useLocation()
   const { currentUser, logout } = useAuth()
   const navigate = useNavigate()
@@ -31,6 +35,13 @@ function LayoutInner() {
   const { student, group: grp } = useStudentData()
   const { nombreDe } = useSucursales()
   const initials = student?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'AL'
+
+  useEffect(() => {
+    const load=()=>fetchNotificaciones().then(setNotifications).catch(()=>{})
+    load()
+    const channel=supabase.channel(`student-notifications-${currentUser?.id}`).on('postgres_changes',{event:'*',schema:'public',table:'notifications'},load).subscribe()
+    return()=>{supabase.removeChannel(channel)}
+  },[currentUser?.id])
 
   const handleLogout = () => { logout(); navigate('/login') }
   const closeSidebar  = () => setSidebarOpen(false)
@@ -233,6 +244,13 @@ function LayoutInner() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <button aria-label="Notificaciones" onClick={()=>setNotifOpen(v=>!v)} className="relative p-1.5 rounded-xl text-white/70 hover:bg-white/10"><Bell size={17}/>{notifications.some(n=>!n.read_at)&&<span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-400"/>}</button>
+              {notifOpen&&<div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-24px)] max-h-80 overflow-y-auto rounded-xl z-50" style={{background:'var(--panel-bg)',border:'1px solid var(--card-border)',boxShadow:'0 18px 50px rgba(0,0,0,.35)'}}>
+                <p className="p-3 text-sm font-bold">Notificaciones</p>{notifications.length===0&&<p className="p-4 text-xs" style={{color:'var(--t3)'}}>Sin notificaciones.</p>}
+                {notifications.map(n=><button key={n.id} className="block w-full text-left p-3" style={{borderTop:'1px solid var(--divider)',background:n.read_at?'transparent':'var(--info-soft)'}} onClick={async()=>{await marcarLeida(n.id);setNotifications(v=>v.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))}}><b className="block text-xs">{n.title}</b><span className="text-xs" style={{color:'var(--t2)'}}>{n.body}</span></button>)}
+              </div>}
+            </div>
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
               style={{ background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.20)' }}>
               {initials}

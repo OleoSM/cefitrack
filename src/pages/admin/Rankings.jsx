@@ -199,6 +199,10 @@ export default function Rankings() {
           const gradeColor = (s.avgGrade ?? 0)>=8.5?'text-emerald-400':(s.avgGrade ?? 0)>=7?'text-blue-400':'text-red-400'
           return (
             <DataTableRow key={s.id} onClick={() => navigate(`/admin/alumnos/${s.id}`)}
+              style={{
+                borderLeft:`4px solid ${s.status==='critical'?'var(--bad)':s.status==='at-risk'?'var(--warn)':'var(--good)'}`,
+                background:s.status==='critical'?'var(--bad-soft)':s.status==='at-risk'?'var(--warn-soft)':'var(--good-soft)',
+              }}
               cells={[
                 { className:'w-10', content:<MedalIcon pos={i+1}/> },
                 {
@@ -211,7 +215,10 @@ export default function Rankings() {
                       sub={
                         <span className="flex items-center gap-2">
                           <span style={{ color:'var(--t3)' }}>{groups.find(g=>g.id===s.groupId)?.name}</span>
-                          <span className={`badge ${cfg.bg} ${cfg.color} border ${cfg.border} text-[10px]`}>{cfg.label}</span>
+                          <span className={`badge ${cfg.bg} ${cfg.color} border ${cfg.border} text-[10px]`}>
+                            <span className="sm:hidden w-2 h-2 rounded-full bg-current" aria-label={cfg.label}/>
+                            <span className="hidden sm:inline">{cfg.label}</span>
+                          </span>
                         </span>
                       }
                     />

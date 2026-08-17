@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Users, Clock, MapPin, UserPlus } from 'lucide-react'
+import { Users, Clock, MapPin, UserPlus, TrendingUp, CalendarCheck, AlertTriangle } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
@@ -16,14 +16,15 @@ import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { DataTable, DataTableRow, DataTableAvatar, DataTableBadge, DataTableBar } from '../../components/ui/DataTable'
 import StudentFormModal from '../../components/admin/StudentFormModal'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
+import KpiCard from '../../components/ui/KpiCard'
 
 const COLUMNS = [
   { key:'rank',   label:'#',          className:'w-8' },
   { key:'name',   label:'Alumno',     className:'flex-grow min-w-[110px] sm:min-w-[140px]' },
-  { key:'att',    label:'Asistencia', className:'w-32 hidden sm:flex' },
+  { key:'att',    label:'Asistencia', className:'w-32 hidden md:flex' },
   { key:'grade',  label:'Promedio',   className:'w-16 sm:w-20' },
   { key:'tasks',  label:'Tareas',     className:'w-28 hidden md:flex' },
-  { key:'status', label:'Estado',     className:'w-28 hidden sm:flex' },
+  { key:'status', label:'Estado',     className:'w-28 hidden md:flex' },
   { key:'action', label:'',           className:'w-16 flex justify-end' },
 ]
 
@@ -91,16 +92,7 @@ export default function GroupDetail() {
   const gradeClass = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
   return (
-    <div className="space-y-5">
-
-      {/* Back */}
-      <button onClick={() => navigate('/admin/grupos')}
-        className="flex items-center gap-1.5 text-sm font-medium transition-colors"
-        style={{ color:'var(--t3)' }}
-        onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
-        onMouseLeave={e => e.currentTarget.style.color='var(--t3)'}>
-        <ArrowLeft size={15}/> Regresar a Grupos
-      </button>
+    <div className="flex flex-col gap-5">
 
       {/* Header card con shader */}
       <GroupShaderCard
@@ -138,8 +130,15 @@ export default function GroupDetail() {
         </div>
       </GroupShaderCard>
 
+      <div data-kpi-grid className="grid grid-cols-2 xl:grid-cols-4 gap-3 order-2">
+        <KpiCard icon={TrendingUp} label="Promedio general" value={stats.avgGrade ?? '—'} tone="good" sub="Evaluaciones registradas"/>
+        <KpiCard icon={CalendarCheck} label="Asistencia" value={stats.attendanceRate === null ? '—' : `${stats.attendanceRate}%`} tone="info" sub="Acumulado del grupo"/>
+        <KpiCard icon={Clock} label="Siguiente clase" value={grp.schedule || 'Por definir'} tone="neutral" sub="Editable desde el grupo"/>
+        <KpiCard icon={AlertTriangle} label="Requieren atención" value={students.filter(s=>['critical','at-risk'].includes(s.status)).length} tone="warn" sub={`De ${students.length} alumnos`}/>
+      </div>
+
       {/* Trend chart */}
-      <div className="card p-4 sm:p-5">
+      <div className="card p-4 sm:p-5 order-4">
         <h2 className="section-title mb-4">Evolución del Promedio</h2>
         {trend.length === 0 ? (
           <p className="text-sm py-8 text-center" style={{ color:'var(--t3)' }}>
@@ -171,7 +170,7 @@ export default function GroupDetail() {
       {lastCred && <CredentialsPanel cred={lastCred} onClose={() => setLastCred(null)}/>}
 
       {/* Students table */}
-      <div>
+      <div className="order-3">
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <h2 className="section-title">Alumnos del Grupo</h2>
           <div className="flex gap-2">
@@ -210,7 +209,7 @@ export default function GroupDetail() {
                     />,
                   },
                   {
-                    className: 'w-32 hidden sm:flex',
+                    className: 'w-32 hidden md:flex',
                     content: rate === null || rate === undefined
                       ? <span className="text-xs" style={{ color:'var(--t3)' }}>Sin sesiones</span>
                       : <DataTableBar value={rate} color={ac} label={`${rate}%`} />,
@@ -228,7 +227,7 @@ export default function GroupDetail() {
                       : <span className="text-xs" style={{ color:'var(--t3)' }}>—</span>,
                   },
                   {
-                    className: 'w-28 hidden sm:flex',
+                    className: 'w-28 hidden md:flex',
                     content: <DataTableBadge label={cfg.label} dot={cfg.dot} bg={cfg.bg} color={cfg.color} border={cfg.border} />,
                   },
                   {

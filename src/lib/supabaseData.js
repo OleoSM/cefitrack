@@ -92,6 +92,8 @@ export async function fetchGroups() {
     color: g.color,
     sucursal: g.sucursal,
     institucion: g.institucion,
+    curso: g.curso ?? (g.institucion === 'ecoems' ? 'ecoems' : 'universidad'),
+    instituciones: g.instituciones ?? (['unam','uam','ipn'].includes(g.institucion) ? [g.institucion] : []),
   }))
 }
 
@@ -110,8 +112,13 @@ export async function fetchStudents() {
     id: s.id,
     name: s.name,
     email: s.email,
+    personalEmail: s.personal_email,
+    whatsapp: s.whatsapp,
     groupId: s.group_id,
-    tutor: { name: s.tutor_name, email: s.tutor_email, phone: s.tutor_phone },
+    tutor: { name: s.tutor_name, email: s.tutor_email, phone: s.tutor_phone, whatsapp: s.tutor_whatsapp },
+    universidadArea: s.universidad_area,
+    garantiaEstado: s.garantia_estado,
+    accesoEstado: s.acceso_estado,
     attendanceRate: num(s.attendance_rate),
     avgGrade: num(s.avg_grade),
     assignmentsDone: s.assignments_done,
@@ -142,8 +149,13 @@ export async function fetchStudentById(id) {
     id: data.id,
     name: data.name,
     email: data.email,
+    personalEmail: data.personal_email,
+    whatsapp: data.whatsapp,
     groupId: data.group_id,
-    tutor: { name: data.tutor_name, email: data.tutor_email, phone: data.tutor_phone },
+    tutor: { name: data.tutor_name, email: data.tutor_email, phone: data.tutor_phone, whatsapp: data.tutor_whatsapp },
+    universidadArea: data.universidad_area,
+    garantiaEstado: data.garantia_estado,
+    accesoEstado: data.acceso_estado,
     attendanceRate: num(data.attendance_rate),
     avgGrade: num(data.avg_grade),
     assignmentsDone: data.assignments_done,
@@ -169,7 +181,7 @@ export async function fetchGroupById(id) {
   const { data, error } = await supabase.from('groups').select('*').eq('id', id).maybeSingle()
   if (error) throw error
   return data
-    ? { id: data.id, name: data.name, subject: data.subject, schedule: data.schedule, room: data.room, color: data.color, sucursal: data.sucursal, institucion: data.institucion }
+    ? { id: data.id, name: data.name, subject: data.subject, schedule: data.schedule, room: data.room, color: data.color, sucursal: data.sucursal, institucion: data.institucion, curso:data.curso, instituciones:data.instituciones ?? [] }
     : null
 }
 
@@ -427,7 +439,7 @@ export async function deleteEvaluation(id) {
 
 /* ── Grupos (escritura) ── */
 
-export async function createGroup({ name, subject, schedule = null, room = null, color = '#3b82f6', sucursal = null, institucion = null }) {
+export async function createGroup({ name, subject, schedule = null, room = null, color = '#3b82f6', sucursal = null, institucion = null, curso = 'ecoems', instituciones = [] }) {
   const { data, error } = await supabase.rpc('create_group', {
     p_name: name,
     p_subject: subject,
@@ -439,10 +451,11 @@ export async function createGroup({ name, subject, schedule = null, room = null,
   })
   if (error) return { ok: false, message: 'No se pudo crear el grupo.' }
   const row = data?.[0]
+  if (row?.id) await supabase.rpc('actualizar_clasificacion_grupo', { p_group_id:row.id, p_curso:curso, p_instituciones:instituciones })
   return { ok: true, group: row ? { ...row, id: row.id } : null }
 }
 
-export async function updateGroup({ id, name, subject, schedule = null, room = null, color = null, sucursal = null, institucion = null }) {
+export async function updateGroup({ id, name, subject, schedule = null, room = null, color = null, sucursal = null, institucion = null, curso = 'ecoems', instituciones = [] }) {
   const { error } = await supabase.rpc('update_group', {
     p_id: id,
     p_name: name,
@@ -454,6 +467,8 @@ export async function updateGroup({ id, name, subject, schedule = null, room = n
     p_institucion: institucion,
   })
   if (error) return { ok: false, message: 'No se pudo actualizar el grupo.' }
+  const { error: classificationError } = await supabase.rpc('actualizar_clasificacion_grupo', { p_group_id:id, p_curso:curso, p_instituciones:instituciones })
+  if (classificationError) return { ok:false, message:'No se pudo guardar el curso e instituciones.' }
   return { ok: true }
 }
 
@@ -470,7 +485,7 @@ export async function deleteGroup(id) {
 /* ── Alumnos (escritura) ── */
 
 /** Crea el alumno y su cuenta de acceso. La contraseña se genera en el cliente. */
-export async function createStudent({ name, email, groupId, password, tutor = {}, sucursal = null }) {
+export async function createStudent({ name, email, groupId, password, tutor = {}, sucursal = null, personalEmail = null, whatsapp = null, universidadArea = null }) {
   const { data, error } = await supabase.rpc('create_student', {
     p_name: name,
     p_email: email,
@@ -490,10 +505,11 @@ export async function createStudent({ name, email, groupId, password, tutor = {}
     return { ok: false, message: 'No se pudo crear el alumno.' }
   }
   const row = data?.[0]
+  if (row?.id) await supabase.rpc('actualizar_contacto_alumno', { p_student_id:row.id, p_personal_email:personalEmail, p_whatsapp:whatsapp, p_tutor_whatsapp:tutor.whatsapp, p_universidad_area:universidadArea })
   return { ok: true, student: row ? { id: row.id, name: row.name, email: row.email, groupId: row.group_id } : null }
 }
 
-export async function updateStudent({ id, name, email, groupId, tutor = {}, sucursal = null }) {
+export async function updateStudent({ id, name, email, groupId, tutor = {}, sucursal = null, personalEmail = null, whatsapp = null, universidadArea = null }) {
   const { error } = await supabase.rpc('update_student', {
     p_id: id,
     p_name: name,
@@ -505,6 +521,8 @@ export async function updateStudent({ id, name, email, groupId, tutor = {}, sucu
     p_sucursal: sucursal,
   })
   if (error) return { ok: false, message: 'No se pudo actualizar el alumno.' }
+  const { error: contactError } = await supabase.rpc('actualizar_contacto_alumno', { p_student_id:id, p_personal_email:personalEmail, p_whatsapp:whatsapp, p_tutor_whatsapp:tutor.whatsapp, p_universidad_area:universidadArea })
+  if (contactError) return { ok:false, message:'Se guardó el alumno, pero no sus datos de contacto.' }
   return { ok: true }
 }
 
@@ -671,7 +689,7 @@ export async function fetchColumnasRegistro(groupId) {
   return data.map(c => ({
     id: c.id, materia: c.materia, materiaOrden: c.materia_orden,
     materiaColor: c.materia_color, nombre: c.nombre, tipo: c.tipo,
-    calMax: Number(c.cal_max), orden: c.orden,
+    calMax: Number(c.cal_max), orden: c.orden, bloque:c.bloque, esFija:!!c.es_fija,
   }))
 }
 
@@ -679,23 +697,24 @@ export async function fetchColumnasRegistro(groupId) {
 export async function fetchCeldasRegistro(groupId) {
   if (!groupId) return {}
   const { data, error } = await supabase
-    .from('evaluations')
-    .select('student_id, calificacion, columna_id, registro_columnas!inner(group_id)')
+    .from('registro_valores')
+    .select('student_id, valor, columna_id, registro_columnas!inner(group_id)')
     .eq('registro_columnas.group_id', groupId)
   if (error) throw error
   const celdas = {}
   for (const e of data) {
-    ;(celdas[e.student_id] ??= {})[e.columna_id] = Number(e.calificacion)
+    const numeric = Number(e.valor)
+    ;(celdas[e.student_id] ??= {})[e.columna_id] = e.valor === 'NP' ? 'NP' : (Number.isNaN(numeric) ? e.valor : numeric)
   }
   return celdas
 }
 
 /** Escribe una celda. `calificacion` en null vacía la celda y borra la nota. */
 export async function setCeldaRegistro(studentId, columnaId, calificacion) {
-  const { error } = await supabase.rpc('set_celda_registro', {
+  const { error } = await supabase.rpc('set_valor_registro', {
     p_student_id: studentId,
     p_columna_id: columnaId,
-    p_calificacion: calificacion === '' || calificacion === undefined ? null : calificacion,
+    p_valor: calificacion === '' || calificacion === undefined ? null : String(calificacion),
   })
   if (error) throw error
 }

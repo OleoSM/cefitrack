@@ -17,11 +17,15 @@ export default function StudentFormModal({
   const [form, setForm] = useState({
     name:        student?.name ?? '',
     email:       student?.email ?? '',
+    personalEmail: student?.personalEmail ?? '',
+    whatsapp:    student?.whatsapp ?? '',
     password:    editing ? '' : generarPassword(),
     groupId:     student?.groupId ?? defaultGroupId ?? (groups[0]?.id ?? ''),
     tutorName:   student?.tutor?.name ?? '',
     tutorEmail:  student?.tutor?.email ?? '',
     tutorPhone:  student?.tutor?.phone ?? '',
+    tutorWhatsapp: student?.tutor?.whatsapp ?? student?.tutor?.phone ?? '',
+    universidadArea: student?.universidadArea ?? '',
   })
   const [showPass, setShowPass] = useState(true)
   const [saving, setSaving]     = useState(false)
@@ -40,11 +44,14 @@ export default function StudentFormModal({
     setSaving(true); setError(null)
 
     const sucursal = groups.find(g => g.id === form.groupId)?.sucursal ?? null
-    const tutor = { name: form.tutorName || null, email: form.tutorEmail || null, phone: form.tutorPhone || null }
+    const selectedGroup = groups.find(g => g.id === form.groupId)
+    const tutor = { name: form.tutorName || null, email: form.tutorEmail || null, phone: form.tutorPhone || null, whatsapp: form.tutorWhatsapp || null }
+    const extra = { personalEmail:form.personalEmail || null, whatsapp:form.whatsapp || null,
+      universidadArea:selectedGroup?.curso === 'universidad' ? Number(form.universidadArea)||null : null }
 
     const res = editing
-      ? await updateStudent({ id: student.id, name: form.name, email: form.email, groupId: form.groupId, tutor, sucursal })
-      : await createStudent({ name: form.name, email: form.email, groupId: form.groupId, password: form.password, tutor, sucursal })
+      ? await updateStudent({ id: student.id, name: form.name, email: form.email, groupId: form.groupId, tutor, sucursal, ...extra })
+      : await createStudent({ name: form.name, email: form.email, groupId: form.groupId, password: form.password, tutor, sucursal, ...extra })
 
     setSaving(false)
     if (!res.ok) { setError(res.message); return }
@@ -88,6 +95,11 @@ export default function StudentFormModal({
             </p>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            {campo('Correo personal', 'personalEmail', { type:'email', placeholder:'alumno@gmail.com' })}
+            {campo('WhatsApp del alumno', 'whatsapp', { type:'tel', placeholder:'55 0000 0000' })}
+          </div>
+
           {!editing && (
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
@@ -120,6 +132,13 @@ export default function StudentFormModal({
             </select>
           </div>
 
+          {groups.find(g=>g.id===form.groupId)?.curso === 'universidad' && <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--t3)'}}>Área universitaria</label>
+            <select required value={form.universidadArea} onChange={e=>set('universidadArea',e.target.value)} className="input-field">
+              <option value="">Seleccionar área…</option>{[1,2,3,4].map(n=><option key={n} value={n}>Área {n}</option>)}
+            </select>
+          </div>}
+
           <div className="pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-3 mt-2"
               style={{ color: 'var(--t4)' }}>Contacto del tutor (opcional)</p>
@@ -129,6 +148,7 @@ export default function StudentFormModal({
                 {campo('Correo', 'tutorEmail', { type:'email', placeholder:'carmen@gmail.com' })}
                 {campo('Teléfono', 'tutorPhone', { placeholder:'555-0101' })}
               </div>
+              {campo('WhatsApp del tutor', 'tutorWhatsapp', { type:'tel', placeholder:'55 0000 0000' })}
             </div>
           </div>
 

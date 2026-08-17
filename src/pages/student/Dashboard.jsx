@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer,
 } from 'recharts'
 import {
-  BookOpen, CalendarCheck, ArrowRight, Target, Zap, Trophy, Info,
+  BookOpen, CalendarCheck, ArrowRight, Target, Zap, Trophy, Info, Settings2, Medal,
 } from 'lucide-react'
 import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
 import { logoInstitucion, tipoDesdeNombre, estiloLogo } from '../../lib/instituciones'
@@ -69,6 +69,11 @@ export default function StudentDashboard() {
   const [ultimasFilter, setUltimasFilter] = useState('todas')
   const [hiddenMaterias, setHiddenMaterias] = useState([])
   const [groupMetrics, setGroupMetrics] = useState(null)
+  const [kpiSettingsOpen, setKpiSettingsOpen] = useState(false)
+  const [visibleKpis, setVisibleKpis] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('student-dashboard-kpis')) || ['simulacro','asistencia','tareas','promedio'] }
+    catch { return ['simulacro','asistencia','tareas','promedio'] }
+  })
 
   // Datos del grupo completo: necesarios para calcular el lugar del alumno.
   useEffect(() => {
@@ -224,6 +229,23 @@ export default function StudentDashboard() {
       </div>
 
       {/* ══ KPI cards ══ */}
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="section-title">Mi resumen</h2>
+        <div className="relative">
+          <button onClick={()=>setKpiSettingsOpen(v=>!v)} className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{background:t.softBg,border:`1px solid ${t.cardBorder}`,color:t.t2}} title="Configurar tarjetas"><Settings2 size={15}/></button>
+          {kpiSettingsOpen && <div className="absolute right-0 top-full mt-2 z-40 w-56 rounded-xl p-3 space-y-2"
+            style={{background:t.ddPanel,border:`1px solid ${t.cardBorder}`,boxShadow:'0 18px 48px rgba(0,0,0,.3)'}}>
+            <p className="text-xs font-bold" style={{color:t.t1}}>Tarjetas visibles</p>
+            {['simulacro','asistencia','tareas','promedio','ranking'].map(id=><label key={id} className="flex items-center gap-2 text-xs capitalize" style={{color:t.t2}}>
+              <input type="checkbox" checked={visibleKpis.includes(id)} onChange={()=>setVisibleKpis(prev=>{
+                const next=prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]
+                const safe=next.length?next:prev; localStorage.setItem('student-dashboard-kpis',JSON.stringify(safe)); return safe
+              })}/>{id}
+            </label>)}
+          </div>}
+        </div>
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { icon: Zap,           label: 'Último Simulacro',  value: lastSim ? `${lastSim.aciertos}/${lastSim.total}` : '—',
@@ -239,7 +261,9 @@ export default function StudentDashboard() {
               ? `${Math.round(s.assignmentsDone / s.assignmentsTotal * 100)}% completado`
               : 'Sin tareas asignadas',
             tone: 'warn', go: () => navigate('/student/calificaciones') },
-        ].map(({ icon, label, value, sub, tone, go }) => (
+          { icon:Trophy, label:'Promedio', value:pond.promedio||'—', sub:'Promedio ponderado', tone:'good', go:()=>navigate('/student/calificaciones') },
+          { icon:Medal, label:'Lugar en grupo', value:myPos?`#${myPos}`:'—', sub:ranking.length?`De ${ranking.length} alumnos`:'Sin ranking aún', tone:'info' },
+        ].filter((_,i)=>visibleKpis.includes(['simulacro','asistencia','tareas','promedio','ranking'][i])).slice(0,4).map(({ icon, label, value, sub, tone, go }) => (
           <KpiCard key={label} icon={icon} label={label} value={value} sub={sub}
             tone={tone} onClick={go} light={t.light}/>
         ))}
@@ -472,14 +496,14 @@ export default function StudentDashboard() {
             Ver más <ArrowRight size={12}/>
           </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-0 sm:min-w-[480px]">
+        <div className="responsive-table-wrap">
+          <table className="responsive-table w-full min-w-0 sm:min-w-[480px]">
             <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
               <tr>
                 <th className="table-header">Materia</th>
                 <th className="table-header">Tipo</th>
                 <th className="table-header">Calificación</th>
-                <th className="table-header">Fecha</th>
+                <th className="table-header hidden sm:table-cell">Fecha</th>
               </tr>
             </thead>
             <tbody>
@@ -497,7 +521,7 @@ export default function StudentDashboard() {
                   <td className="table-cell">
                     <span className="font-bold text-lg tabular-nums" style={{ color: gradeColor(e.calificacion) }}>{e.calificacion}</span>
                   </td>
-                  <td className="table-cell text-xs" style={{ color: t.t3 }}>{e.fecha}</td>
+                  <td className="table-cell text-xs hidden sm:table-cell" style={{ color: t.t3 }}>{e.fecha}</td>
                 </tr>
               ))}
             </tbody>

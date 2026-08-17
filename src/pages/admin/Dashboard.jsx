@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   Users, TrendingUp, CalendarCheck, ClipboardList,
-  AlertTriangle, CheckCircle, ArrowRight, Filter, Star
+  AlertTriangle, CheckCircle, ArrowRight, Filter, Star, Search, RefreshCw
 } from 'lucide-react'
 import {
   fetchGroups, fetchStudents, fetchEvaluations,
@@ -22,9 +22,9 @@ import { useSucursales } from '../../hooks/useSucursales'
 function FilterSelect({ value, onChange, options, style }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
-      className="text-xs font-semibold rounded-xl py-2 px-3 outline-none"
+      className="text-xs font-semibold rounded-xl py-2 px-3 outline-none min-h-11"
       style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t1)', ...style }}>
-      {options.map(o => <option key={o.value} value={o.value} style={{ color:'#000', background:'#fff' }}>{o.label}</option>)}
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   )
 }
@@ -145,10 +145,14 @@ export default function Dashboard() {
   const [evaluations, setEvaluations] = useState([])
   const [attByStudent, setAttByStudent] = useState({})
   const [hoy, setHoy]                 = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [loadError, setLoadError]     = useState('')
+  const [reloadKey, setReloadKey]     = useState(0)
 
   useEffect(() => {
     let alive = true
     ;(async () => {
+      setLoading(true); setLoadError('')
       try {
         const [gs, sts, evs] = await Promise.all([fetchGroups(), fetchStudents(), fetchEvaluations()])
         const [stats, asisHoy] = await Promise.all([
@@ -157,10 +161,14 @@ export default function Dashboard() {
         if (!alive) return
         setGroups(gs); setStudents(sts); setEvaluations(evs)
         setAttByStudent(stats.byStudent); setHoy(asisHoy)
-      } catch { /* el dashboard queda en ceros */ }
+      } catch (error) {
+        if (alive) setLoadError(error?.message || 'No fue posible cargar el resumen.')
+      } finally {
+        if (alive) setLoading(false)
+      }
     })()
     return () => { alive = false }
-  }, [])
+  }, [reloadKey])
 
   const visibleGroups = useMemo(
     () => isAdmin ? groups : groups.filter(g => canAccess(g.sucursal, g.id)),
@@ -172,10 +180,18 @@ export default function Dashboard() {
 
   const [sucursal, setSucursal] = useState('todas')
   const [grupoId, setGrupoId]   = useState('todos')
+  const [curso, setCurso]       = useState('todos')
+  const [trendGroupId, setTrendGroupId] = useState('')
+  const [groupQuery, setGroupQuery] = useState('')
+  const [analysisView, setAnalysisView] = useState('tendencia')
+  const [rankingView, setRankingView] = useState('promedio')
+  const [subjectName, setSubjectName] = useState('')
 
-  const groupsInSucursal = sucursal === 'todas'
+  const groupsInSucursalBase = sucursal === 'todas'
     ? visibleGroups
     : visibleGroups.filter(g => g.sucursal === sucursal)
+  const groupsInSucursal = curso === 'todos' ? groupsInSucursalBase : groupsInSucursalBase.filter(g=>g.curso===curso)
+  const queriedGroups = groupsInSucursal.filter(g => g.name.toLocaleLowerCase('es-MX').includes(groupQuery.trim().toLocaleLowerCase('es-MX')))
 
   const handleSucursalChange = (val) => {
     setSucursal(val)
@@ -183,7 +199,7 @@ export default function Dashboard() {
   }
 
   const selectedGroups = grupoId === 'todos'
-    ? groupsInSucursal
+    ? queriedGroups
     : groupsInSucursal.filter(g => g.id === grupoId)
   const selectedGroupIds = new Set(selectedGroups.map(g => g.id))
 
@@ -217,9 +233,28 @@ export default function Dashboard() {
   const promedioNum = notas.length ? notas.reduce((a, b) => a + b, 0) / notas.length : null
   const promedioGeneral = promedioNum === null ? '—' : promedioNum.toFixed(1)
 
-  const monthlyTrend       = useMemo(() => construirTendencia(evalsFiltradas, students, selectedGroups),
-                                     [evalsFiltradas, students, selectedGroups])
+  useEffect(() => {
+    if (selectedGroups.length === 1) {
+      setTrendGroupId(selectedGroups[0].id)
+      return
+    }
+    if (!selectedGroups.some(g => g.id === trendGroupId)) setTrendGroupId('')
+  }, [selectedGroups, trendGroupId])
+
+  // La gráfica nunca dibuja todos los grupos: con catálogos grandes las
+  // series se vuelven indistinguibles. El filtro general acota el catálogo y
+  // este selector permite estudiar un grupo a la vez.
+  const trendGroups = useMemo(
+    () => selectedGroups.filter(g => g.id === trendGroupId),
+    [selectedGroups, trendGroupId]
+  )
+  const monthlyTrend       = useMemo(() => construirTendencia(evalsFiltradas, students, trendGroups),
+                                     [evalsFiltradas, students, trendGroups])
   const subjectPerformance = useMemo(() => construirRendimiento(evalsFiltradas), [evalsFiltradas])
+  useEffect(() => {
+    if (!subjectPerformance.some(m => m.materia === subjectName)) setSubjectName(subjectPerformance[0]?.materia ?? '')
+  }, [subjectPerformance, subjectName])
+  const visibleSubjectPerformance = subjectPerformance.filter(m => m.materia === subjectName)
 
   // Asistencia de hoy: sin sesión registrada no se inventan porcentajes.
   const attendancePie = useMemo(() => {
@@ -239,14 +274,33 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div role="alert" className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between" style={{borderColor:'var(--bad-line)',background:'var(--bad-soft)'}}>
+          <div><p className="text-sm font-bold" style={{color:'var(--bad)'}}>No se pudo cargar el dashboard</p><p className="text-xs" style={{color:'var(--t2)'}}>{loadError}</p></div>
+          <button className="btn-secondary min-h-11 inline-flex items-center justify-center gap-2" onClick={()=>setReloadKey(k=>k+1)}><RefreshCw size={15}/>Reintentar</button>
+        </div>
+      )}
       {/* Filtro sucursal / grupo */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="filter-toolbar">
         <Filter size={14} style={{ color: 'var(--t3)' }} />
         <FilterSelect value={sucursal} onChange={handleSucursalChange}
           options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:nombreDe(s) }))]} />
+        <FilterSelect value={curso} onChange={v=>{setCurso(v);setGrupoId('todos')}} options={[
+          {value:'todos',label:'Todos los cursos'},{value:'ecoems',label:'ECOEMS'},{value:'universidad',label:'Universidad'},
+        ]}/>
         <FilterSelect value={grupoId} onChange={setGrupoId}
-          options={[{ value:'todos', label:'Todos los grupos' }, ...groupsInSucursal.map(g => ({ value:g.id, label:g.name }))]} />
+          options={[{ value:'todos', label:'Todos los grupos' }, ...queriedGroups.map(g => ({ value:g.id, label:g.name }))]} />
+        <label className="relative flex-1 min-w-[180px]" data-filter-bar>
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color:'var(--t3)'}}/>
+          <input value={groupQuery} onChange={e=>{setGroupQuery(e.target.value);setGrupoId('todos')}} placeholder="Buscar grupo por nombre"
+            className="input-field w-full min-h-11 pl-9 pr-3 text-xs" aria-label="Buscar grupo por nombre"/>
+        </label>
+        <span className="text-[11px] whitespace-nowrap" style={{color:'var(--t3)'}}>{queriedGroups.length} resultado(s)</span>
       </div>
+
+      {loading && <p className="card p-4 text-sm" role="status" style={{color:'var(--t2)'}}>Cargando indicadores…</p>}
+
+      {!loading && !loadError && <>
 
       {/* Stats — el pill traduce el dato a un juicio rápido en vez de repetirlo */}
       <div data-kpi-grid className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4">
@@ -263,9 +317,9 @@ export default function Dashboard() {
             : null}
           onClick={() => navigate('/admin/asistencias')} />
 
-        <KpiCard icon={TrendingUp} label="Promedio General" tone="info"
-          value={promedioGeneral}
-          sub={notas.length ? `${notas.length} alumno(s) con calificación` : 'Sin calificaciones aún'}
+        <KpiCard icon={TrendingUp} label="Promedio por sucursal" tone="info"
+          value={sucursal === 'todas' ? '—' : promedioGeneral}
+          sub={sucursal === 'todas' ? 'Selecciona una sucursal' : notas.length ? `${notas.length} alumno(s) con calificación` : 'Sin calificaciones aún'}
           pill={notas.length
             ? { icon: Star, text: promedioNum >= 8.5 ? '¡Muy bien!' : promedioNum >= 7 ? 'Aceptable' : 'Requiere atención' }
             : null}
@@ -280,20 +334,40 @@ export default function Dashboard() {
           onClick={() => navigate('/admin/alumnos')} />
       </div>
 
-      {/* Charts row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Area chart */}
-        <div className="card lg:col-span-2 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="section-title">Evolución del Promedio</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Promedio mensual por grupo, según evaluaciones capturadas</p>
-            </div>
-            <button onClick={()=>navigate('/admin/grupos')} className="text-xs font-medium hover:underline flex items-center gap-1" style={{ color: 'var(--t3)' }}>
-              Ver grupos <ArrowRight size={12}/>
-            </button>
+      <section className="space-y-3" aria-labelledby="analisis-title">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div><h2 id="analisis-title" className="section-title">Análisis académico</h2><p className="text-xs" style={{color:'var(--t3)'}}>Consulta una visualización a la vez.</p></div>
+          <div className="filter-toolbar sm:w-auto" role="tablist" aria-label="Vista de análisis">
+            {[['tendencia','Evolución'],['asistencia','Asistencia'],['materias','Materias'],['actividad','Actividad']].map(([id,label])=><button key={id} role="tab" aria-selected={analysisView===id} onClick={()=>setAnalysisView(id)} className="min-h-11 px-3 rounded-xl text-xs font-bold" style={{background:analysisView===id?'var(--accent)':'var(--soft-bg)',color:analysisView===id?'var(--accent-contrast)':'var(--t2)',border:'1px solid var(--card-border)'}}>{label}</button>)}
           </div>
-          {monthlyTrend.length === 0 ? (
+        </div>
+
+      {/* Una sola vista analítica a la vez */}
+      <div className="grid grid-cols-1 gap-4">
+        {/* Area chart */}
+        {analysisView === 'tendencia' && <div className="card p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <h2 className="section-title">Evolución del Promedio</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Promedio mensual del grupo seleccionado</p>
+            </div>
+            <label className="flex flex-col gap-1 sm:items-end min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color:'var(--t3)' }}>Grupo de la gráfica</span>
+              <FilterSelect value={trendGroupId} onChange={setTrendGroupId}
+                options={[
+                  { value:'', label: selectedGroups.length ? 'Elige un grupo' : 'Sin grupos disponibles' },
+                  ...selectedGroups.map(g => ({ value:g.id, label:g.name })),
+                ]}
+                style={{ width:'min(100%, 230px)' }} />
+            </label>
+          </div>
+          {!trendGroupId ? (
+            <div className="flex flex-col items-center justify-center py-14 text-center gap-2">
+              <Filter size={20} style={{ color:'var(--t4)' }}/>
+              <p className="text-sm" style={{ color:'var(--t2)' }}>Selecciona un grupo para consultar su evolución.</p>
+              <p className="text-[11px]" style={{ color:'var(--t3)' }}>Se muestra uno a la vez para mantener la gráfica legible.</p>
+            </div>
+          ) : monthlyTrend.length === 0 ? (
             <p className="text-sm py-16 text-center" style={{ color: 'var(--t3)' }}>
               Aún no hay calificaciones capturadas para graficar.
             </p>
@@ -301,7 +375,7 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={230}>
               <AreaChart data={monthlyTrend} margin={{ top:5, right:10, bottom:0, left:-15 }}>
                 <defs>
-                  {selectedGroups.map((g, i) => (
+                  {trendGroups.map(g => (
                     <linearGradient key={g.id} id={`grad-${g.id}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%"  stopColor={getAccent(g.id)} stopOpacity={0.18}/>
                       <stop offset="95%" stopColor={getAccent(g.id)} stopOpacity={0}/>
@@ -313,7 +387,7 @@ export default function Dashboard() {
                 <YAxis domain={[0,10]} tick={{ fontSize:11, fill: 'var(--axis)' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ stroke: 'var(--grid)', strokeWidth:1 }} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color: 'var(--t2)' }} />
-                {selectedGroups.map((g, i) => (
+                {trendGroups.map(g => (
                   <Area key={g.id} type="monotone" dataKey={g.id} name={g.name}
                     stroke={getAccent(g.id)} fill={`url(#grad-${g.id})`}
                     strokeWidth={2.5} connectNulls
@@ -323,10 +397,10 @@ export default function Dashboard() {
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </div>}
 
         {/* Pie chart */}
-        <div className="card p-5">
+        {analysisView === 'asistencia' && <div className="card p-4 sm:p-5">
           <div className="mb-4">
             <h2 className="section-title">Asistencia Hoy</h2>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -344,7 +418,7 @@ export default function Dashboard() {
                   dataKey="value" stroke="none" minAngle={2} isAnimationActive={false}>
                   {attendancePie.map(d => <Cell key={d.name} fill={COLOR_ASISTENCIA[d.name]} />)}
                 </Pie>
-                <Tooltip formatter={(v) => [`${v}%`]} wrapperStyle={{ outline:'none' }} contentStyle={{ fontSize:11, borderRadius:10, background:'rgba(10,10,20,.92)', border: '1px solid var(--card-border)', color: 'var(--t2)' }} />
+                <Tooltip formatter={(v) => [`${v}%`]} wrapperStyle={{ outline:'none' }} contentStyle={{ fontSize:11, borderRadius:10, background:'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', color: 'var(--tooltip-text)' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -359,18 +433,18 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        </div>
+        </div>}
       </div>
 
-      {/* Charts row 2 + activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {/* Bar chart */}
-        <div className="card lg:col-span-2 p-5">
-          <div className="flex items-center justify-between mb-4">
+        {analysisView === 'materias' && <div className="card p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="section-title">Rendimiento por Materia</h2>
               <p className="text-xs text-slate-400 mt-0.5">Promedio del ciclo escolar</p>
             </div>
+            <FilterSelect value={subjectName} onChange={setSubjectName} options={subjectPerformance.length ? subjectPerformance.map(m=>({value:m.materia,label:m.materia})) : [{value:'',label:'Sin materias'}]} style={{width:'min(100%,230px)'}}/>
           </div>
           {subjectPerformance.length === 0 ? (
             <p className="text-sm py-16 text-center" style={{ color: 'var(--t3)' }}>
@@ -378,7 +452,7 @@ export default function Dashboard() {
             </p>
           ) : (
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={subjectPerformance} margin={{ top:5, right:10, bottom:5, left:-15 }} barSize={14} barGap={4}>
+            <BarChart data={visibleSubjectPerformance} margin={{ top:5, right:10, bottom:5, left:-15 }} barSize={24} barGap={6}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" vertical={false} />
               {/* Etiqueta horizontal y recortada: rotada a -30° se desbordaba
                   del contenedor con nombres largos o con una sola materia. */}
@@ -394,10 +468,10 @@ export default function Dashboard() {
             </BarChart>
           </ResponsiveContainer>
           )}
-        </div>
+        </div>}
 
         {/* Recent activity */}
-        <div className="card p-5">
+        {analysisView === 'actividad' && <div className="card p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title">Actividad Reciente</h2>
             <span className="badge bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px]">
@@ -415,13 +489,21 @@ export default function Dashboard() {
               Registrará altas, bajas, asistencias, evaluaciones y cambios administrativos.
             </p>
           </div>
-        </div>
+        </div>}
       </div>
+      </section>
 
       {/* Tops: mejor promedio y riesgo — ambos sobre asistencia y evaluaciones reales */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <section className="space-y-3" aria-labelledby="seguimiento-title">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div><h2 id="seguimiento-title" className="section-title">Seguimiento de alumnos</h2><p className="text-xs" style={{color:'var(--t3)'}}>Alterna entre desempeño y riesgo.</p></div>
+          <div className="filter-toolbar sm:w-auto" role="tablist" aria-label="Vista de seguimiento">
+            {[['promedio','Mejor promedio'],['riesgo','En riesgo']].map(([id,label])=><button key={id} role="tab" aria-selected={rankingView===id} onClick={()=>setRankingView(id)} className="min-h-11 px-3 rounded-xl text-xs font-bold" style={{background:rankingView===id?'var(--accent)':'var(--soft-bg)',color:rankingView===id?'var(--accent-contrast)':'var(--t2)',border:'1px solid var(--card-border)'}}>{label}</button>)}
+          </div>
+        </div>
+      <div className="grid grid-cols-1 gap-4">
         {/* Mejor promedio */}
-        <div className="card p-5">
+        {rankingView === 'promedio' && <div className="card p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0">
               <h2 className="section-title flex items-center gap-2">
@@ -432,7 +514,7 @@ export default function Dashboard() {
                 Promedio de evaluaciones capturadas · desempate por asistencia
               </p>
             </div>
-            <button onClick={()=>navigate('/admin/rankings')} className="text-xs font-medium hover:underline flex items-center gap-1 flex-shrink-0" style={{ color: 'var(--t3)' }}>
+            <button onClick={()=>navigate('/admin/rankings')} className="text-xs font-medium hover:underline flex items-center gap-1 flex-shrink-0 min-h-11 px-2" style={{ color: 'var(--t3)' }}>
               Ver todos <ArrowRight size={12}/>
             </button>
           </div>
@@ -444,20 +526,22 @@ export default function Dashboard() {
           <div className="space-y-2">
             {topPromedio.map((s, i) => (
               <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
-                className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
-                onMouseEnter={e=>e.currentTarget.style.background='var(--card-bg)'}
-                onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                className="w-full grid grid-cols-[auto_minmax(0,1fr)_56px] sm:grid-cols-[auto_auto_minmax(0,1fr)_72px] items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-xl transition-colors text-left"
+                style={{ border:'1px solid var(--divider)', background:'var(--soft-bg)' }}
+                onMouseEnter={e=>e.currentTarget.style.borderColor='var(--accent)'}
+                onMouseLeave={e=>e.currentTarget.style.borderColor='var(--divider)'}>
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                   style={i === 0
                     ? { background: 'var(--warn)', color: '#fff' }
                     : { background: 'var(--soft-bg)', color: 'var(--t2)' }}>{i+1}</div>
-                <AvatarAlumno student={s} size={32}/>
+                <span className="hidden sm:block"><AvatarAlumno student={s} size={32}/></span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{s.name}</p>
                   <p className="text-[11px] truncate" style={{ color: 'var(--t3)' }}>{groups.find(g=>g.id===s.groupId)?.name ?? '—'}</p>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold" style={{ color: 'var(--good)' }}>{s.prom}</p>
+                <div className="text-center min-w-0 rounded-xl px-1 sm:px-2 py-1.5"
+                  style={{background:'var(--good-soft)',border:'1px solid var(--good-line)'}}>
+                  <p className="text-base font-black" style={{ color: 'var(--good)' }}>{s.prom}</p>
                   <p className="text-[10px]" style={{ color: 'var(--t3)' }}>
                     {s.asist === null ? 'sin asist.' : `${s.asist}% asist.`}
                   </p>
@@ -466,10 +550,10 @@ export default function Dashboard() {
             ))}
           </div>
           )}
-        </div>
+        </div>}
 
         {/* En riesgo */}
-        <div className="card p-5">
+        {rankingView === 'riesgo' && <div className="card p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0">
               <h2 className="section-title flex items-center gap-2">
@@ -480,7 +564,7 @@ export default function Dashboard() {
                 Asistencia real por debajo de {UMBRAL_ASISTENCIA}% o promedio menor a {UMBRAL_PROMEDIO}
               </p>
             </div>
-            <button onClick={()=>navigate('/admin/alumnos')} className="text-xs font-medium hover:underline flex items-center gap-1 flex-shrink-0" style={{ color: 'var(--t3)' }}>
+            <button onClick={()=>navigate('/admin/alumnos')} className="text-xs font-medium hover:underline flex items-center gap-1 flex-shrink-0 min-h-11 px-2" style={{ color: 'var(--t3)' }}>
               Ver alumnos <ArrowRight size={12}/>
             </button>
           </div>
@@ -492,10 +576,8 @@ export default function Dashboard() {
           <div className="space-y-2">
             {topRiesgo.map(s => (
               <button key={s.id} onClick={()=>navigate(`/admin/alumnos/${s.id}`)}
-                className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left"
-                style={{ border: '1px solid var(--divider)' }}
-                onMouseEnter={e=>e.currentTarget.style.background='var(--card-bg)'}
-                onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                className="w-full grid grid-cols-[auto_minmax(0,1fr)_56px] sm:grid-cols-[auto_minmax(0,1fr)_72px] items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-xl transition-colors text-left"
+                style={{ border:'1px solid var(--bad-line)', background:'var(--bad-soft)' }}>
                 <AvatarAlumno student={s} size={32}
                   style={{ background: 'var(--bad-soft)', color: 'var(--bad)', border: '1px solid var(--bad-line)' }}/>
                 <div className="flex-1 min-w-0">
@@ -504,7 +586,8 @@ export default function Dashboard() {
                     {s.motivos.join(' · ')}
                   </p>
                 </div>
-                <div className="text-right flex-shrink-0">
+                <div className="text-center min-w-0 rounded-xl px-1 sm:px-2 py-1.5"
+                  style={{background:'var(--card-bg)',border:'1px solid var(--bad-line)'}}>
                   <p className="text-sm font-bold" style={{ color: 'var(--bad)' }}>
                     {s.asist === null ? '—' : `${s.asist}%`}
                   </p>
@@ -519,8 +602,10 @@ export default function Dashboard() {
               y {enRiesgo.length - topRiesgo.length} alumno(s) más por debajo de los umbrales
             </p>
           )}
-        </div>
+        </div>}
       </div>
+      </section>
+      </>}
     </div>
   )
 }

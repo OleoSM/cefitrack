@@ -31,7 +31,7 @@ export const DataTable = forwardRef(function DataTable(
   return (
     <div ref={ref}
       data-datatable
-      className={`w-full overflow-hidden rounded-2xl ${className}`}
+      className={`w-full max-w-full min-w-0 overflow-hidden rounded-2xl ${className}`}
       style={{
         background:'var(--card-bg)',
         border:'1px solid var(--card-border)',
@@ -51,7 +51,7 @@ export const DataTable = forwardRef(function DataTable(
           aun con las columnas ocultas por breakpoint no cabe, el scroll
           horizontal del padre mueve encabezado y filas a la vez.
         */}
-        <div className="min-w-full text-[clamp(0.68rem,2.7vw,0.875rem)]">
+        <div className="min-w-full text-[clamp(0.62rem,2.2vw,0.875rem)]">
 
           {/* Encabezado.
               `gap`: las celdas iban pegadas una junto a otra, sin separación
@@ -60,7 +60,7 @@ export const DataTable = forwardRef(function DataTable(
               —el caso reportado: la barra de avance y su porcentaje contra la
               columna vecina—. Se separa menos en móvil que en escritorio,
               porque ahí cada píxel cuenta para que las columnas quepan. */}
-          <div className="flex items-center gap-1 sm:gap-3 px-3 sm:px-5 py-2 sm:py-2.5 sticky top-0 z-10"
+          <div className="flex items-center gap-1 md:gap-3 px-2.5 md:px-5 py-2 md:py-2.5 sticky top-0 z-10"
             style={{
               background: 'var(--header-bg)',
               backdropFilter: 'blur(12px)',
@@ -108,8 +108,8 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
       onClick={onClick}
       onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
       data-fila=""
-      className={`flex items-center gap-1 sm:gap-3 px-3 sm:px-5 py-2 sm:py-2.5 min-h-[44px] sm:min-h-[46px] transition-colors duration-150 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
-      style={{ borderBottom:'1px solid var(--divider)', ...rowStyle }}
+      className={`flex items-center gap-1 md:gap-3 px-2.5 md:px-5 py-2 md:py-2.5 min-h-[44px] md:min-h-[46px] transition-colors duration-150 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      style={{ borderBottom:'1px solid var(--divider)', background:'color-mix(in srgb, var(--card-bg) 96%, var(--soft-bg))', ...rowStyle }}
       /* `filter: brightness()` está prohibido por la regla de color: sobre
          fondo claro aclara la fila hasta el blanco. El realce es el fondo
          suave del tema, que funciona igual en las tres identidades. */

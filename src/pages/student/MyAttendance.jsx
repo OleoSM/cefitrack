@@ -410,7 +410,7 @@ export default function MyAttendance() {
             sizes={{ mobile: 1, tablet: 2, desktop: 3 }}
             emptyLabel="Todavía no hay asistencias registradas.">
           {([mKey, month]) => (
-            <div key={mKey} className="card overflow-hidden">
+            <div key={mKey} className="card overflow-hidden min-w-0 max-w-full">
               <div className="px-4 py-2.5 capitalize font-bold text-sm"
                 style={{ background: t.softBg, borderBottom: `1px solid ${t.divider}`, color: t.t1 }}>
                 {month.label}

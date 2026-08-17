@@ -22,13 +22,13 @@ const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400'
 
 const COLUMNS = [
   { key:'name',    label:'Alumno',     className:'flex-grow min-w-0 sm:min-w-[140px]' },
-  { key:'group',   label:'Grupo',      className:'w-28 hidden sm:flex' },
+  { key:'group',   label:'Grupo',      className:'w-28 hidden md:flex' },
   { key:'att',     label:'Asistencia', className:'w-36 hidden lg:flex' },
   { key:'grade',   label:'Promedio',   className:'w-12 sm:w-24' },
   { key:'tasks',   label:'Tareas',     className:'w-32 hidden xl:flex' },
-  { key:'status',  label:'Estado',     className:'w-28 hidden sm:flex' },
+  { key:'status',  label:'Estado',     className:'w-28 hidden md:flex' },
   { key:'contact', label:'Contacto',   className:'w-40 hidden xl:flex' },
-  { key:'action',  label:'',           className:'w-[4.5rem] sm:w-28 flex justify-end' },
+  { key:'action',  label:'',           className:'w-[4.5rem] md:w-28 flex justify-end' },
 ]
 
 export default function Students() {
@@ -249,7 +249,7 @@ export default function Students() {
                 },
                 /* Grupo */
                 {
-                  className: 'w-28 hidden sm:flex',
+                  className: 'w-28 hidden md:flex',
                   content: (
                     <span
                       className="text-[11px] font-semibold px-2 py-0.5 rounded-full transition-all duration-300"
@@ -301,7 +301,7 @@ export default function Students() {
                 },
                 /* Estado */
                 {
-                  className: 'w-28 hidden sm:flex',
+                  className: 'w-28 hidden md:flex',
                   content: (
                     <DataTableBadge
                       label={cfg.label}
@@ -330,7 +330,7 @@ export default function Students() {
                 },
                 /* Acciones */
                 {
-                  className: 'w-[4.5rem] sm:w-28 flex justify-end',
+                  className: 'w-[4.5rem] md:w-28 flex justify-end',
                   content: (
                     <div className="flex items-center gap-0 sm:gap-0.5">
                       {[

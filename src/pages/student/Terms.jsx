@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { downloadStampedPdf } from '../../lib/termsPdf'
+import { fetchDocumentos, subirDocumento, guardarGarantia, fetchTerminosActivo } from '../../lib/expedienteData'
 
 const TERMS_PDF_URL = '/docs/terminos-condiciones-ecoems-universidad.pdf'
 
@@ -241,6 +242,14 @@ export default function Terms() {
   const [privRead,   setPrivRead]   = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [handSignedFile, setHandSignedFile] = useState(null) // { name, file } — firmado a mano, no persiste en Supabase todavía
+  const [documents, setDocuments] = useState([])
+  const [termsDocument, setTermsDocument] = useState(null)
+  const [uploading, setUploading] = useState(null)
+  const [garantiaAlumno, setGarantiaAlumno] = useState(null)
+  const [garantiaTutor, setGarantiaTutor] = useState(null)
+  const [garantiaSaved, setGarantiaSaved] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [signatureTarget, setSignatureTarget] = useState('terms')
   const handSignedUrl = handSignedFile?.file ? URL.createObjectURL(handSignedFile.file) : null
 
   useEffect(() => () => { if (handSignedUrl) URL.revokeObjectURL(handSignedUrl) }, [handSignedUrl])
@@ -258,16 +267,22 @@ export default function Terms() {
       : null)
   }, [s])
 
+  useEffect(() => { if (s?.id) fetchDocumentos(s.id).then(setDocuments).catch(()=>{}) }, [s?.id])
+  useEffect(() => { fetchTerminosActivo().then(setTermsDocument).catch(()=>{}) }, [])
+  const termsPdfUrl = termsDocument?.url ?? TERMS_PDF_URL
+
   if (!s) return null
 
   const hasSignature = !!signature
-  const canSign = hasSignature && !!curpFile && !!ineFile && tcRead && privRead && !signed
+  const hasCurp = documents.some(d=>d.document_type === 'curp')
+  const hasIne = documents.some(d=>d.document_type === 'ine_tutor')
+  const canSign = hasSignature && hasCurp && hasIne && tcRead && privRead && !signed
 
   const checklist = [
     { ok: tcRead,       label:'Términos y Condiciones leídos' },
     { ok: privRead,     label:'Aviso de Privacidad leído' },
-    { ok: !!curpFile,   label:'CURP subida' },
-    { ok: !!ineFile,    label:'INE del tutor subida' },
+    { ok: hasCurp,      label:'CURP subida' },
+    { ok: hasIne,       label:'INE del tutor subida' },
     { ok: hasSignature, label:'Firma digital capturada' },
   ]
 
@@ -275,12 +290,13 @@ export default function Terms() {
     downloadStampedPdf({
       studentName: s.name, tcText: TC_TEXT, privText: PRIV_TEXT,
       signatureDataUrl: signature, signedAt: signedAt ?? new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' }),
+      termsPdfUrl,
     })
   }
 
   const handleDownloadBlank = () => {
     const link = document.createElement('a')
-    link.href = TERMS_PDF_URL
+    link.href = termsPdfUrl
     link.download = 'TERMINOS_Y_CONDICIONES_ECOEMS_Y_UNIVERSIDAD.pdf'
     link.click()
   }
@@ -303,6 +319,25 @@ export default function Terms() {
     }
   }
 
+  const uploadDoc = async (type, file) => {
+    if (!file) return
+    setUploading(type)
+    try {
+      await subirDocumento(s.id,type,file)
+      setDocuments(await fetchDocumentos(s.id))
+      if (type==='curp') setCurpFile(file); else setIneFile(file)
+    } finally { setUploading(null) }
+  }
+
+  const saveGuarantee = async () => {
+    if (!garantiaAlumno || !garantiaTutor) return
+    setSubmitting(true)
+    setFormError('')
+    try { await guardarGarantia(s.id,garantiaAlumno,garantiaTutor); setGarantiaSaved(true) }
+    catch (error) { setFormError(error?.message || 'No se pudo guardar la garantía. El backend todavía no está disponible.') }
+    finally { setSubmitting(false) }
+  }
+
   const TABS = [
     { id:'tc',    label:'Términos y Condiciones', short:'T&C',       icon: FileText },
     { id:'priv',  label:'Aviso de Privacidad',    short:'Privacidad', icon: Shield   },
@@ -310,7 +345,7 @@ export default function Terms() {
   ]
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-5">
+    <div className="w-full min-w-0 space-y-5">
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -384,17 +419,17 @@ export default function Terms() {
               <h2 className="section-title">Términos y Condiciones ECOEMS y Universidad</h2>
               <p className="text-xs mt-1" style={{ color:'var(--t3)' }}>Documento oficial vigente proporcionado por CEFIMAT.</p>
             </div>
-            <a href={TERMS_PDF_URL} download="TERMINOS_Y_CONDICIONES_ECOEMS_Y_UNIVERSIDAD.pdf"
+            <a href={termsPdfUrl} download="TERMINOS_Y_CONDICIONES_ECOEMS_Y_UNIVERSIDAD.pdf"
               className="btn-secondary justify-center text-xs flex-shrink-0">
               <Download size={13}/> Descargar PDF
             </a>
           </div>
           <div className="rounded-xl overflow-hidden" style={{ border:'1px solid var(--card-border)', background:'var(--soft-bg)' }}>
-            <object data={TERMS_PDF_URL} type="application/pdf"
+            <object data={termsPdfUrl} type="application/pdf"
               className="block w-full h-[62vh] min-h-[420px] sm:min-h-[620px]">
               <div className="p-8 text-center">
                 <p className="text-sm" style={{ color:'var(--t3)' }}>Tu navegador no puede mostrar el PDF aquí.</p>
-                <a href={TERMS_PDF_URL} target="_blank" rel="noreferrer" className="btn-primary inline-flex mt-3">Abrir documento</a>
+                <a href={termsPdfUrl} target="_blank" rel="noreferrer" className="btn-primary inline-flex mt-3">Abrir documento</a>
               </div>
             </object>
           </div>
@@ -439,12 +474,53 @@ export default function Terms() {
       {/* ── Tab Firma y Documentos ───────────────────────────────── */}
       {tab === 'firma' && (
         <div className="space-y-4">
+          {formError && <div className="rounded-xl p-3 text-xs" style={{background:'var(--bad-soft)',border:'1px solid var(--bad-line)',color:'var(--bad)'}}>{formError}</div>}
 
           {/* Documentos */}
           <div className="card p-5 space-y-4">
             <h2 className="section-title">Documentos</h2>
-            <DocUpload label="CURP del alumno"             icon={FileText} file={curpFile}  onChange={setCurpFile}  disabled={signed}/>
-            <DocUpload label="INE / Identificación del tutor" icon={Shield}   file={ineFile}   onChange={setIneFile}   disabled={signed}/>
+            <DocUpload label={uploading==='curp'?'Subiendo CURP…':'CURP del alumno'} icon={FileText} file={curpFile ?? (hasCurp?{name:documents.find(d=>d.document_type==='curp')?.file_name}:null)} onChange={f=>uploadDoc('curp',f)} disabled={uploading==='curp'}/>
+            <DocUpload label={uploading==='ine_tutor'?'Subiendo INE…':'INE / Identificación del tutor'} icon={Shield} file={ineFile ?? (hasIne?{name:documents.find(d=>d.document_type==='ine_tutor')?.file_name}:null)} onChange={f=>uploadDoc('ine_tutor',f)} disabled={uploading==='ine_tutor'}/>
+          </div>
+
+          <div className="card p-5 space-y-4">
+            <div>
+              <h2 className="section-title">Capturar firma</h2>
+              <p className="text-xs mt-1" style={{color:'var(--t3)'}}>Se utiliza una sola caja; elige dónde guardar cada firma.</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                ['terms','T&C',signature],['guarantee_student','Garantía alumno',garantiaAlumno],['guarantee_tutor','Garantía tutor',garantiaTutor],
+              ].map(([id,label,value])=><button key={id} onClick={()=>setSignatureTarget(id)}
+                className="rounded-xl px-2 py-2 text-[10px] sm:text-xs font-bold"
+                style={{background:signatureTarget===id?'var(--accent)':'var(--soft-bg)',color:signatureTarget===id?'#fff':'var(--t2)',border:'1px solid var(--card-border)'}}>
+                {value?'✓ ':''}{label}
+              </button>)}
+            </div>
+            {!(signatureTarget==='terms'&&signed) && !(signatureTarget!=='terms'&&garantiaSaved) && (
+              <SignaturePad onCapture={value=>{
+                if(signatureTarget==='terms') setSignature(value)
+                else if(signatureTarget==='guarantee_student') setGarantiaAlumno(value)
+                else setGarantiaTutor(value)
+              }}/>
+            )}
+            {(signatureTarget==='terms'?signature:signatureTarget==='guarantee_student'?garantiaAlumno:garantiaTutor) &&
+              <div className="rounded-xl p-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
+                <p className="text-[10px] font-bold mb-2" style={{color:'var(--t3)'}}>Vista previa de la firma seleccionada</p>
+                <img src={signatureTarget==='terms'?signature:signatureTarget==='guarantee_student'?garantiaAlumno:garantiaTutor}
+                  alt="Vista previa de firma" className="max-h-24 mx-auto"/>
+              </div>}
+          </div>
+
+          <div className="card p-5 space-y-4">
+            <div><h2 className="section-title">Garantía</h2><p className="text-xs mt-1" style={{color:'var(--t3)'}}>El alumno y el tutor aceptan la garantía y firman de manera independiente.</p></div>
+            {garantiaSaved ? <div className="flex gap-2 text-sm" style={{color:'var(--good)'}}><CheckCircle2 size={16}/> Garantía entregada; administración debe validarla.</div> : <>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-xl p-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)',color:garantiaAlumno?'var(--good)':'var(--t3)'}}>{garantiaAlumno?'✓':'○'} Firma del alumno</div>
+                <div className="rounded-xl p-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)',color:garantiaTutor?'var(--good)':'var(--t3)'}}>{garantiaTutor?'✓':'○'} Firma del tutor</div>
+              </div>
+              <button type="button" onClick={saveGuarantee} disabled={!garantiaAlumno||!garantiaTutor||submitting} className="btn-primary w-full justify-center"><FileSignature size={15}/> Aceptar y entregar garantía</button>
+            </>}
           </div>
 
           {/* Firma */}
@@ -481,7 +557,6 @@ export default function Terms() {
             {/* Canvas */}
             {!signed && (
               <>
-                <SignaturePad onCapture={setSignature} disabled={signed}/>
                 {signature && (
                   <div className="flex items-center gap-2 p-2.5 rounded-xl" style={{ background:'var(--good-soft)', border:'1px solid var(--good-soft)' }}>
                     <CheckCircle2 size={13} style={{ color:'var(--good)' }}/>

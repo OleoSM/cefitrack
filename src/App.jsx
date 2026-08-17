@@ -32,6 +32,7 @@ const Registrar        = lazy(() => import('./pages/admin/Registrar'))
 const Settings         = lazy(() => import('./pages/admin/Settings'))
 const AccesoDisposicion = lazy(() => import('./pages/admin/AccesoDisposicion'))
 const Pagos            = lazy(() => import('./pages/admin/Pagos'))
+const EnviarCorreos    = lazy(() => import('./pages/admin/EnviarCorreos'))
 
 const ADMIN_ROLES = ['admin', 'sub_admin']
 
@@ -61,7 +62,7 @@ function RootRedirect() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition:true, v7_relativeSplatPath:true }}>
         <Suspense fallback={
           <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
             <LoadingPage />
@@ -88,6 +89,7 @@ export default function App() {
               <Route path="terminos"              element={<TermsManager />} />
               <Route path="registrar"             element={<Registrar />} />
               <Route path="pagos"                 element={<Pagos />} />
+              <Route path="correos"                element={<EnviarCorreos />} />
               <Route path="configuracion"         element={<Settings />} />
               <Route path="configuracion/acceso"  element={<AccesoDisposicion />} />
             </Route>

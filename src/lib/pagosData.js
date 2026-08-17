@@ -120,6 +120,11 @@ export async function fetchPagos(planIds) {
     .in('plan_id', ids)
     .order('fecha', { ascending: false })
   if (error) throw error
+  const creators = [...new Set(data.map(p=>p.created_by).filter(Boolean))]
+  const { data: perfiles } = creators.length
+    ? await supabase.from('profiles').select('id,name').in('id',creators)
+    : { data:[] }
+  const creatorNames = Object.fromEntries((perfiles ?? []).map(p=>[p.id,p.name]))
   return data.map(p => ({
     id: p.id,
     planId: p.plan_id,
@@ -131,6 +136,9 @@ export async function fetchPagos(planIds) {
     cubreTotal: !!p.cubre_total,
     referencia: p.referencia,
     nota: p.nota,
+    concepto: p.concepto ?? 'Pago de curso',
+    createdBy: p.created_by,
+    createdByName: creatorNames[p.created_by] ?? 'Administrador',
   }))
 }
 
@@ -190,9 +198,9 @@ export async function guardarPlan({
  */
 export async function registrarPago({
   id = null, planId, monto, metodo, fecha = null,
-  periodo = null, cubreTotal = false, referencia = null, nota = null,
+  periodo = null, cubreTotal = false, concepto = 'Pago de curso', referencia = null, nota = null,
 }) {
-  const { data, error } = await supabase.rpc('registrar_pago', {
+  const { data, error } = await supabase.rpc('registrar_pago_v2', {
     p_id: id,
     p_plan_id: planId,
     p_monto: monto,
@@ -200,6 +208,7 @@ export async function registrarPago({
     p_fecha: fecha,
     p_periodo: cubreTotal ? null : periodo,
     p_cubre_total: cubreTotal,
+    p_concepto: concepto,
     p_referencia: referencia,
     p_nota: nota,
   })

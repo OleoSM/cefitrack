@@ -561,8 +561,10 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                         <p className="text-[11px] truncate" style={{ color: 'var(--t3)' }}>
                           {p.fecha}
                           {p.periodo ? ` · cubre ${etiquetaMes(p.periodo)}` : ' · sin mes asignado'}
+                          {` · ${p.concepto}`}
                           {p.referencia ? ` · ref. ${p.referencia}` : ''}
                           {p.nota ? ` · ${p.nota}` : ''}
+                          {` · Registró: ${p.createdByName}`}
                         </p>
                       </div>
                       <button onClick={() => eliminar(p.id)} title="Eliminar movimiento"
@@ -715,7 +717,7 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
 
   const [f, setF] = useState({
     monto: '', metodo: 'efectivo', fecha: hoy,
-    periodo: primeroPendiente, contado: false, referencia: '', nota: '',
+    periodo: primeroPendiente, contado: false, concepto:'Pago de curso', referencia: '', nota: '',
   })
   const [guardando, setGuardando] = useState(false)
 
@@ -728,6 +730,7 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
       planId: fila.planId, monto, metodo: f.metodo, fecha: f.fecha,
       periodo: f.contado ? null : (f.periodo || null),
       cubreTotal: f.contado,
+      concepto: f.concepto,
       referencia: f.referencia || null, nota: f.nota || null,
     })
     setGuardando(false)
@@ -768,6 +771,10 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
           <input type="number" min="0.01" step="0.01" value={f.monto} required
             onChange={e => setF(v => ({ ...v, monto: e.target.value }))}
             className="input-field text-sm" placeholder="2000"/>
+        </Campo>
+        <Campo label="Concepto de pago">
+          <input value={f.concepto} onChange={e=>setF(v=>({...v,concepto:e.target.value}))}
+            className="input-field text-sm" placeholder="Inscripción, mensualidad, examen…" required/>
         </Campo>
         <Campo label="Fecha">
           <input type="date" value={f.fecha}

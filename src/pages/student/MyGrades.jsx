@@ -34,6 +34,18 @@ function materiaIcon(m) {
   return BookMarked
 }
 
+function materiaTile(m) {
+  const n=(m||'').toLowerCase()
+  if (/(fisic|fís)/.test(n)) return 1
+  if (/(quim|quím)/.test(n)) return 2
+  if (/biolog/.test(n)) return 3
+  if (/(españ|espan|lectur|literat)/.test(n)) return 4
+  if (/histor/.test(n)) return 5
+  if (/geograf/.test(n)) return 6
+  if (/(inglés|ingles|idiom)/.test(n)) return 7
+  return 0
+}
+
 export default function MyGrades() {
   const { t } = useStudentTheme()
   const { student: s, evaluations } = useStudentData({ withEvaluations: true })
@@ -158,8 +170,11 @@ export default function MyGrades() {
             const Icon = materiaIcon(mat)
             return (
               <button key={mat} onClick={() => setScope(mat)}
-                className="stat-card text-left transition-all active:scale-[.97] group"
+                className="stat-card text-left transition-all active:scale-[.97] group relative overflow-hidden"
                 style={{ borderTop: `3px solid ${accent}` }}>
+                <span className="absolute inset-x-0 top-0 h-16 opacity-30 pointer-events-none"
+                  style={{backgroundImage:"linear-gradient(to bottom,transparent,var(--card-bg)),url('/materias-atlas-v1.png')",backgroundSize:'400% 200%',backgroundPosition:`${(materiaTile(mat)%4)*33.333}% ${materiaTile(mat)>3?100:0}%`}}/>
+                <div className="relative">
                 <div className="flex items-center justify-between">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: accent }}>
@@ -170,6 +185,7 @@ export default function MyGrades() {
                 <p className="text-2xl font-bold tabular-nums mt-2" style={{ color: gradeColor(prom) }}>{prom}</p>
                 <p className="text-xs font-semibold mt-0.5 truncate" style={{ color: t.t1 }}>{mat}</p>
                 <p className="text-[10px] mt-0.5" style={{ color: t.t4 }}>{evs.length} evaluacion{evs.length !== 1 ? 'es' : ''}</p>
+                </div>
               </button>
             )
           })}
@@ -222,9 +238,9 @@ export default function MyGrades() {
                   caben enteras, y el mínimo cómodo entra a partir de `sm`.
                   `overscroll-behavior-x: contain` evita que el barrido lateral
                   dispare el gesto de "atrás" del navegador. */}
-              <div className="overflow-x-auto"
+              <div className="responsive-table-wrap"
                 style={{ borderTop: `1px solid ${t.divider}`, overscrollBehaviorX: 'contain' }}>
-                <table className="w-full min-w-0 sm:min-w-[420px] lg:min-w-[520px]">
+                <table className="responsive-table w-full min-w-0 sm:min-w-[420px] lg:min-w-[520px]">
                   <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
                     <tr>
                       <th className="table-header px-3 sm:px-4">Tipo</th>

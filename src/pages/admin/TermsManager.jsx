@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { createPortal } from 'react-dom'
 import { fetchStudents, resetTerms } from '../../lib/supabaseData'
@@ -9,6 +9,7 @@ import {
 import clsx from 'clsx'
 import KpiCard from '../../components/ui/KpiCard'
 import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
+import { fetchDocumentosAlumnos, validarDocumento, validarGarantia, fetchTerminosActivo, publicarTerminos } from '../../lib/expedienteData'
 
 const VERSION_MOCK = { version: '1.0', updatedAt: '31 de mayo de 2026', updatedBy: 'Prof. Mario Sánchez' }
 
@@ -17,7 +18,10 @@ export default function TermsManager() {
   const [search, setSearch]     = useState('')
   const [filter, setFilter]     = useState('todos')
   const [preview, setPreview]   = useState(null)   // alumno seleccionado para ver firma
-  const [tcVersion, setTcVersion] = useState(VERSION_MOCK)
+  const [tcVersion, setTcVersion] = useState(null)
+  const [uploadingTerms, setUploadingTerms] = useState(false)
+  const [termsError, setTermsError] = useState('')
+  const termsInputRef = useRef(null)
   const [confirmReset, setConfirmReset] = useState(null) // id del alumno a resetear
 
   const signed   = list.filter(s => s.termsStatus === 'firmado').length
@@ -32,10 +36,30 @@ export default function TermsManager() {
   })
 
   const load = useCallback(async () => {
-    try { setList(await fetchStudents()) } catch { /* lista vacía */ }
+    try {
+      const students = await fetchStudents()
+      const docs = await fetchDocumentosAlumnos(students.map(s=>s.id))
+      setList(students.map(s=>({ ...s, documents:docs.filter(d=>d.student_id===s.id) })))
+    } catch { /* lista vacía */ }
   }, [])
 
+  const approveDoc = async doc => { await validarDocumento(doc.id,true); await load() }
+  const approveGuarantee = async id => { await validarGarantia(id); await load() }
+
   useEffect(() => { load() }, [load])
+  useEffect(() => { fetchTerminosActivo().then(setTcVersion).catch(()=>{}) }, [])
+
+  const uploadTerms = async file => {
+    if (!file) return
+    setUploadingTerms(true)
+    setTermsError('')
+    try { setTcVersion(await publicarTerminos(file)) }
+    catch (error) { setTermsError(error.message || 'No se pudo publicar el documento.') }
+    finally {
+      setUploadingTerms(false)
+      if (termsInputRef.current) termsInputRef.current.value = ''
+    }
+  }
 
   const resetSignature = async (id) => {
     setConfirmReset(null)
@@ -79,19 +103,27 @@ export default function TermsManager() {
             <div>
               <p className="text-sm font-bold" style={{ color:'var(--t1)' }}>Documento de T&C activo</p>
               <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
-                v{tcVersion.version} · Actualizado {tcVersion.updatedAt} · por {tcVersion.updatedBy}
+                {tcVersion
+                  ? `v${tcVersion.version} · ${tcVersion.file_name} · ${new Date(tcVersion.created_at).toLocaleDateString('es-MX')}`
+                  : 'Sin documento publicado en Supabase'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <input ref={termsInputRef} type="file" accept="application/pdf" className="hidden"
+              onChange={e => uploadTerms(e.target.files?.[0])}/>
+            {tcVersion?.url && <a href={tcVersion.url} target="_blank" rel="noreferrer"
+              className="btn-secondary text-xs"><Eye size={13}/> Ver PDF</a>}
             <button
+              disabled={uploadingTerms}
               className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl font-semibold transition-all active:scale-95"
               style={{ background:'var(--info-soft)', border:'1px solid var(--info-soft)', color:'var(--info)' }}
-              onClick={() => alert('Upload T&C — conectar a backend')}>
-              <Upload size={13}/> Actualizar documento
+              onClick={() => termsInputRef.current?.click()}>
+              <Upload size={13}/> {uploadingTerms ? 'Subiendo…' : 'Actualizar documento'}
             </button>
           </div>
         </div>
+        {termsError && <p className="text-xs mt-3" style={{ color:'var(--bad)' }}>{termsError}</p>}
         <div className="mt-3 p-3 rounded-xl text-xs" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-soft)', color:'var(--warn-line)' }}>
           <AlertTriangle size={12} className="inline mr-1.5 -mt-0.5"/>
           Actualizar el documento <strong>no invalida automáticamente</strong> las firmas existentes. Si el cambio es sustancial, resetea las firmas de los alumnos afectados para que vuelvan a firmar la versión nueva.
@@ -178,22 +210,23 @@ export default function TermsManager() {
 
               {/* CURP */}
               <div className="hidden md:flex items-center">
-                {s.curpDoc
-                  ? <span className="text-xs truncate max-w-[90px]" title={s.curpDoc} style={{ color:'var(--good)' }}>{s.curpDoc}</span>
+                {s.documents?.find(d=>d.document_type==='curp')
+                  ? <button className="text-xs" style={{color:s.documents.find(d=>d.document_type==='curp').status==='validado'?'var(--good)':'var(--warn)'}} onClick={()=>approveDoc(s.documents.find(d=>d.document_type==='curp'))}>{s.documents.find(d=>d.document_type==='curp').status}</button>
                   : <span className="text-xs" style={{ color:'var(--t4)' }}>—</span>
                 }
               </div>
 
               {/* INE */}
               <div className="hidden md:flex items-center">
-                {s.ineTutorDoc
-                  ? <span className="text-xs truncate max-w-[90px]" title={s.ineTutorDoc} style={{ color:'var(--good)' }}>{s.ineTutorDoc}</span>
+                {s.documents?.find(d=>d.document_type==='ine_tutor')
+                  ? <button className="text-xs" style={{color:s.documents.find(d=>d.document_type==='ine_tutor').status==='validado'?'var(--good)':'var(--warn)'}} onClick={()=>approveDoc(s.documents.find(d=>d.document_type==='ine_tutor'))}>{s.documents.find(d=>d.document_type==='ine_tutor').status}</button>
                   : <span className="text-xs" style={{ color:'var(--t4)' }}>—</span>
                 }
               </div>
 
               {/* Acciones */}
               <div className="flex items-center gap-1">
+                {s.garantiaEstado === 'entregada' && <button title="Validar garantía" onClick={()=>approveGuarantee(s.id)} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'var(--warn-soft)',color:'var(--warn)'}}><Shield size={13}/></button>}
                 {isSigned && (
                   <button
                     title="Ver firma"

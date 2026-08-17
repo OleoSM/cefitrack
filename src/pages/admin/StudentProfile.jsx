@@ -269,14 +269,6 @@ export default function StudentProfile() {
     <div className="space-y-4">
 
       {/* ── Back ──────────────────────────────────────────────────── */}
-      <button onClick={() => navigate('/admin/alumnos')}
-        className="flex items-center gap-1.5 text-sm font-medium transition-colors"
-        style={{ color:'var(--t3)' }}
-        onMouseEnter={e => e.currentTarget.style.color = 'var(--t1)'}
-        onMouseLeave={e => e.currentTarget.style.color = 'var(--t3)'}>
-        <ArrowLeft size={15}/> Regresar a Alumnos
-      </button>
-
       {/* ── Profile header ────────────────────────────────────────── */}
       <div className="card p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row gap-5">
@@ -520,12 +512,12 @@ export default function StudentProfile() {
             </div>
             {/* El barrido horizontal sobre la tabla disparaba el gesto de
                 "atrás" del navegador al llegar al borde. */}
-            <div className="overflow-x-auto" style={{ overscrollBehaviorX:'contain' }}>
+            <div className="responsive-table-wrap" style={{ overscrollBehaviorX:'contain' }}>
               {/* Tres niveles de ancho. En teléfono la tabla cabe entera —sin
                   Periodo ni Fecha, que se pliegan bajo la materia— y no hace
                   falta desplazarla; de `sm` en adelante se le da un mínimo
                   cómodo para que las columnas no se aplasten. */}
-              <table className="w-full min-w-0 sm:min-w-[480px] lg:min-w-[560px]">
+              <table className="responsive-table w-full min-w-0 sm:min-w-[480px] lg:min-w-[560px]">
                 <thead>
                   <tr style={{ borderBottom:'1px solid var(--divider)' }}>
                     <th className="table-header px-2 sm:px-4 text-[9px] sm:text-[11px]">Materia</th>

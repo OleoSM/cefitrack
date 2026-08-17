@@ -5,7 +5,7 @@ import {
   Plus, Minus, Trash2, Check, ChevronDown, ChevronRight,
   UserPlus, X, GraduationCap, Maximize2, SlidersHorizontal,
   ArrowLeft, Calendar, Shield, Users, Clock,
-  Save, AlertTriangle, RotateCw, Download, Pencil,
+  Save, AlertTriangle, RotateCw, Download, Pencil, Search, Columns2, Rows3,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
@@ -21,6 +21,9 @@ import { useAdminTheme } from '../../context/AdminThemeContext'
 import { folioEX, folioEXD } from '../../lib/folios'
 import { supabase } from '../../lib/supabaseClient'
 import { useSucursales } from '../../hooks/useSucursales'
+import { fetchDocumentosAlumnos } from '../../lib/expedienteData'
+import StudentFormModal from '../../components/admin/StudentFormModal'
+import CredentialsPanel from '../../components/admin/CredentialsPanel'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -67,7 +70,7 @@ function dateKey(d) {
 }
 function scoreColor(v) {
   if (v === undefined || v === null || v === '') return 'var(--t4)'
-  if (v === 'NP') return 'var(--t4)'
+  if (String(v).toUpperCase() === 'NP') return 'var(--bad)'
   const n = parseFloat(v)
   if (isNaN(n)) return 'var(--t4)'
   const s = n <= 1 ? n * 10 : n
@@ -95,7 +98,10 @@ function GroupPicker({ groups, students, loading, onSelect }) {
   const { getAccent } = useGroupColors()
   const { sucursales } = useSucursales()
   const [sucursal, setSucursal] = useState('todas')
-  const gruposVisibles = sucursal === 'todas' ? groups : groups.filter(g => g.sucursal === sucursal)
+  const [query, setQuery] = useState('')
+  const [columns, setColumns] = useState(1)
+  const gruposSucursal = sucursal === 'todas' ? groups : groups.filter(g => g.sucursal === sucursal)
+  const gruposVisibles = gruposSucursal.filter(g => `${g.name} ${g.subject}`.toLowerCase().includes(query.trim().toLowerCase()))
 
   return (
     <div className="space-y-6">
@@ -106,7 +112,7 @@ function GroupPicker({ groups, students, loading, onSelect }) {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="filter-toolbar items-end">
         <div>
           <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>
             Sucursal
@@ -117,6 +123,15 @@ function GroupPicker({ groups, students, loading, onSelect }) {
           </select>
         </div>
         <p className="text-xs pb-2.5" style={{ color:'var(--t3)' }}>{gruposVisibles.length} grupo(s)</p>
+        <label className="flex items-center gap-2 px-3 rounded-xl flex-1 min-w-[210px] max-w-sm"
+          style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
+          <Search size={14} style={{color:'var(--t3)'}}/>
+          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar grupo…"
+            className="bg-transparent outline-none py-2.5 text-sm min-w-0 w-full" style={{color:'var(--t1)'}}/>
+        </label>
+        <button className="btn-secondary p-2.5" onClick={()=>setColumns(v=>v===1?2:1)} title="Cambiar distribución">
+          {columns===1?<Columns2 size={16}/>:<Rows3 size={16}/>}<span className="hidden sm:inline text-xs">Vista</span>
+        </button>
       </div>
 
       {!loading && groups.length === 0 && (
@@ -127,7 +142,7 @@ function GroupPicker({ groups, students, loading, onSelect }) {
         </div>
       )}
 
-      <div className="grid gap-4">
+      <div className={`grid gap-4 ${columns===2?'lg:grid-cols-2':'grid-cols-1'}`}>
         {gruposVisibles.map(g => {
           const grpStudents = students.filter(s => s.groupId === g.id)
           const accent      = getAccent(g.id)
@@ -517,8 +532,8 @@ function AddSubjectModal({ onAdd, onClose }) {
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'rgba(10,10,18,.98)', border: '1px solid var(--card-border)' }} onClick={e=>e.stopPropagation()}>
-        <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Nueva materia</p>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre de la materia"
+        <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Nueva sección</p>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre de la sección"
           className="input-dark w-full" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),color)} autoFocus/>
         <div className="flex gap-2 flex-wrap">
           {COLORS.map(c=>(
@@ -608,6 +623,13 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
       </span>
     </th>
   )
+}
+
+function AutoStatusCell({ value, bg }) {
+  const ok = value === 'validado' || value === 'firmado'
+  return <td style={{minWidth:72,textAlign:'center',fontSize:10,fontWeight:700,background:bg,color:ok?'var(--good)':value==='entregado'?'var(--warn)':'var(--t4)'}}>
+    {value || 'Pendiente'}
+  </td>
 }
 
 function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52, rowSpan, style: extraStyle }) {
@@ -861,9 +883,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
   const [students,      setStudents]      = useState(rosterFromDb)
   const [subjects,      setSubjects]      = useState([])
-  const [simCount,      setSimCount]      = useState(10)
-  const [onlineCount,   setOnlineCount]   = useState(5)
-  const [tableFocus,    setTableFocus]    = useState('summary')
+  const [simCount,      setSimCount]      = useState(0)
+  const [onlineCount,   setOnlineCount]   = useState(0)
+  const [tableFocus,    setTableFocus]    = useState('all')
   const [activeSim,     setActiveSim]     = useState(1)
   const simNamesKey = `siga_registro_sim_headers_${group.id}`
   const [simHeaderNames, setSimHeaderNames] = useState(() => {
@@ -902,6 +924,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const [showLeaveModal,setShowLeaveModal]= useState(false)
   const [saveFlash,     setSaveFlash]     = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // { id, name } | null
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [lastCred, setLastCred] = useState(null)
+  const [studentQuery, setStudentQuery] = useState('')
 
   useEffect(() => {
     if (activeSim > simCount) setActiveSim(Math.max(1, simCount))
@@ -989,10 +1014,11 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const cargarHoja = useCallback(async () => {
     setErrorHoja(null)
     try {
-      const [cols, celdas, asis] = await Promise.all([
+      const [cols, celdas, asis, docs] = await Promise.all([
         fetchColumnasRegistro(group.id),
         fetchCeldasRegistro(group.id),
         fetchAsistenciaRegistro(group.id),
+        fetchDocumentosAlumnos(groupStudents.map(s=>s.id)),
       ])
 
       // Las columnas llegan planas; la hoja las dibuja agrupadas por materia.
@@ -1004,7 +1030,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
             color: c.materiaColor || 'var(--info)', cols: [],
           })
         }
-        porMateria.get(c.materia).cols.push({ id: c.id, name: c.nombre, t: c.tipo, calMax: c.calMax })
+        porMateria.get(c.materia).cols.push({ id: c.id, name: c.nombre, t: c.tipo, calMax: c.calMax, esFija:c.esFija })
       }
       setSubjects([...porMateria.values()])
 
@@ -1028,6 +1054,12 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         }
       }
       setAttendance(att)
+      setStudents(rosterFromDb().map(student => ({ ...student,
+        curpEstado:docs.find(d=>d.student_id===student.id&&d.document_type==='curp')?.status ?? 'pendiente',
+        ineEstado:docs.find(d=>d.student_id===student.id&&d.document_type==='ine_tutor')?.status ?? 'pendiente',
+        area:groupStudents.find(s=>s.id===student.id)?.universidadArea,
+        garantiaEstado:groupStudents.find(s=>s.id===student.id)?.garantiaEstado ?? 'pendiente',
+      })))
     } catch (err) {
       setErrorHoja('No se pudo cargar la hoja. Revisa tu conexión y vuelve a intentar.')
     } finally {
@@ -1083,10 +1115,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     const timerKey  = `${sid}:${columnaId}`
     clearTimeout(timersCelda.current[timerKey])
     timersCelda.current[timerKey] = setTimeout(async () => {
-      const num = val === '' || val === null || val === undefined ? null : Number(val)
-      if (num !== null && Number.isNaN(num)) return
+      const value = val === '' || val === null || val === undefined ? null : val
       try {
-        await setCeldaRegistro(sid, columnaId, num)
+        await setCeldaRegistro(sid, columnaId, value)
         onDataChange?.()
       } catch {
         setErrorHoja('No se pudo guardar una calificación. Vuelve a escribirla.')
@@ -1137,8 +1168,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const showSummary = tableFocus === 'all' || tableFocus === 'summary'
   const showDocs = tableFocus === 'all' || tableFocus === 'docs'
   const showSubject = id => tableFocus === 'all' || tableFocus === `subject:${id}`
-  const showSims = tableFocus === 'all' || tableFocus === 'sims'
-  const showOnline = tableFocus === 'all' || tableFocus === 'online'
+  const showSims = false
+  const showOnline = false
   const showAttendance = tableFocus === 'all' || tableFocus === 'attendance' || tableFocus === 'summary'
   const visibleSims = tableFocus === 'sims'
     ? [activeSim]
@@ -1151,15 +1182,11 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const secciones = useMemo(() => [
     { id:'docs',   label:'Documentos' },
     ...subjects.map(s => ({ id:s.id, label:s.name })),
-    { id:'sims',   label:'Simulacros' },
-    { id:'online', label:'Exámenes digitales' },
   ], [subjects])
   const focusOptions = useMemo(() => [
     { id:'summary', label:'Resumen' },
     { id:'docs', label:'Documentos' },
     ...subjects.map(s => ({ id:`subject:${s.id}`, label:s.name })),
-    { id:'sims', label:'Simulacros' },
-    { id:'online', label:'Digitales' },
     { id:'attendance', label:'Asistencia' },
     { id:'all', label:'Todas' },
   ], [subjects])
@@ -1205,7 +1232,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       await Promise.all(materia.cols.map(c => borrarColumnaRegistro(c.id)))
       await cargarHoja()
       onDataChange?.()
-    } catch { setErrorHoja('No se pudo eliminar la materia.') }
+    } catch { setErrorHoja('No se pudo eliminar la sección.') }
     setSubjects(p => p.filter(s => s.id !== subjId))
   }
 
@@ -1353,8 +1380,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
           en dos filas: ~90 px de los 411 de alto de un teléfono apaisado, justo
           en el modo que se abre para ver MÁS hoja. */}
       {[{v:stats.total,l:'Total',c:'var(--t2)'},{v:stats.conGar,l:'Con garantía',c:'var(--good)'},{v:stats.sinGar,l:'Sin garantía',c:'var(--bad)'}].map(({v,l,c})=>(
-        <div key={l} className={clsx('text-center px-3 py-1 rounded-lg', esCompacto && 'hidden')}
-          style={{ background: 'var(--card-bg)' }}>
+        <div key={l} className={clsx('text-center px-3 py-1.5 rounded-xl', esCompacto && 'hidden')}
+          style={{ background:`color-mix(in srgb, ${c} 14%, var(--card-bg))`, border:`1px solid color-mix(in srgb, ${c} 45%, var(--card-border))`, minWidth:86 }}>
           <span className="text-base font-black mr-1" style={{ color:c }}>{v}</span>
           <span className="text-[10px]" style={{ color: 'var(--t3)' }}>{l}</span>
         </div>
@@ -1367,7 +1394,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         <UserPlus size={13}/> Alumno
       </button>
       <button onClick={() => setAddSubjModal(true)} className="btn-secondary text-xs py-2 gap-1.5">
-        <Plus size={13}/> Materia
+        <Plus size={13}/> Sección
       </button>
       {/* Utilidades: lo que no se toca mientras se capturan calificaciones. */}
       <MenuUtilidades>
@@ -1449,6 +1476,12 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const focusBar = (
     <div className="mb-3 flex flex-col sm:flex-row sm:items-start gap-2">
       <FocusFilter options={focusOptions} value={tableFocus} onChange={selectFocus}/>
+      <label className="flex items-center gap-2 px-3 rounded-xl min-w-[210px] sm:ml-auto"
+        style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
+        <Search size={13} style={{color:'var(--t3)'}}/>
+        <input value={studentQuery} onChange={e=>setStudentQuery(e.target.value)} placeholder="Filtrar alumno…"
+          className="bg-transparent outline-none py-2 text-xs w-full min-w-0" style={{color:'var(--t1)'}}/>
+      </label>
       {tableFocus === 'sims' && (
         <div className="flex flex-1 items-center gap-1.5 overflow-x-auto pb-1 sm:pt-1" aria-label="Simulacro activo">
           {Array.from({length:simCount},(_,i)=>i+1).map(n => (
@@ -1488,7 +1521,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         ...(isFullscreen
           ? { flex:1, minHeight:0 }
           : { maxHeight:isMobile?'max(320px, calc(100dvh - 300px))':'calc(100vh - 208px)' }) }}>
-        <table style={{
+        <table data-wide-sheet style={{
           borderCollapse:'collapse',
           /* Ocupa el contenedor en vistas pequeñas (Resumen, Documentos o un
              solo simulacro), pero conserva su ancho intrínseco y el scroll
@@ -1518,7 +1551,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
               </>}
 
               {showDocs && <SectionHeader label={headerName('section:docs','DOCUMENTOS')}
-                onRename={v=>renameHeader('section:docs',v)} cols={collapsed['docs']?1:3}
+                onRename={v=>renameHeader('section:docs',v)} cols={collapsed['docs']?1:4}
                 collapsed={!!collapsed['docs']} onToggle={()=>toggleSection('docs')}/>}
 
               {subjects.filter(subj=>showSubject(subj.id)).map(subj => (
@@ -1529,7 +1562,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                   collapsed={!!collapsed[subj.id]}
                   onToggle={()=>toggleSection(subj.id)}
                   onAdd={()=>setAddColModal(subj.id)}
-                  onRemoveItem={()=>removeSubject(subj.id)}
+                  onRemoveItem={subj.cols.some(c=>c.esFija) ? undefined : ()=>removeSubject(subj.id)}
                 />
               ))}
 
@@ -1560,9 +1593,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
               {showDocs && (collapsed['docs']
                 ? <th style={{ minWidth:52, fontSize:10, color: hcMode ? HC.docs : 'var(--t4)', textAlign:'center', borderRight: hcMode ? `2px solid ${HC.docs}70` : '1px solid rgba(255,255,255,.06)' }}>···</th>
                 : [
-                    ['doc_guarantee','Firma Gar.'],
+                    ['doc_curp','CURP'],
+                    ['doc_ine','INE tutor'],
                     ['doc_terms','Firma T&C'],
-                    ['doc_exam','Examen Gral.'],
+                    ['doc_guarantee','Garantía'],
                   ].map(([key,fallback]) => (
                     <EditableColumnHeader key={key} minWidth={68} light={hcMode}
                       value={headerName(key,fallback)} onChange={v=>renameHeader(key,v)}
@@ -1571,7 +1605,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                   ))
               )}
 
-              {/* Materias */}
+              {/* Secciones */}
               {subjects.filter(subj=>showSubject(subj.id)).map(subj => {
                 if (collapsed[subj.id]) return <th key={subj.id} style={{ minWidth:52, fontSize:10, color: 'var(--t4)', textAlign:'center', borderRight: '1px solid var(--divider)' }}>···</th>
                 return [
@@ -1579,7 +1613,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                     <EditableColumnHeader key={`${subj.id}_${col.id}`} minWidth={76} light={hcMode}
                       value={headerName(`col:${col.id}`,col.name)}
                       onChange={v=>renameHeader(`col:${col.id}`,v)}
-                      onRemove={()=>removeCol(subj.id,col.id)}/>
+                      onRemove={col.esFija ? undefined : ()=>removeCol(subj.id,col.id)}/>
                   )),
                   <th key={`${subj.id}_add`} style={{ minWidth:26, borderRight: '1px solid var(--divider)' }}>
                     <button onClick={()=>setAddColModal(subj.id)} className="mx-auto flex items-center justify-center w-4 h-4 rounded hover:bg-white/15" title="Añadir columna">
@@ -1623,7 +1657,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
           </thead>
 
           <tbody>
-            {students.map((s, idx) => {
+            {students.filter(s=>s.name.toLowerCase().includes(studentQuery.trim().toLowerCase())).map((s, idx) => {
               const sc = cells[s.id] || {}
               const rowBg = idx%2===0 ? rowEvenBg : rowOddBg
 
@@ -1681,9 +1715,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                   {showDocs && (collapsed['docs']
                     ? <td style={{ minWidth:52, background: hcMode ? `${HC.docs}06` : rowBg }}/>
                     : <>
-                        <CheckCell checked={s.firmaGar} onChange={()=>toggleCheck(s.id,'firmaGar')} bg={rowBg} sc={HC.docs}/>
-                        <CheckCell checked={s.firmaTyC} onChange={()=>toggleCheck(s.id,'firmaTyC')} bg={rowBg} sc={HC.docs}/>
-                        <CheckCell checked={s.exGral}   onChange={()=>toggleCheck(s.id,'exGral')}   bg={rowBg} sc={HC.docs}/>
+                        <AutoStatusCell value={s.curpEstado} bg={rowBg}/>
+                        <AutoStatusCell value={s.ineEstado} bg={rowBg}/>
+                        <AutoStatusCell value={s.firmaTyC?'firmado':'pendiente'} bg={rowBg}/>
+                        <AutoStatusCell value={s.garantiaEstado} bg={rowBg}/>
                       </>
                   )}
 
@@ -1881,6 +1916,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         {attModal && <AttendanceModal studentId={attModal} studentName={students.find(s=>s.id===attModal)?.name??''} attendance={attendance} onChange={toggleAtt} onClose={()=>setAttModal(null)}/>}
         {addColModal && <AddColModal subjName={subjects.find(s=>s.id===addColModal)?.name??''} onAdd={(n,t)=>addCol(addColModal,n,t)} onClose={()=>setAddColModal(null)}/>}
         {addSubjModal && <AddSubjectModal onAdd={addSubject} onClose={()=>setAddSubjModal(false)}/>}
+        {showAddStudent && <StudentFormModal groups={[group]} defaultGroupId={group.id}
+          onClose={()=>setShowAddStudent(false)} onSaved={cred=>{setShowAddStudent(false);if(cred)setLastCred(cred);onDataChange?.()}}/>}
+        {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
         {deleteModal}
         {leaveModal}
       </div>

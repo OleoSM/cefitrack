@@ -30,8 +30,8 @@ export default function ModalPortal({
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
       onClick={onClose}>
-      <div
-        className={`w-full ${maxWidth} rounded-2xl animate-scale-in ${scrollable ? 'max-h-[85vh] overflow-y-auto' : ''}`}
+      <div role="dialog" aria-modal="true"
+        className={`w-full min-w-0 ${maxWidth} max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-2xl animate-scale-in ${scrollable ? 'overflow-y-auto' : ''}`}
         style={{
           background:'var(--panel-bg)',
           border: '1px solid var(--card-border)',

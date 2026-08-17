@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, ArrowRight, Filter, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, BookOpen, TrendingUp, Star, Ban } from 'lucide-react'
+import { Users, Clock, MapPin, ArrowRight, Filter, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, BookOpen, TrendingUp, Star, Ban, Columns2, Rows3 } from 'lucide-react'
 import {
   fetchGroups, fetchStudents, fetchAttendanceStats,
   computeGroupStats, createGroup, updateGroup, deleteGroup,
@@ -60,6 +60,8 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
     color:    group?.color ?? COLORES[0],
     sucursal: group?.sucursal ?? '',
     institucion: group?.institucion ?? null,
+    curso: group?.curso ?? (group?.institucion && group.institucion !== 'ecoems' ? 'universidad' : 'ecoems'),
+    instituciones: group?.instituciones ?? (['unam','uam','ipn'].includes(group?.institucion) ? [group.institucion] : []),
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
@@ -67,12 +69,16 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
 
   const handleSubmit = async e => {
     e.preventDefault()
+    if (form.curso === 'universidad' && form.instituciones.length === 0) {
+      setError('Selecciona al menos una institución para Universidad.'); return
+    }
     setSaving(true); setError(null)
     const payload = {
-      name: form.name, subject: form.subject,
+      name: form.name, subject: form.curso === 'ecoems' ? 'ECOEMS' : 'Universidad',
       schedule: form.schedule || null, room: form.room || null,
       color: form.color, sucursal: form.sucursal || null,
-      institucion: form.institucion || null,
+      institucion: form.curso === 'ecoems' ? 'ecoems' : (form.instituciones[0] ?? null),
+      curso:form.curso, instituciones:form.instituciones,
     }
     const res = editing
       ? await updateGroup({ id: group.id, ...payload })
@@ -99,9 +105,14 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--t3)'}}>Curso</label>
+            <select value={form.curso} onChange={e=>set('curso',e.target.value)} className="input-field" required>
+              <option value="ecoems">ECOEMS</option><option value="universidad">Universidad</option>
+            </select>
+          </div>
           {[
             { label:'Nombre del grupo', key:'name', placeholder:'Ej. Grupo D', required:true },
-            { label:'Materia', key:'subject', placeholder:'Ej. Cálculo Diferencial', required:true },
             { label:'Horario', key:'schedule', placeholder:'Ej. Lun / Mié  08:00 – 09:30' },
             { label:'Aula', key:'room', placeholder:'Ej. Aula 201' },
           ].map(f => (
@@ -150,35 +161,33 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
           {/* Institución a la que apunta el grupo. Se guarda la clave, no la
               ruta del archivo: el logo es presentación y puede cambiar de
               formato sin que haya que migrar datos. */}
-          <div>
+          {form.curso === 'universidad' && <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-              style={{ color:'var(--t3)' }}>Institución</label>
-            <div className="grid grid-cols-5 gap-2">
-              {[{ id:null, alt:'Sin asignar' }, ...INSTITUCIONES].map(inst => {
-                const activo = form.institucion === inst.id
+              style={{ color:'var(--t3)' }}>Instituciones objetivo</label>
+            <div className="grid grid-cols-3 gap-2">
+              {INSTITUCIONES.filter(x=>x.id !== 'ecoems').map(inst => {
+                const activo = form.instituciones.includes(inst.id)
                 const logo = inst.id ? logoInstitucion(inst.id) : null
                 return (
-                  <button key={inst.id ?? 'ninguna'} type="button"
-                    onClick={() => set('institucion', inst.id)}
-                    title={logo?.alt ?? 'Sin asignar'}
+                  <button key={inst.id} type="button"
+                    onClick={() => set('instituciones', activo ? form.instituciones.filter(x=>x!==inst.id) : [...form.instituciones,inst.id])}
+                    title={logo?.alt}
                     className="h-14 rounded-xl flex flex-col items-center justify-center gap-1 p-1.5 transition-all active:scale-95"
                     style={{
                       background: activo ? 'var(--soft-bg)' : 'transparent',
                       border: activo ? '2px solid var(--accent)' : '1px solid var(--card-border)',
                     }}>
-                    {logo
-                      ? <img src={logo.src} alt={logo.alt} style={estiloLogo(!temaAdmin?.light)}
-                          className="max-h-7 max-w-full object-contain"/>
-                      : <Ban size={16} style={{ color:'var(--t4)' }}/>}
+                    <img src={logo.src} alt={logo.alt} style={estiloLogo(!temaAdmin?.light)}
+                      className="max-h-7 max-w-full object-contain"/>
                     <span className="text-[8px] font-semibold leading-none truncate w-full text-center"
                       style={{ color: activo ? 'var(--t1)' : 'var(--t3)' }}>
-                      {logo?.alt ?? 'Ninguna'}
+                      {logo.alt}
                     </span>
                   </button>
                 )
               })}
             </div>
-          </div>
+          </div>}
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg px-3 py-2"
@@ -217,6 +226,8 @@ export default function Groups() {
   const [addStudentTo, setAddStudentTo] = useState(null)  // grupo al que se le agrega alumno
   const [lastCred, setLastCred] = useState(null)
   const [sucursal, setSucursal] = useState('todas')
+  const [curso, setCurso] = useState('todos')
+  const [cardColumns, setCardColumns] = useState(1)
 
   const load = useCallback(async () => {
     try {
@@ -239,7 +250,8 @@ export default function Groups() {
   const sucursalOptions = catalogoSucursales
     .filter(s => isAdmin || allowedSucursales.includes(s.id))
     .map(s => s.id)
-  const filteredGroups = sucursal === 'todas' ? visibleGroups : visibleGroups.filter(g => g.sucursal === sucursal)
+  const bySucursal = sucursal === 'todas' ? visibleGroups : visibleGroups.filter(g => g.sucursal === sucursal)
+  const filteredGroups = curso === 'todos' ? bySucursal : bySucursal.filter(g=>g.curso===curso)
   const filteredStudents = students.filter(s => filteredGroups.some(g => g.id === s.groupId))
 
   const globalGrades = filteredStudents.map(s => s.avgGrade).filter(Number.isFinite)
@@ -282,10 +294,18 @@ export default function Groups() {
       {lastCred && <CredentialsPanel cred={lastCred} onClose={() => setLastCred(null)}/>}
 
       {/* Filtro sucursal + alta */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="filter-toolbar">
         <Filter size={14} style={{ color:'var(--t3)' }} />
         <FilterSelect value={sucursal} onChange={setSucursal}
           options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:nombreDe(s) }))]} />
+        <FilterSelect value={curso} onChange={setCurso} options={[
+          {value:'todos',label:'Todos los cursos'},{value:'ecoems',label:'ECOEMS'},{value:'universidad',label:'Universidad'},
+        ]}/>
+        <button type="button" onClick={() => setCardColumns(v => v === 1 ? 2 : 1)}
+          className="btn-secondary p-2.5" title={cardColumns === 1 ? 'Mostrar dos columnas' : 'Mostrar una columna'}
+          aria-label={cardColumns === 1 ? 'Mostrar dos columnas' : 'Mostrar una columna'}>
+          {cardColumns === 1 ? <Columns2 size={16}/> : <Rows3 size={16}/>}<span className="hidden sm:inline text-xs">Vista</span>
+        </button>
         {isAdmin && (
           <button onClick={() => setFormFor({ group: null })} className="btn-primary ml-auto">
             <Plus size={14}/> Nuevo grupo
@@ -321,7 +341,7 @@ export default function Groups() {
         </div>
       )}
 
-      <ProgressiveList items={filteredGroups} className="grid gap-4"
+      <ProgressiveList items={filteredGroups} className={`grid gap-4 ${cardColumns === 2 ? 'lg:grid-cols-2' : 'grid-cols-1'}`}
         sizes={{ mobile: 3, tablet: 6, desktop: 10 }}
         emptyLabel="No hay grupos con ese criterio.">
         {g => {

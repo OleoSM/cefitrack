@@ -394,7 +394,6 @@ export default function MyAttendance() {
               { value: 'presente',    label: 'Presentes' },
               { value: 'tardanza',    label: 'Retardos' },
               { value: 'ausente',     label: 'Ausencias' },
-              { value: 'justificado', label: 'Justificados' },
             ]}/>
         </div>
 

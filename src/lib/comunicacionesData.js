@@ -13,6 +13,13 @@ export async function marcarLeida(id) {
   if (error) throw error
 }
 
+export async function marcarTodasLeidas(ids) {
+  if (!ids?.length) return
+  const { error } = await supabase.from('notifications')
+    .update({ read_at: new Date().toISOString() }).in('id', ids)
+  if (error) throw error
+}
+
 export async function guardarBorradorCorreo({ subject, body, studentIds, includeStudent, includeTutor }) {
   const { data, error } = await supabase.from('email_drafts').insert({
     subject, body, student_ids: studentIds,

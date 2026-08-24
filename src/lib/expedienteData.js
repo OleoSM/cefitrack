@@ -3,6 +3,8 @@ import { supabase } from './supabaseClient'
 export const DOCUMENT_TYPES = [
   { id: 'curp', label: 'CURP' },
   { id: 'ine_tutor', label: 'INE del tutor' },
+  { id: 'garantia', label: 'Garantía firmada' },
+  { id: 'terminos', label: 'T&C firmados a mano' },
 ]
 
 export async function fetchDocumentos(studentId) {

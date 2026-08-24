@@ -117,40 +117,66 @@ function SignaturePad({ onCapture, disabled }) {
 }
 
 // ── Subida de documento ──────────────────────────────────────────────────────
-function DocUpload({ label, icon: Icon, file, onChange, disabled }) {
+/* `onChange` entrega el File, no su nombre. Antes pasaba `files[0].name` —una
+   cadena— y `subirDocumento` hacia `file.name.split(...)` sobre ella: reventaba
+   antes de tocar la red, asi que NINGÚN documento llegaba a subirse. El nombre
+   a mostrar se recibe aparte, ya sea del archivo recien elegido o del que la
+   base de datos tenga registrado. */
+function DocUpload({ label, icon: Icon, fileName, estado, onChange, disabled, motivo }) {
   const ref = useRef(null)
+  const ok = !!fileName
+  const tono = estado === 'validado' ? 'good' : estado === 'rechazado' ? 'bad' : ok ? 'warn' : null
+  const color = tono ? `var(--${tono})` : 'var(--t3)'
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color:'var(--t3)' }}>{label}</p>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color:'var(--t3)' }}>{label}</p>
+        {estado && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background:`var(--${tono}-soft)`, color, border:`1px solid var(--${tono}-line)` }}>
+            {estado === 'validado' ? 'Validado' : estado === 'rechazado' ? 'Rechazado' : 'En revisión'}
+          </span>
+        )}
+      </div>
       <button
         type="button"
         onClick={() => ref.current?.click()}
         disabled={disabled}
         className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all active:scale-[.98] disabled:opacity-50"
         style={{
-          background:  file ? 'var(--good-soft)' : 'var(--soft-bg)',
-          border:     `1px solid ${file ? 'var(--good-soft)' : 'var(--card-bg)'}`,
+          background:  ok ? `var(--${tono}-soft)` : 'var(--soft-bg)',
+          border:     `1px solid ${ok ? `var(--${tono}-line)` : 'var(--card-border)'}`,
         }}>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{
-          background: file ? 'var(--good-soft)' : 'var(--card-bg)',
+          background: ok ? `var(--${tono}-soft)` : 'var(--card-bg)',
         }}>
-          {file
-            ? <CheckCircle2 size={16} style={{ color:'var(--good)' }}/>
+          {ok
+            ? <CheckCircle2 size={16} style={{ color }}/>
             : <Icon         size={16} style={{ color:'var(--t3)' }}/>
           }
         </div>
         <div className="flex-1 min-w-0">
-          {file
-            ? <p className="text-xs font-semibold truncate" style={{ color:'var(--good)' }}>{file}</p>
-            : <p className="text-xs"                        style={{ color:'var(--t3)' }}>Subir archivo (PDF, JPG, PNG)</p>
+          {ok
+            ? <>
+                <p className="text-xs font-semibold truncate" style={{ color }}>{fileName}</p>
+                <p className="text-[10px]" style={{ color:'var(--t3)' }}>Toca para reemplazarlo</p>
+              </>
+            : <p className="text-xs" style={{ color:'var(--t3)' }}>Subir archivo (PDF, JPG, PNG · máx. 10 MB)</p>
           }
         </div>
-        {!file && <Upload size={13} style={{ color:'var(--t4)', flexShrink:0 }}/>}
+        <Upload size={13} style={{ color:'var(--t4)', flexShrink:0 }}/>
       </button>
+      {estado === 'rechazado' && motivo && (
+        <p className="text-[11px] mt-1.5" style={{ color:'var(--bad)' }}>Motivo: {motivo}</p>
+      )}
       <input
         ref={ref} type="file" className="hidden"
         accept=".pdf,.jpg,.jpeg,.png"
-        onChange={e => onChange(e.target.files[0]?.name ?? null)}
+        onChange={e => {
+          const f = e.target.files?.[0]
+          e.target.value = ''          // permite volver a elegir el mismo archivo
+          if (f) onChange(f)
+        }}
       />
     </div>
   )
@@ -234,14 +260,12 @@ export default function Terms() {
 
   const [tab,        setTab]        = useState('tc')
   const [signature,  setSignature]  = useState(null)
-  const [curpFile,   setCurpFile]   = useState(null)
-  const [ineFile,    setIneFile]    = useState(null)
   const [signed,     setSigned]     = useState(false)
   const [signedAt,   setSignedAt]   = useState(null)
   const [tcRead,     setTcRead]     = useState(false)
   const [privRead,   setPrivRead]   = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [handSignedFile, setHandSignedFile] = useState(null) // { name, file } — firmado a mano, no persiste en Supabase todavía
+  const [handSignedFile, setHandSignedFile] = useState(null) // { name, file } elegido, aún sin subir
   const [documents, setDocuments] = useState([])
   const [termsDocument, setTermsDocument] = useState(null)
   const [uploading, setUploading] = useState(null)
@@ -273,10 +297,30 @@ export default function Terms() {
 
   if (!s) return null
 
+  const docDe = tipo => documents.find(d => d.document_type === tipo) ?? null
+  const curpDoc = docDe('curp')
+  const ineDoc  = docDe('ine_tutor')
+  const garantiaDoc = docDe('garantia')
+  const terminosDoc = docDe('terminos')
+
   const hasSignature = !!signature
-  const hasCurp = documents.some(d=>d.document_type === 'curp')
-  const hasIne = documents.some(d=>d.document_type === 'ine_tutor')
+  const hasCurp = !!curpDoc
+  const hasIne  = !!ineDoc
   const canSign = hasSignature && hasCurp && hasIne && tcRead && privRead && !signed
+
+  /* El acceso lo decide la base de datos (`acceso_estado`) tras validar todo el
+     expediente. Aquí sólo se explica QUÉ falta, para que el alumno no vea un
+     "pendiente" sin motivo. */
+  const accesoActivo = s.accesoEstado === 'activo'
+  const garantiaEntregada = garantiaSaved
+    || s.garantiaEstado === 'entregada' || s.garantiaEstado === 'validada'
+  const pendientes = [
+    !signed && 'firmar los Términos y Condiciones',
+    !hasCurp && 'subir tu CURP',
+    !hasIne && 'subir la INE del tutor',
+    !garantiaEntregada && 'entregar la garantía',
+    signed && hasCurp && hasIne && garantiaEntregada && !accesoActivo && 'la validación de administración',
+  ].filter(Boolean)
 
   const checklist = [
     { ok: tcRead,       label:'Términos y Condiciones leídos' },
@@ -321,11 +365,17 @@ export default function Terms() {
 
   const uploadDoc = async (type, file) => {
     if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError(`"${file.name}" pesa más de 10 MB. Comprímelo o toma la foto con menos resolución.`)
+      return
+    }
     setUploading(type)
+    setFormError('')
     try {
-      await subirDocumento(s.id,type,file)
+      await subirDocumento(s.id, type, file)
       setDocuments(await fetchDocumentos(s.id))
-      if (type==='curp') setCurpFile(file); else setIneFile(file)
+    } catch (error) {
+      setFormError(error?.message || 'No se pudo subir el documento. Revisa tu conexión e inténtalo de nuevo.')
     } finally { setUploading(null) }
   }
 
@@ -334,7 +384,7 @@ export default function Terms() {
     setSubmitting(true)
     setFormError('')
     try { await guardarGarantia(s.id,garantiaAlumno,garantiaTutor); setGarantiaSaved(true) }
-    catch (error) { setFormError(error?.message || 'No se pudo guardar la garantía. El backend todavía no está disponible.') }
+    catch (error) { setFormError(error?.message || 'No se pudo guardar la garantía. Inténtalo de nuevo.') }
     finally { setSubmitting(false) }
   }
 
@@ -366,26 +416,28 @@ export default function Terms() {
         </span>
       </div>
 
-      {/* Banner de estado */}
-      {!signed && (
-        <div className="flex gap-3 p-4 rounded-xl" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-soft)' }}>
+      {/* Banner de estado — refleja `acceso_estado`, no sólo la firma: el
+          acceso no se activa hasta que administración valida el expediente. */}
+      {accesoActivo ? (
+        <div className="flex gap-3 p-4 rounded-xl" style={{ background:'var(--good-soft)', border:'1px solid var(--good-line)' }}>
+          <CheckCircle2 size={16} style={{ color:'var(--good)', flexShrink:0, marginTop:2 }}/>
+          <div>
+            <p className="text-sm font-semibold" style={{ color:'var(--good)' }}>Acceso activo</p>
+            <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
+              Tu expediente está completo y validado{signedAt ? `. Firmado el ${signedAt}` : ''}.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-3 p-4 rounded-xl" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
           <AlertTriangle size={16} style={{ color:'var(--warn)', flexShrink:0, marginTop:2 }}/>
           <div>
             <p className="text-sm font-semibold" style={{ color:'var(--warn)' }}>Acceso pendiente de activación</p>
             <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
-              Lee los documentos, sube tu CURP e INE del tutor, y dibuja tu firma para completar el registro.
-              La validez de la firma es responsabilidad enteramente del alumno.
-            </p>
-          </div>
-        </div>
-      )}
-      {signed && (
-        <div className="flex gap-3 p-4 rounded-xl" style={{ background:'var(--good-soft)', border:'1px solid var(--good-soft)' }}>
-          <CheckCircle2 size={16} style={{ color:'var(--good)', flexShrink:0, marginTop:2 }}/>
-          <div>
-            <p className="text-sm font-semibold" style={{ color:'var(--good)' }}>Documentos firmados</p>
-            <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
-              Firmado el {signedAt}. Tu firma fue guardada en tu perfil.
+              {pendientes.length
+                ? <>Falta {pendientes.join(', ').replace(/, ([^,]*)$/, ' y $1')}.</>
+                : 'Tu expediente está en revisión.'}
+              {' '}La validez de la firma es responsabilidad enteramente del alumno.
             </p>
           </div>
         </div>
@@ -479,8 +531,21 @@ export default function Terms() {
           {/* Documentos */}
           <div className="card p-5 space-y-4">
             <h2 className="section-title">Documentos</h2>
-            <DocUpload label={uploading==='curp'?'Subiendo CURP…':'CURP del alumno'} icon={FileText} file={curpFile ?? (hasCurp?{name:documents.find(d=>d.document_type==='curp')?.file_name}:null)} onChange={f=>uploadDoc('curp',f)} disabled={uploading==='curp'}/>
-            <DocUpload label={uploading==='ine_tutor'?'Subiendo INE…':'INE / Identificación del tutor'} icon={Shield} file={ineFile ?? (hasIne?{name:documents.find(d=>d.document_type==='ine_tutor')?.file_name}:null)} onChange={f=>uploadDoc('ine_tutor',f)} disabled={uploading==='ine_tutor'}/>
+            <DocUpload
+              label={uploading==='curp' ? 'Subiendo CURP…' : 'CURP del alumno'}
+              icon={FileText} fileName={curpDoc?.file_name} estado={curpDoc?.status}
+              motivo={curpDoc?.rejection_reason}
+              onChange={f => uploadDoc('curp', f)} disabled={uploading==='curp'}/>
+            <DocUpload
+              label={uploading==='ine_tutor' ? 'Subiendo INE…' : 'INE / Identificación del tutor'}
+              icon={Shield} fileName={ineDoc?.file_name} estado={ineDoc?.status}
+              motivo={ineDoc?.rejection_reason}
+              onChange={f => uploadDoc('ine_tutor', f)} disabled={uploading==='ine_tutor'}/>
+            <DocUpload
+              label={uploading==='garantia' ? 'Subiendo garantía…' : 'Garantía firmada (opcional si la firmas aquí abajo)'}
+              icon={FileSignature} fileName={garantiaDoc?.file_name} estado={garantiaDoc?.status}
+              motivo={garantiaDoc?.rejection_reason}
+              onChange={f => uploadDoc('garantia', f)} disabled={uploading==='garantia'}/>
           </div>
 
           <div className="card p-5 space-y-4">
@@ -497,7 +562,7 @@ export default function Terms() {
                 {value?'✓ ':''}{label}
               </button>)}
             </div>
-            {!(signatureTarget==='terms'&&signed) && !(signatureTarget!=='terms'&&garantiaSaved) && (
+            {!(signatureTarget==='terms'&&signed) && !(signatureTarget!=='terms'&&garantiaEntregada) && (
               <SignaturePad onCapture={value=>{
                 if(signatureTarget==='terms') setSignature(value)
                 else if(signatureTarget==='guarantee_student') setGarantiaAlumno(value)
@@ -513,8 +578,10 @@ export default function Terms() {
           </div>
 
           <div className="card p-5 space-y-4">
-            <div><h2 className="section-title">Garantía</h2><p className="text-xs mt-1" style={{color:'var(--t3)'}}>El alumno y el tutor aceptan la garantía y firman de manera independiente.</p></div>
-            {garantiaSaved ? <div className="flex gap-2 text-sm" style={{color:'var(--good)'}}><CheckCircle2 size={16}/> Garantía entregada; administración debe validarla.</div> : <>
+            <div><h2 className="section-title">Garantía</h2><p className="text-xs mt-1" style={{color:'var(--t3)'}}>El alumno y el tutor aceptan la garantía y firman de manera independiente. Si la firmaron en papel, basta con subir el archivo arriba.</p></div>
+            {s.garantiaEstado === 'validada'
+              ? <div className="flex gap-2 text-sm" style={{color:'var(--good)'}}><CheckCircle2 size={16}/> Garantía validada por administración.</div>
+              : garantiaEntregada ? <div className="flex gap-2 text-sm" style={{color:'var(--warn)'}}><Clock size={16}/> Garantía entregada; administración debe validarla.</div> : <>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded-xl p-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)',color:garantiaAlumno?'var(--good)':'var(--t3)'}}>{garantiaAlumno?'✓':'○'} Firma del alumno</div>
                 <div className="rounded-xl p-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)',color:garantiaTutor?'var(--good)':'var(--t3)'}}>{garantiaTutor?'✓':'○'} Firma del tutor</div>
@@ -585,6 +652,29 @@ export default function Terms() {
                     </button>
                     <HandSignedUpload file={handSignedFile} onChange={setHandSignedFile}/>
                   </div>
+                  {handSignedFile && (
+                    <button type="button" disabled={uploading === 'terminos'}
+                      onClick={async () => {
+                        await uploadDoc('terminos', handSignedFile.file)
+                        setHandSignedFile(null)
+                      }}
+                      className="btn-primary w-full justify-center text-xs py-2 disabled:opacity-50">
+                      <Upload size={13}/> {uploading === 'terminos' ? 'Subiendo…' : 'Entregar este PDF firmado'}
+                    </button>
+                  )}
+                  {terminosDoc && (
+                    <div className="flex items-center gap-2 rounded-xl px-3 py-2"
+                      style={{ background:'var(--good-soft)', border:'1px solid var(--good-line)' }}>
+                      <CheckCircle2 size={13} style={{ color:'var(--good)' }}/>
+                      <span className="text-xs flex-1 truncate" style={{ color:'var(--good)' }}>
+                        Entregado: {terminosDoc.file_name}
+                      </span>
+                      <span className="text-[10px] font-bold" style={{ color:'var(--t3)' }}>
+                        {terminosDoc.status === 'validado' ? 'Validado'
+                          : terminosDoc.status === 'rechazado' ? 'Rechazado' : 'En revisión'}
+                      </span>
+                    </div>
+                  )}
                   {handSignedUrl && (
                     <div className="rounded-xl overflow-hidden" style={{ border:'1px solid var(--good-line)', background:'var(--soft-bg)' }}>
                       <div className="flex items-center justify-between gap-2 px-3 py-2" style={{ borderBottom:'1px solid var(--divider)' }}>
@@ -597,8 +687,8 @@ export default function Terms() {
                     </div>
                   )}
                   <p className="text-[10px]" style={{ color:'var(--t4)' }}>
-                    Descarga, fírmalo a mano y vuelve a subirlo aquí. El PDF que subas se adjunta a tu registro localmente por ahora —
-                    la subida permanente a almacenamiento seguro está pendiente de habilitarse por el administrador.
+                    Descarga el documento, fírmalo a mano y súbelo aquí. Queda guardado en tu
+                    expediente y administración lo revisa igual que el resto de tus documentos.
                   </p>
                 </div>
               </>

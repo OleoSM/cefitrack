@@ -22,14 +22,19 @@ export function promedioExamenes(evs) {
   return +(pool.reduce((sum, e) => sum + calificacionBase10(e), 0) / pool.length).toFixed(2)
 }
 
-/* Asistencia real del alumno (3 retardos = 1 inasistencia; justificados no cuentan). */
+/* Asistencia real del alumno: 3 retardos = 1 inasistencia. Ya no hay estado
+   "justificado" —el centro sólo distingue tardanza de inasistencia—, así que
+   toda sesión registrada cuenta. */
 export function statsAsistencia(records = []) {
-  const counts = { presente: 0, tardanza: 0, ausente: 0, justificado: 0 }
-  records.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1 })
+  const counts = { presente: 0, tardanza: 0, ausente: 0 }
+  records.forEach(r => {
+    const estado = r.status === 'presente' || r.status === 'tardanza' ? r.status : 'ausente'
+    counts[estado] += 1
+  })
   const tardanzasConvertidas = Math.floor(counts.tardanza / 3)
   const tardanzasRestantes   = counts.tardanza % 3
   const ausentesEfectivos    = counts.ausente + tardanzasConvertidas
-  const contabiles           = records.length - counts.justificado
+  const contabiles           = records.length
   // Sin sesiones capturadas devolvía 100 %, y la tarjeta mostraba "100 % de
   // asistencia · 0 presentes". No hay dato, no hay porcentaje.
   const pct = contabiles > 0

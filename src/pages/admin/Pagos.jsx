@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import {
   Wallet, Search, Plus, Trash2, Pencil, X, Building2, Users,
   CreditCard, WalletCards, Banknote, ArrowLeftRight, CheckCircle2, AlertTriangle,
+  StickyNote, Ticket,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
@@ -487,8 +488,30 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
           </div>
         )}
 
+        {/* Las notas del plan se leen ANTES de cobrar: quien registra necesita
+            el contexto (beca, acuerdo de pago, adeudo previo) para no aplicar
+            un importe que luego hay que deshacer. */}
+        {fila.planId && !editandoPlan && (fila.notas || fila.pagoEstado) && (
+          <div className="rounded-xl p-3.5 flex items-start gap-2.5"
+            style={{ background: 'var(--warn-soft)', border: '1px solid var(--warn-line)' }}>
+            <StickyNote size={15} style={{ color: 'var(--warn)', flexShrink: 0, marginTop: 1 }}/>
+            <div className="min-w-0 text-xs" style={{ color: 'var(--t2)' }}>
+              <p className="font-bold mb-0.5" style={{ color: 'var(--warn)' }}>Notas del alumno</p>
+              {fila.notas && <p className="whitespace-pre-line">{fila.notas}</p>}
+              {fila.pagoEstado && (
+                <p className="mt-1" style={{ color: 'var(--t3)' }}>
+                  Estado en la hoja de calificaciones: “{fila.pagoEstado}”
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {fila.planId && !editandoPlan && (
           <>
+            <FormInscripcion fila={fila} pagos={pagos}
+              onRegistrado={onCambio} onError={setError}/>
+
             {/* ── Mes a mes ─────────────────────────────────────────────── */}
             <section className="space-y-2">
               <h3 className="section-title">Pagos mes a mes</h3>
@@ -557,6 +580,11 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                               LIQUIDA EL TOTAL
                             </span>
                           )}
+                          {p.esInscripcion && (
+                            <span className="ml-2 text-[10px] font-semibold" style={{ color: 'var(--warn)' }}>
+                              INSCRIPCIÓN
+                            </span>
+                          )}
                         </p>
                         <p className="text-[11px] truncate" style={{ color: 'var(--t3)' }}>
                           {p.fecha}
@@ -564,7 +592,7 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                           {` · ${p.concepto}`}
                           {p.referencia ? ` · ref. ${p.referencia}` : ''}
                           {p.nota ? ` · ${p.nota}` : ''}
-                          {` · Registró: ${p.createdByName}`}
+                          {` · Registro: ${p.registradoPor ?? p.createdByName}`}
                         </p>
                       </div>
                       <button onClick={() => eliminar(p.id)} title="Eliminar movimiento"
@@ -637,6 +665,7 @@ function FormPlan({ fila, onCancel, onGuardado }) {
     mensualidades: fila.mensualidades ?? 6,
     inicio: fila.inicio ?? claveMes(new Date().toISOString().slice(0, 10)),
     notas: fila.notas ?? '',
+    inscripcion: fila.inscripcion ?? '',
   })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
@@ -651,6 +680,7 @@ function FormPlan({ fila, onCancel, onGuardado }) {
       modalidad: f.modalidad,
       mensualidades: f.modalidad === 'contado' ? 1 : Number(f.mensualidades),
       inicio: f.inicio, concepto: f.concepto, notas: f.notas || null,
+      inscripcion: f.inscripcion === '' ? null : Number(f.inscripcion),
     })
     setGuardando(false)
     if (!res.ok) { setError(res.message); return }
@@ -666,6 +696,11 @@ function FormPlan({ fila, onCancel, onGuardado }) {
         <Campo label="Concepto" className="col-span-2">
           <input value={f.concepto} onChange={e => setF(v => ({ ...v, concepto: e.target.value }))}
             className="input-field text-sm" placeholder="Curso 2026-A"/>
+        </Campo>
+        <Campo label="Inscripción">
+          <input type="number" min="0" step="0.01" value={f.inscripcion}
+            onChange={e => setF(v => ({ ...v, inscripcion: e.target.value }))}
+            className="input-field text-sm" placeholder="Aparte del curso"/>
         </Campo>
         <Campo label="Total del curso">
           <input type="number" min="1" step="0.01" value={f.total} required
@@ -710,14 +745,138 @@ function FormPlan({ fila, onCancel, onGuardado }) {
   )
 }
 
+/* ── Inscripción ─────────────────────────────────────────────────────────────
+   Va aparte del pago del curso a propósito: se cobra una sola vez, no cuelga de
+   ningún mes y no cuenta contra el total de las mensualidades. Cuando se
+   registraba como un movimiento más, inflaba el porcentaje pagado y el saldo
+   dejaba de coincidir con lo que faltaba por cobrar del curso. */
+function FormInscripcion({ fila, pagos, onRegistrado, onError }) {
+  const hoy = new Date().toISOString().slice(0, 10)
+  const cobrada = pagos.filter(p => p.esInscripcion)
+  const totalCobrado = cobrada.reduce((a, p) => a + (p.monto ?? 0), 0)
+  const esperada = fila.inscripcion ?? null
+  const liquidada = esperada != null && totalCobrado >= esperada
+
+  const [abierto, setAbierto] = useState(false)
+  const [f, setF] = useState({
+    monto: '', metodo: 'efectivo', fecha: hoy, referencia: '', nota: '',
+    registro: localStorage.getItem('siga_pagos_registro') ?? '',
+  })
+  const [guardando, setGuardando] = useState(false)
+
+  const enviar = async (e) => {
+    e.preventDefault()
+    const monto = Number(f.monto)
+    if (!(monto > 0)) { onError('El importe de la inscripción debe ser mayor que cero.'); return }
+    if (!f.registro.trim()) { onError('Escribe tu nombre en «Registro»: debe constar quién recibió el pago.'); return }
+    setGuardando(true)
+    const res = await registrarPago({
+      planId: fila.planId, monto, metodo: f.metodo, fecha: f.fecha,
+      concepto: 'Inscripción', esInscripcion: true,
+      referencia: f.referencia || null, nota: f.nota || null,
+      registradoPor: f.registro.trim(),
+    })
+    setGuardando(false)
+    if (!res.ok) { onError(res.message); return }
+    onError(null)
+    localStorage.setItem('siga_pagos_registro', f.registro.trim())
+    setF(v => ({ ...v, monto: '', referencia: '', nota: '' }))
+    setAbierto(false)
+    onRegistrado()
+  }
+
+  return (
+    <section className="rounded-xl p-4 space-y-3"
+      style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="section-title flex items-center gap-2"><Ticket size={14}/> Inscripción</h3>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+          style={liquidada
+            ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
+            : totalCobrado > 0
+              ? { background:'var(--warn-soft)', color:'var(--warn)', border:'1px solid var(--warn-line)' }
+              : { background:'var(--card-bg)', color:'var(--t3)', border:'1px solid var(--divider)' }}>
+          {totalCobrado > 0 ? mxn(totalCobrado) : 'Sin cobrar'}
+          {esperada != null && ` de ${mxn(esperada)}`}
+        </span>
+      </div>
+
+      <p className="text-[11px]" style={{ color:'var(--t3)' }}>
+        Se registra por separado del curso: no cuenta contra el total del plan ni contra ningún mes.
+      </p>
+
+      {!abierto ? (
+        <button type="button" onClick={() => setAbierto(true)}
+          className="btn-secondary text-xs py-2">
+          <Plus size={13}/> Registrar inscripción
+        </button>
+      ) : (
+        <form onSubmit={enviar} className="space-y-3">
+          <div className="flex flex-wrap gap-1.5">
+            {METODOS.map(m => {
+              const Icon = METODO_ICON[m]
+              const activo = f.metodo === m
+              return (
+                <button key={m} type="button" onClick={() => setF(v => ({ ...v, metodo: m }))}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all active:scale-95"
+                  style={activo
+                    ? { background: METODO_COLOR[m], color: '#fff', border: `1px solid ${METODO_COLOR[m]}` }
+                    : { background: 'var(--card-bg)', color: 'var(--t2)', border: '1px solid var(--card-border)' }}>
+                  <Icon size={13}/> {METODO_LABEL[m]}
+                </button>
+              )
+            })}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <Campo label="Importe">
+              <input type="number" min="0.01" step="0.01" value={f.monto} required
+                onChange={e => setF(v => ({ ...v, monto: e.target.value }))}
+                className="input-field text-sm"
+                placeholder={esperada != null ? String(esperada) : '500'}/>
+            </Campo>
+            <Campo label="Fecha">
+              <input type="date" value={f.fecha}
+                onChange={e => setF(v => ({ ...v, fecha: e.target.value }))}
+                className="input-field text-sm"/>
+            </Campo>
+            <Campo label="Referencia">
+              <input value={f.referencia} onChange={e => setF(v => ({ ...v, referencia: e.target.value }))}
+                className="input-field text-sm" placeholder="Folio o autorización"/>
+            </Campo>
+            <Campo label="Registro">
+              <input value={f.registro} onChange={e => setF(v => ({ ...v, registro: e.target.value }))}
+                className="input-field text-sm" placeholder="Tu nombre" required/>
+            </Campo>
+            <Campo label="Nota" className="col-span-2 sm:col-span-4">
+              <input value={f.nota} onChange={e => setF(v => ({ ...v, nota: e.target.value }))}
+                className="input-field text-sm" placeholder="Opcional"/>
+            </Campo>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setAbierto(false)}
+              className="btn-secondary text-xs py-2">Cancelar</button>
+            <button type="submit" disabled={guardando} className="btn-primary text-sm py-2 ml-auto">
+              <Plus size={14}/> {guardando ? 'Guardando…' : 'Registrar inscripción'}
+            </button>
+          </div>
+        </form>
+      )}
+    </section>
+  )
+}
+
 /* ── Registro de un movimiento ───────────────────────────────────────────── */
 function FormPago({ fila, calendario, onRegistrado, onError }) {
   const hoy = new Date().toISOString().slice(0, 10)
   const primeroPendiente = calendario.find(m => !m.cubierto)?.mes ?? ''
 
+  /* El nombre de quien cobra se recuerda entre movimientos: en un mostrador
+     lo normal es que la misma persona registre varios pagos seguidos, y
+     volver a teclearlo cada vez invita a dejarlo en blanco. */
   const [f, setF] = useState({
     monto: '', metodo: 'efectivo', fecha: hoy,
     periodo: primeroPendiente, contado: false, concepto:'Pago de curso', referencia: '', nota: '',
+    registro: localStorage.getItem('siga_pagos_registro') ?? '',
   })
   const [guardando, setGuardando] = useState(false)
 
@@ -725,6 +884,7 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
     e.preventDefault()
     const monto = Number(f.monto)
     if (!(monto > 0)) { onError('El importe debe ser mayor que cero.'); return }
+    if (!f.registro.trim()) { onError('Escribe tu nombre en «Registro»: debe constar quién recibió el pago.'); return }
     setGuardando(true)
     const res = await registrarPago({
       planId: fila.planId, monto, metodo: f.metodo, fecha: f.fecha,
@@ -732,10 +892,12 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
       cubreTotal: f.contado,
       concepto: f.concepto,
       referencia: f.referencia || null, nota: f.nota || null,
+      registradoPor: f.registro.trim(),
     })
     setGuardando(false)
     if (!res.ok) { onError(res.message); return }
     onError(null)
+    localStorage.setItem('siga_pagos_registro', f.registro.trim())
     setF(v => ({ ...v, monto: '', referencia: '', nota: '', contado: false }))
     onRegistrado()
   }
@@ -799,6 +961,13 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
         <Campo label="Referencia">
           <input value={f.referencia} onChange={e => setF(v => ({ ...v, referencia: e.target.value }))}
             className="input-field text-sm" placeholder="Folio o autorización"/>
+        </Campo>
+        {/* Quién recibió el dinero. Va escrito a mano y no deducido de la
+            sesión: el mostrador se comparte, y el movimiento tiene que poder
+            reclamarse a una persona concreta. */}
+        <Campo label="Registro">
+          <input value={f.registro} onChange={e => setF(v => ({ ...v, registro: e.target.value }))}
+            className="input-field text-sm" placeholder="Tu nombre" required/>
         </Campo>
         <Campo label="Nota" className="col-span-2 sm:col-span-4">
           <input value={f.nota} onChange={e => setF(v => ({ ...v, nota: e.target.value }))}

@@ -7,7 +7,6 @@ import {
   DataTable, DataTableRow,
   DataTableAvatar, DataTableBadge, DataTableBar,
 } from '../../components/ui/DataTable'
-import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import { useAuth } from '../../context/AuthContext'
 import StudentFormModal from '../../components/admin/StudentFormModal'
@@ -47,7 +46,6 @@ export default function Students() {
   const [groupFilter, setGroup]   = useState('all')
   const [statusFilter, setStatus] = useState('all')
   const [sort, setSort]           = useState('name')
-  const [visual, setVisual]       = useState(false)   // ← modo visual
 
   /* CRUD */
   const [formFor, setFormFor]     = useState(null)   // { student } | { student:null } para alta
@@ -167,35 +165,12 @@ export default function Students() {
             </div>
           ))}
 
-          {/* ── Checkbox modo visual ──────────────────────────── */}
-          <div className="flex items-end pb-0.5">
-            <NeonCheckbox
-              checked={visual}
-              onChange={e => setVisual(e.target.checked)}
-              label="Vista por grupo"
-              color="#5D3E90"
-            />
-          </div>
-
         </>
       </FilterBar>
 
       <p className="text-[11px] flex items-center gap-1.5 px-1" style={{ color:'var(--t3)' }}>
         <Users size={11} />
         {filtered.length} de {students.length} alumnos
-        {visual && (
-          <span className="ml-2 hidden sm:flex items-center gap-1.5">
-            {visibleGroups.map(g => {
-              const accent = getAccent(g.id)
-              return (
-                <span key={g.id} className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full" style={{ background: accent }} />
-                  <span style={{ color:'var(--t3)' }}>{g.name}</span>
-                </span>
-              )
-            })}
-          </span>
-        )}
       </p>
 
       {/* ── Tabla ───────────────────────────────────────────── */}
@@ -213,13 +188,10 @@ export default function Students() {
           const ac          = attColor(s.attendanceRate ?? 0)
           const groupAccent = getAccent(s.groupId)   // mismo color que Groups / Attendance / Registrar
 
-          /* En modo visual: la fila toma el color del grupo */
-          const rowStyle = visual
-            ? {
-                borderLeft:  `3px solid ${groupAccent}`,
-                background:  `${groupAccent}0d`,
-              }
-            : {}
+          /* La lista es de ALUMNOS: se recorre buscando a una persona, y el
+             grupo ya viaja en su propia columna. Teñir la fila entera del
+             color del grupo convertía la búsqueda en una lectura por bloques
+             de color y competía con los indicadores de riesgo. */
 
           // El avatar siempre muestra el color del grupo (coincide con el resto de la app)
           const avatarColor = ac
@@ -228,7 +200,6 @@ export default function Students() {
             <DataTableRow
               key={s.id}
               onClick={() => navigate(`/admin/alumnos/${s.id}`)}
-              style={rowStyle}
               cells={[
                 /* Alumno */
                 {
@@ -252,11 +223,8 @@ export default function Students() {
                   className: 'w-28 hidden md:flex',
                   content: (
                     <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full transition-all duration-300"
-                      style={visual
-                        ? { background:`${groupAccent}25`, color: groupAccent, border:`1px solid ${groupAccent}55` }
-                        : { background:'var(--soft-bg)', color:'var(--t2)' }
-                      }>
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background:'var(--soft-bg)', color:'var(--t2)' }}>
                       {grp?.name}
                     </span>
                   ),
@@ -269,7 +237,7 @@ export default function Students() {
                     : (
                       <DataTableBar
                         value={s.attendanceRate}
-                        color={visual ? groupAccent : ac}
+                        color={ac}
                         label={`${s.attendanceRate}%`}
                       />
                     ),
@@ -293,7 +261,7 @@ export default function Students() {
                       <DataTableBar
                         value={s.assignmentsDone}
                         max={s.assignmentsTotal}
-                        color={visual ? groupAccent : 'var(--info)'}
+                        color="var(--info)"
                         label={`${s.assignmentsDone}/${s.assignmentsTotal}`}
                       />
                     )

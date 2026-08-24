@@ -111,23 +111,15 @@ const ICONOS_ASISTENCIA = {
       <line x1="15" y1="12.5" x2="9" y2="18.5"/>
     </IconoEstado>
   ),
-  /* Documento validado: la falta va respaldada por un justificante */
-  justificado: (
-    <IconoEstado>
-      <path d="M8.5 12h5l2 2v5.5h-7zM13.5 12v2h2"/>
-      <path d="m10 16 1.25 1.25 2.5-2.5"/>
-    </IconoEstado>
-  ),
 }
 
 /* Relleno mate de cada estado. Es un token, nunca un color literal: cada
    identidad (default / IPN / UNAM) publica el suyo, y los tres están
    calibrados para llevar texto blanco encima. */
 const RELLENO_ASISTENCIA = {
-  presente:    'var(--good-solid)',
-  tardanza:    'var(--warn-solid)',
-  ausente:     'var(--bad-solid)',
-  justificado: 'var(--info-solid)',
+  presente: 'var(--good-solid)',
+  tardanza: 'var(--warn-solid)',
+  ausente:  'var(--bad-solid)',
 }
 
 export default function StudentProfile() {
@@ -238,11 +230,13 @@ export default function StudentProfile() {
   const cfg   = getStatusConfig(s.status)
   const accent = getAccent(s.groupId)
 
+  /* Sin "justificado": el criterio del centro es tardanza o inasistencia, y
+     tres tardanzas hacen una inasistencia. Una cuarta categoría que no cambia
+     ese cálculo sólo repartía la gráfica en un trozo que nadie usaba. */
   const attCounts = {
-    presente:    att.filter(a => a.status === 'presente').length,
-    tardanza:    att.filter(a => a.status === 'tardanza').length,
-    ausente:     att.filter(a => a.status === 'ausente').length,
-    justificado: att.filter(a => a.status === 'justificado').length,
+    presente: att.filter(a => a.status === 'presente').length,
+    tardanza: att.filter(a => a.status === 'tardanza').length,
+    ausente:  att.filter(a => a.status !== 'presente' && a.status !== 'tardanza').length,
   }
   const attPie = Object.entries(attCounts).map(([k, v]) => ({
     name: attendanceColors[k].label, value: v,

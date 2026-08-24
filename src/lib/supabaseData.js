@@ -118,6 +118,9 @@ export async function fetchStudents() {
     tutor: { name: s.tutor_name, email: s.tutor_email, phone: s.tutor_phone, whatsapp: s.tutor_whatsapp },
     universidadArea: s.universidad_area,
     garantiaEstado: s.garantia_estado,
+    garantiaAceptada: s.garantia_aceptada,
+    garantiaFirmaAlumno: s.garantia_firma_alumno,
+    garantiaFirmaTutor: s.garantia_firma_tutor,
     accesoEstado: s.acceso_estado,
     attendanceRate: num(s.attendance_rate),
     avgGrade: num(s.avg_grade),
@@ -155,6 +158,9 @@ export async function fetchStudentById(id) {
     tutor: { name: data.tutor_name, email: data.tutor_email, phone: data.tutor_phone, whatsapp: data.tutor_whatsapp },
     universidadArea: data.universidad_area,
     garantiaEstado: data.garantia_estado,
+    garantiaAceptada: data.garantia_aceptada,
+    garantiaFirmaAlumno: data.garantia_firma_alumno,
+    garantiaFirmaTutor: data.garantia_firma_tutor,
     accesoEstado: data.acceso_estado,
     attendanceRate: num(data.attendance_rate),
     avgGrade: num(data.avg_grade),
@@ -528,6 +534,24 @@ export async function updateStudent({ id, name, email, groupId, tutor = {}, sucu
 
 export async function deleteStudent(id) {
   const { error } = await supabase.rpc('delete_student', { p_id: id })
+  if (error) throw error
+}
+
+/**
+ * Datos de contacto y área, sin tocar el resto del alumno.
+ *
+ * La hoja de calificaciones necesita cambiar SÓLO el área desde un desplegable
+ * de celda; pasar por `updateStudent` obligaría a reenviar nombre, correo y
+ * grupo, y cualquier valor obsoleto en memoria pisaría el dato bueno.
+ */
+export async function actualizarContactoAlumno({ id, personalEmail = null, whatsapp = null, tutorWhatsapp = null, universidadArea = null }) {
+  const { error } = await supabase.rpc('actualizar_contacto_alumno', {
+    p_student_id: id,
+    p_personal_email: personalEmail,
+    p_whatsapp: whatsapp,
+    p_tutor_whatsapp: tutorWhatsapp,
+    p_universidad_area: universidadArea,
+  })
   if (error) throw error
 }
 

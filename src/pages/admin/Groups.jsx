@@ -15,6 +15,7 @@ import { useGroupColors } from '../../hooks/useGroupColors'
 import { logoInstitucion, INSTITUCIONES, estiloLogo } from '../../lib/instituciones'
 import { useAdminTheme } from '../../context/AdminThemeContext'
 import ProgressiveList from '../../components/ui/ProgressiveList'
+import IconoCurso from '../../components/ui/IconoCurso'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
 
@@ -298,9 +299,33 @@ export default function Groups() {
         <Filter size={14} style={{ color:'var(--t3)' }} />
         <FilterSelect value={sucursal} onChange={setSucursal}
           options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:nombreDe(s) }))]} />
-        <FilterSelect value={curso} onChange={setCurso} options={[
-          {value:'todos',label:'Todos los cursos'},{value:'ecoems',label:'ECOEMS'},{value:'universidad',label:'Universidad'},
-        ]}/>
+        {/* Botones, no desplegable: la lista de grupos es larga y separarla en
+            ECOEMS / Universidad es el corte que más se usa. Con un <select> hay
+            que abrirlo para ver que existe la división. */}
+        <div className="flex items-center gap-1 p-1 rounded-xl"
+          style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
+          role="group" aria-label="Filtrar por vertiente">
+          {[
+            { value:'todos', label:'Todos', icon:null },
+            { value:'ecoems', label:'ECOEMS', icon:<IconoCurso curso="ecoems" size={16}/> },
+            { value:'universidad', label:'Universidad', icon:<IconoCurso curso="universidad" size={16}/> },
+          ].map(o => {
+            const activo = curso === o.value
+            const n = o.value === 'todos' ? bySucursal.length : bySucursal.filter(g => g.curso === o.value).length
+            return (
+              <button key={o.value} type="button" onClick={() => setCurso(o.value)}
+                aria-pressed={activo}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95"
+                style={activo
+                  ? { background:'var(--accent)', color:'var(--accent-contrast)' }
+                  : { background:'transparent', color:'var(--t3)' }}>
+                {o.icon}
+                <span>{o.label}</span>
+                <span className="text-[10px] font-black opacity-70">{n}</span>
+              </button>
+            )
+          })}
+        </div>
         <button type="button" onClick={() => setCardColumns(v => v === 1 ? 2 : 1)}
           className="btn-secondary p-2.5" title={cardColumns === 1 ? 'Mostrar dos columnas' : 'Mostrar una columna'}
           aria-label={cardColumns === 1 ? 'Mostrar dos columnas' : 'Mostrar una columna'}>

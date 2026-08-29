@@ -3,7 +3,7 @@ import { X, Plus, Save, AlertCircle, RefreshCw, Eye, EyeOff, Building2 } from 'l
 import { createStudent, updateStudent } from '../../lib/supabaseData'
 import { generarPassword, generarUsuario, DOMINIO_CORREO } from '../../lib/credentials'
 import { useSucursales } from '../../hooks/useSucursales'
-import { AREAS_UNIVERSIDAD } from '../../lib/areas'
+import { areasParaInstituciones } from '../../lib/areas'
 import ModalPortal from '../ui/ModalPortal'
 
 /**
@@ -23,6 +23,10 @@ export default function StudentFormModal({
   const [sucursalFiltro, setSucursalFiltro] = useState(() => {
     const inicial = student?.groupId ?? defaultGroupId
     return groups.find(g => g.id === inicial)?.sucursal ?? 'todas'
+  })
+  const [cursoFiltro, setCursoFiltro] = useState(() => {
+    const inicial = student?.groupId ?? defaultGroupId
+    return groups.find(g => g.id === inicial)?.curso ?? 'ecoems'
   })
 
   const [form, setForm] = useState({
@@ -74,10 +78,10 @@ export default function StudentFormModal({
     }
   }
 
-  const gruposVisibles = sucursalFiltro === 'todas'
-    ? groups
-    : groups.filter(g => g.sucursal === sucursalFiltro)
+  const gruposVisibles = groups.filter(g =>
+    g.curso === cursoFiltro && (sucursalFiltro === 'todas' || g.sucursal === sucursalFiltro))
   const grupoElegido = groups.find(g => g.id === form.groupId) ?? null
+  const areasDisponibles = areasParaInstituciones(grupoElegido?.instituciones ?? [])
 
   const campo = (label, key, props = {}) => (
     <div>
@@ -114,6 +118,22 @@ export default function StudentFormModal({
             <p className="text-[10px] mt-1" style={{ color: 'var(--t4)' }}>
               Con este correo inicia sesión el alumno.
             </p>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--t3)'}}>Curso</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[['ecoems','ECOEMS'],['universidad','Universidad']].map(([id,label]) => (
+                <button key={id} type="button" onClick={() => {
+                  setCursoFiltro(id)
+                  if (groups.find(g => g.id === form.groupId)?.curso !== id) set('groupId','')
+                  if (id === 'ecoems') set('universidadArea','')
+                }} className="min-h-11 rounded-xl text-xs font-bold"
+                  style={{background:cursoFiltro===id?'var(--accent)':'var(--soft-bg)',color:cursoFiltro===id?'var(--accent-contrast)':'var(--t2)',border:'1px solid var(--card-border)'}}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -182,7 +202,7 @@ export default function StudentFormModal({
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--t3)'}}>Área universitaria</label>
             <select required value={form.universidadArea} onChange={e=>set('universidadArea',e.target.value)} className="input-field">
               <option value="">Seleccionar área…</option>
-              {AREAS_UNIVERSIDAD.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+              {areasDisponibles.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
             </select>
           </div>}
 

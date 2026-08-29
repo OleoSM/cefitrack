@@ -171,7 +171,7 @@ function DocUpload({ label, icon: Icon, fileName, estado, onChange, disabled, mo
       )}
       <input
         ref={ref} type="file" className="hidden"
-        accept=".pdf,.jpg,.jpeg,.png"
+        accept=".pdf,.jpg,.jpeg,.png,.webp"
         onChange={e => {
           const f = e.target.files?.[0]
           e.target.value = ''          // permite volver a elegir el mismo archivo
@@ -206,11 +206,9 @@ function HandSignedUpload({ file, onChange }) {
   )
 }
 
-// ── Textos placeholder (se reemplazarán con el contenido real) ───────────────
+// Respaldo legible cuando el PDF institucional no puede mostrarse.
 const TC_TEXT = `TÉRMINOS Y CONDICIONES — CEFIMAT
-[Versión: pendiente de publicación oficial]
-
-El texto completo de los Términos y Condiciones será publicado próximamente. Por favor contacta a tu asesor CEFIMAT para obtener la versión vigente.
+Versión institucional vigente: agosto de 2026
 
 1. SERVICIOS
 CEFIMAT provee servicios educativos de preparación para exámenes de admisión a nivel superior (UNAM, IPN, ECOEMS y otras instituciones).
@@ -233,7 +231,7 @@ El alumno se compromete a asistir puntualmente, entregar tareas en tiempo y form
 La firma digital registrada en esta plataforma tiene carácter de compromiso del alumno. Su validez es responsabilidad exclusiva del firmante.`
 
 const PRIV_TEXT = `AVISO DE PRIVACIDAD — CEFIMAT
-[Versión: pendiente de publicación oficial]
+Versión institucional vigente: agosto de 2026
 
 CEFIMAT, como responsable del tratamiento de tus datos personales, te informa:
 
@@ -249,10 +247,14 @@ FINALIDADES
 - Comunicación sobre desempeño académico
 - Cumplimiento de obligaciones legales y contractuales
 
+CONSERVACIÓN Y SEGURIDAD
+La información se conserva durante el tiempo necesario para prestar los servicios educativos y atender las obligaciones aplicables. CEFIMAT aplica controles administrativos y técnicos para evitar acceso, alteración o divulgación no autorizados.
+
 TUS DERECHOS (ARCO)
 Puedes ejercer tus derechos de Acceso, Rectificación, Cancelación y Oposición escribiendo a privacidad@cefimat.mx.
 
-Tus datos no serán transferidos a terceros sin tu consentimiento previo, salvo las excepciones previstas en la Ley Federal de Protección de Datos Personales.`
+TRANSFERENCIAS Y CAMBIOS
+Tus datos no serán transferidos a terceros sin tu consentimiento previo, salvo las excepciones previstas en la Ley Federal de Protección de Datos Personales. Los cambios sustanciales a este aviso se comunicarán por esta plataforma o por los medios de contacto registrados.`
 
 // ── Página principal ─────────────────────────────────────────────────────────
 export default function Terms() {
@@ -270,7 +272,6 @@ export default function Terms() {
   const [termsDocument, setTermsDocument] = useState(null)
   const [uploading, setUploading] = useState(null)
   const [garantiaAlumno, setGarantiaAlumno] = useState(null)
-  const [garantiaTutor, setGarantiaTutor] = useState(null)
   const [garantiaSaved, setGarantiaSaved] = useState(false)
   const [formError, setFormError] = useState('')
   const [signatureTarget, setSignatureTarget] = useState('terms')
@@ -380,10 +381,10 @@ export default function Terms() {
   }
 
   const saveGuarantee = async () => {
-    if (!garantiaAlumno || !garantiaTutor) return
+    if (!garantiaAlumno) return
     setSubmitting(true)
     setFormError('')
-    try { await guardarGarantia(s.id,garantiaAlumno,garantiaTutor); setGarantiaSaved(true) }
+    try { await guardarGarantia(s.id, garantiaAlumno); setGarantiaSaved(true) }
     catch (error) { setFormError(error?.message || 'No se pudo guardar la garantía. Inténtalo de nuevo.') }
     finally { setSubmitting(false) }
   }
@@ -551,11 +552,11 @@ export default function Terms() {
           <div className="card p-5 space-y-4">
             <div>
               <h2 className="section-title">Capturar firma</h2>
-              <p className="text-xs mt-1" style={{color:'var(--t3)'}}>Se utiliza una sola caja; elige dónde guardar cada firma.</p>
+              <p className="text-xs mt-1" style={{color:'var(--t3)'}}>Se utiliza una sola caja; elige el documento que vas a firmar.</p>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {[
-                ['terms','T&C',signature],['guarantee_student','Garantía alumno',garantiaAlumno],['guarantee_tutor','Garantía tutor',garantiaTutor],
+                ['terms','T&C',signature],['guarantee_student','Garantía del curso',garantiaAlumno],
               ].map(([id,label,value])=><button key={id} onClick={()=>setSignatureTarget(id)}
                 className="rounded-xl px-2 py-2 text-[10px] sm:text-xs font-bold"
                 style={{background:signatureTarget===id?'var(--accent)':'var(--soft-bg)',color:signatureTarget===id?'#fff':'var(--t2)',border:'1px solid var(--card-border)'}}>
@@ -565,28 +566,26 @@ export default function Terms() {
             {!(signatureTarget==='terms'&&signed) && !(signatureTarget!=='terms'&&garantiaEntregada) && (
               <SignaturePad onCapture={value=>{
                 if(signatureTarget==='terms') setSignature(value)
-                else if(signatureTarget==='guarantee_student') setGarantiaAlumno(value)
-                else setGarantiaTutor(value)
+                else setGarantiaAlumno(value)
               }}/>
             )}
-            {(signatureTarget==='terms'?signature:signatureTarget==='guarantee_student'?garantiaAlumno:garantiaTutor) &&
+            {(signatureTarget==='terms'?signature:garantiaAlumno) &&
               <div className="rounded-xl p-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
                 <p className="text-[10px] font-bold mb-2" style={{color:'var(--t3)'}}>Vista previa de la firma seleccionada</p>
-                <img src={signatureTarget==='terms'?signature:signatureTarget==='guarantee_student'?garantiaAlumno:garantiaTutor}
+                <img src={signatureTarget==='terms'?signature:garantiaAlumno}
                   alt="Vista previa de firma" className="max-h-24 mx-auto"/>
               </div>}
           </div>
 
           <div className="card p-5 space-y-4">
-            <div><h2 className="section-title">Garantía</h2><p className="text-xs mt-1" style={{color:'var(--t3)'}}>El alumno y el tutor aceptan la garantía y firman de manera independiente. Si la firmaron en papel, basta con subir el archivo arriba.</p></div>
+            <div><h2 className="section-title">Garantía del curso</h2><p className="text-xs mt-1" style={{color:'var(--t3)'}}>La firma del alumno formaliza la garantía del curso. Si se firmó en papel, basta con subir el archivo arriba.</p></div>
             {s.garantiaEstado === 'validada'
               ? <div className="flex gap-2 text-sm" style={{color:'var(--good)'}}><CheckCircle2 size={16}/> Garantía validada por administración.</div>
               : garantiaEntregada ? <div className="flex gap-2 text-sm" style={{color:'var(--warn)'}}><Clock size={16}/> Garantía entregada; administración debe validarla.</div> : <>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="text-xs">
                 <div className="rounded-xl p-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)',color:garantiaAlumno?'var(--good)':'var(--t3)'}}>{garantiaAlumno?'✓':'○'} Firma del alumno</div>
-                <div className="rounded-xl p-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)',color:garantiaTutor?'var(--good)':'var(--t3)'}}>{garantiaTutor?'✓':'○'} Firma del tutor</div>
               </div>
-              <button type="button" onClick={saveGuarantee} disabled={!garantiaAlumno||!garantiaTutor||submitting} className="btn-primary w-full justify-center"><FileSignature size={15}/> Aceptar y entregar garantía</button>
+              <button type="button" onClick={saveGuarantee} disabled={!garantiaAlumno||submitting} className="btn-primary w-full justify-center"><FileSignature size={15}/> Aceptar y entregar garantía</button>
             </>}
           </div>
 

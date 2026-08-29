@@ -15,6 +15,14 @@ import { logoInstitucion, estiloLogo } from '../../lib/instituciones'
 const UNIVERSIDAD = ['unam', 'uam', 'ipn']
 
 export default function IconoCurso({ curso, instituciones = [], size = 20, sobreColor = false, className = '' }) {
+  if (curso === 'universidad') {
+    return <span className={`inline-flex flex-shrink-0 overflow-visible ${className}`}
+      style={{width:size,height:size}}>
+      <img src="/logos/universidad-informe-transparente.png" alt="Universidad: UNAM, UAM e IPN"
+        className="w-full h-full object-contain"
+        style={{transform:'scale(1.82)',transformOrigin:'center',filter:sobreColor?'brightness(0) invert(1)':undefined}}/>
+    </span>
+  }
   const escudos = curso === 'ecoems'
     ? ['ecoems']
     : (instituciones.length ? instituciones.filter(i => UNIVERSIDAD.includes(i)) : UNIVERSIDAD)

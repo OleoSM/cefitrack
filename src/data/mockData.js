@@ -79,9 +79,9 @@ export const attendance = students.flatMap(s => {
     let status
     if (s.attendanceRate >= 90) status = rand < 0.92 ? 'presente' : rand < 0.96 ? 'tardanza' : 'ausente'
     else if (s.attendanceRate >= 75) status = rand < 0.78 ? 'presente' : rand < 0.88 ? 'ausente' : 'tardanza'
-    else status = rand < 0.60 ? 'presente' : rand < 0.75 ? 'ausente' : rand < 0.88 ? 'tardanza' : 'justificado'
+    else status = rand < 0.64 ? 'presente' : rand < 0.82 ? 'ausente' : 'tardanza'
     // Hora determinista basada en día: presente 07:55–08:04, tardanza 08:06–08:24, ausente null
-    const time = status === 'ausente' || status === 'justificado'
+    const time = status === 'ausente'
       ? null
       : status === 'tardanza'
         ? `08:${String(6 + (d % 19)).padStart(2,'0')}`
@@ -304,6 +304,5 @@ export const attendanceColors = {
   presente:    { label:'Presente',    bg:'bg-emerald-500/15', text:'text-emerald-400', dot:'bg-emerald-400', border:'border-emerald-500/30' },
   ausente:     { label:'Ausente',     bg:'bg-red-500/15',     text:'text-red-400',     dot:'bg-red-400',     border:'border-red-500/30'     },
   tardanza:    { label:'Tardanza',    bg:'bg-amber-500/15',   text:'text-amber-400',   dot:'bg-amber-400',   border:'border-amber-500/30'   },
-  justificado: { label:'Justificado', bg:'bg-blue-500/15',    text:'text-blue-400',    dot:'bg-blue-400',    border:'border-blue-500/30'    },
   sinRegistro: { label:'Sin registro', bg:'bg-slate-500/15',  text:'text-slate-400',   dot:'bg-slate-400',   border:'border-slate-500/30'   },
 }

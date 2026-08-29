@@ -182,11 +182,20 @@ export default function MyGrades() {
             const Icon = materiaIcon(mat)
             return (
               <button key={mat} onClick={() => setScope(mat)}
-                className="stat-card text-left transition-all active:scale-[.97] group relative overflow-hidden"
+                className="stat-card text-left transition-all active:scale-[.97] group relative overflow-hidden !p-0"
                 style={{ borderTop: `3px solid ${accent}` }}>
-                <span className="absolute inset-x-0 top-0 h-16 opacity-30 pointer-events-none"
-                  style={{backgroundImage:"linear-gradient(to bottom,transparent,var(--card-bg)),url('/materias-atlas-v1.png')",backgroundSize:'400% 200%',backgroundPosition:`${(materiaTile(mat)%4)*33.333}% ${materiaTile(mat)>3?100:0}%`}}/>
-                <div className="relative">
+                {/* Cada celda del atlas mide 3:4. El contenedor conserva esa
+                    proporciÃ³n y el fondo 4x2 muestra la celda completa, sin
+                    estirarla ni recortar instrumentos, libros o retratos. */}
+                <span className="block w-full pointer-events-none"
+                  style={{
+                    aspectRatio:'3 / 4',
+                    backgroundImage:"url('/materias-atlas-v1.png')",
+                    backgroundSize:'400% 200%',
+                    backgroundPosition:`${(materiaTile(mat)%4)*33.333}% ${materiaTile(mat)>3?100:0}%`,
+                    backgroundRepeat:'no-repeat',
+                  }}/>
+                <div className="relative p-3 sm:p-4" style={{borderTop:'1px solid var(--divider)'}}>
                 <div className="flex items-center justify-between">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: accent }}>

@@ -210,7 +210,7 @@ export default function GroupShaderCard({
       style={{
         border: `1px solid ${isLight ? surface : 'var(--card-border)'}`,
         boxShadow: 'var(--card-shadow)',
-        overflow: 'hidden',
+        overflow: 'visible',
         /* En claro la tarjeta se pinta ENTERA del color del grupo, igual que
            en oscuro se pinta entera con el shader. Con el color de fondo, la
            escala de texto tiene que invertirse: se redefinen las variables en
@@ -283,12 +283,15 @@ export default function GroupShaderCard({
               background: (logo || curso) ? 'transparent' : (isLight ? 'rgba(255,255,255,.18)' : accent),
               border: (!logo && !curso && isLight) ? '1px solid rgba(255,255,255,.35)' : 'none',
               boxShadow: (logo || curso || isLight) ? 'none' : `0 0 20px ${accent}50` }}>
-            {curso === 'universidad'
-              ? <IconoCurso curso="universidad" instituciones={group.instituciones ?? []} size={26} sobreColor/>
+            {curso === 'universidad' && (group.instituciones?.length ?? 0) > 1
+              ? <IconoCurso curso="universidad" instituciones={group.instituciones ?? []} size={34} sobreColor/>
               : logo
-                ? <img src={logo.src} alt={logo.alt} style={estiloLogo(true)}
-                    className="w-full h-full object-contain"/>
-                : letter}
+                ? <img src={logo.src} alt={logo.alt}
+                    className="w-full h-full object-contain"
+                    style={{...estiloLogo(true),transform:`scale(${group.institucion === 'ipn' ? .9 : group.institucion === 'uam' ? 1.16 : group.institucion === 'ecoems' ? 1.08 : 1.04})`}}/>
+                : curso === 'universidad'
+                  ? <IconoCurso curso="universidad" instituciones={group.instituciones ?? []} size={26} sobreColor/>
+                  : letter}
           </div>
 
           {/* Info */}
@@ -317,15 +320,6 @@ export default function GroupShaderCard({
               </button>
             )}
 
-            {onClick && (
-              <button type="button" onClick={onClick} aria-label="Ver grupo"
-                className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200"
-                style={{ background:'var(--soft-bg)', color:'var(--t2)' }}
-                onMouseEnter={e => { e.currentTarget.style.background='var(--soft-bg)'; e.currentTarget.style.color='var(--t1)' }}
-                onMouseLeave={e => { e.currentTarget.style.background='var(--soft-bg)'; e.currentTarget.style.color='var(--t2)' }}>
-                <span className="font-bold text-sm">→</span>
-              </button>
-            )}
           </div>
         </div>
 

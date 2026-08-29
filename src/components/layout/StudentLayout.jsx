@@ -1,8 +1,9 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../../context/AuthContext'
 import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ChevronDown, ScrollText, Settings, Bell } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
 import { StudentThemeProvider, useStudentTheme } from '../../context/StudentThemeContext'
@@ -36,6 +37,9 @@ function LayoutInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const notifButtonRef = useRef(null)
+  const notifPanelRef = useRef(null)
+  const [notifPosition, setNotifPosition] = useState(null)
   const { pathname } = useLocation()
   const [openSections, setOpenSections] = useState(() => ({
     'Operación académica': ['/student/calificaciones','/student/asistencias','/student/mi-qr'].some(route => pathname.startsWith(route)),
@@ -50,12 +54,40 @@ function LayoutInner() {
   const avatarBorder = appearance === 'default' ? '#ffffff' : '#000000'
   const toggleSection = title => setOpenSections(current => ({ ...current, [title]: !current[title] }))
 
+  const positionNotifications = useCallback(() => {
+    const rect = notifButtonRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setNotifPosition({
+      top: Math.min(rect.bottom + 8, window.innerHeight - 80),
+      right: Math.max(12, window.innerWidth - rect.right),
+    })
+  }, [])
+
   useEffect(() => {
     const load=()=>fetchNotificaciones().then(setNotifications).catch(()=>{})
     load()
     const channel=supabase.channel(`student-notifications-${currentUser?.id}`).on('postgres_changes',{event:'*',schema:'public',table:'notifications'},load).subscribe()
     return()=>{supabase.removeChannel(channel)}
   },[currentUser?.id])
+
+  useEffect(() => {
+    if (!notifOpen) return
+    positionNotifications()
+    const closeOnEscape = event => { if (event.key === 'Escape') setNotifOpen(false) }
+    window.addEventListener('resize', positionNotifications)
+    window.addEventListener('scroll', positionNotifications, true)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('resize', positionNotifications)
+      window.removeEventListener('scroll', positionNotifications, true)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [notifOpen, positionNotifications])
+
+  const toggleNotifications = () => {
+    positionNotifications()
+    setNotifOpen(open => !open)
+  }
 
   const handleLogout = () => { logout(); navigate('/login') }
   const closeSidebar  = () => setSidebarOpen(false)
@@ -277,11 +309,50 @@ function LayoutInner() {
 
           <div className="flex items-center gap-2">
             <div className="relative">
-              <button aria-label="Notificaciones" onClick={()=>setNotifOpen(v=>!v)} className="relative p-1.5 rounded-xl text-white/70 hover:bg-white/10"><Bell size={17}/>{notifications.some(n=>!n.read_at)&&<span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-400"/>}</button>
-              {notifOpen&&<div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-24px)] max-h-80 overflow-y-auto rounded-xl z-50" style={{background:'var(--panel-bg)',border:'1px solid var(--card-border)',boxShadow:'0 18px 50px rgba(0,0,0,.35)'}}>
-                <p className="p-3 text-sm font-bold">Notificaciones</p>{notifications.length===0&&<p className="p-4 text-xs" style={{color:'var(--t3)'}}>Sin notificaciones.</p>}
-                {notifications.map(n=><button key={n.id} className="block w-full text-left p-3" style={{borderTop:'1px solid var(--divider)',background:n.read_at?'transparent':'var(--info-soft)'}} onClick={async()=>{await marcarLeida(n.id);setNotifications(v=>v.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))}}><b className="block text-xs">{n.title}</b><span className="text-xs" style={{color:'var(--t2)'}}>{n.body}</span></button>)}
-              </div>}
+              <button ref={notifButtonRef} aria-label="Notificaciones" aria-expanded={notifOpen}
+                onClick={toggleNotifications}
+                className="relative min-w-11 min-h-11 flex items-center justify-center rounded-xl text-white/70 hover:bg-white/10">
+                <Bell size={17}/>
+                {notifications.some(n=>!n.read_at)&&<span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-400" aria-hidden="true"/>}
+              </button>
+              {notifOpen && notifPosition && createPortal(
+                <>
+                  <button type="button" aria-label="Cerrar notificaciones" onClick={()=>setNotifOpen(false)}
+                    className="fixed inset-0 z-[10000] bg-black/35 lg:bg-transparent cursor-default" />
+                  <section ref={notifPanelRef} role="dialog" aria-modal="true" aria-label="Notificaciones"
+                    className="fixed z-[10001] w-80 max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl animate-scale-in"
+                    style={{
+                      top:notifPosition.top, right:notifPosition.right,
+                      background:t.light ? '#ffffff' : '#08080f',
+                      border:'1px solid var(--card-border)',
+                      boxShadow:'0 24px 72px rgba(0,0,0,.52)',
+                    }}>
+                    <div className="flex items-center justify-between gap-2 px-4 py-3" style={{borderBottom:'1px solid var(--divider)'}}>
+                      <p className="text-sm font-bold" style={{color:'var(--t1)'}}>Notificaciones</p>
+                      <button type="button" onClick={()=>setNotifOpen(false)} aria-label="Cerrar"
+                        className="min-w-11 min-h-11 flex items-center justify-center rounded-xl" style={{color:'var(--t2)'}}>
+                        <X size={16}/>
+                      </button>
+                    </div>
+                    <div className="overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{maxHeight:'min(24rem, calc(100dvh - 8rem))', WebkitOverflowScrolling:'touch'}}>
+                      {notifications.length===0&&<p className="p-4 text-xs" style={{color:'var(--t3)'}}>Sin notificaciones.</p>}
+                      {notifications.map(n=><button key={n.id} type="button" className="block w-full min-h-11 text-left p-3"
+                        style={{borderTop:'1px solid var(--divider)',background:n.read_at?'transparent':'var(--info-soft)'}}
+                        onClick={async()=>{
+                          const previous = notifications
+                          setNotifications(v=>v.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))
+                          try { await marcarLeida(n.id) }
+                          catch { setNotifications(previous) }
+                        }}>
+                        <b className="block text-xs" style={{color:'var(--t1)'}}>{n.title}</b>
+                        <span className="text-xs" style={{color:'var(--t2)'}}>{n.body}</span>
+                      </button>)}
+                    </div>
+                  </section>
+                </>,
+                document.body,
+              )}
             </div>
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
               style={{ background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.20)' }}>

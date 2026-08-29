@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, CheckCircle, Search, Trash2, AlertCircle } from 'lucide-react'
+import { Plus, X, CheckCircle, Search, Trash2, AlertCircle, ClipboardCheck, MonitorCheck, GraduationCap } from 'lucide-react'
 import {
   fetchEvaluations, fetchStudents, fetchGroups,
   saveEvaluation, deleteEvaluation,
@@ -11,7 +11,12 @@ import { useSucursales } from '../../hooks/useSucursales'
 
 // Las cuatro categorías autorizadas por CEFIMAT (requisito EVA-01).
 // Las anteriores (Examen Parcial, Proyecto, Examen Final, Quíz, Práctica) se retiran.
-const tipos = ['Tarea','Actividad en clase','Examen digital','Examen de simulación']
+const EXAMENES = [
+  { tipo:'Simulacro base', total:6, icon:ClipboardCheck, desc:'Seis aplicaciones presenciales programadas' },
+  { tipo:'Simulacro digital', total:5, icon:MonitorCheck, desc:'Cinco aplicaciones en plataforma' },
+  { tipo:'Examen general', total:1, icon:GraduationCap, desc:'Una evaluación integral final' },
+]
+const tipos = EXAMENES.map(x => x.tipo)
 
 const gradeColor = c =>
   c >= 8 ? { bg:'bg-emerald-500/15', text:'text-emerald-400', border:'border-emerald-500/30' }
@@ -210,6 +215,22 @@ export default function Evaluations() {
       {showModal && (
         <Modal students={students} onClose={() => setShowModal(false)} onSaved={load}/>
       )}
+
+      <section aria-label="Estructura de exámenes" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {EXAMENES.map(({tipo,total,icon:Icon,desc}) => {
+          const capturados = evaluations.filter(e => e.tipo === tipo).length
+          return <button key={tipo} type="button" onClick={() => setType(typeFilter === tipo ? 'all' : tipo)}
+            className="card p-4 text-left min-h-[120px] transition-transform active:scale-[.99]"
+            style={{border:typeFilter===tipo?'1px solid var(--accent)':'1px solid var(--card-border)'}}>
+            <div className="flex items-start justify-between gap-3">
+              <Icon size={20} style={{color:'var(--accent)'}}/>
+              <span className="text-2xl font-black" style={{color:'var(--t1)'}}>{total}</span>
+            </div>
+            <p className="text-sm font-bold mt-2" style={{color:'var(--t1)'}}>{tipo}</p>
+            <p className="text-[11px] mt-1" style={{color:'var(--t3)'}}>{desc} · {capturados} registros</p>
+          </button>
+        })}
+      </section>
 
       {/* Toolbar */}
       <FilterBar

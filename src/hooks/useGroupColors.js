@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAdminTheme } from '../context/AdminThemeContext'
 
 /*
@@ -147,6 +147,15 @@ export function useGroupColors() {
   const { t } = useAdminTheme()
   const claro = !!t?.light          // IPN o UNAM
 
+  /* Cada tarjeta usa su propia instancia del hook. Sin este evento, cambiar
+     la paleta desde el modal actualizaba localStorage pero las tarjetas ya
+     montadas conservaban su estado anterior hasta recargar la página. */
+  useEffect(() => {
+    const sync = event => setSaved(event.detail ?? load())
+    window.addEventListener('siga:group-palettes', sync)
+    return () => window.removeEventListener('siga:group-palettes', sync)
+  }, [])
+
   const getPalette = useCallback((groupId) => {
     const pid = saved[groupId] ?? DEFAULTS[groupId] ?? 'ocean'
     return COLOR_PALETTES.find(p => p.id === pid) ?? COLOR_PALETTES[0]
@@ -184,11 +193,10 @@ export function useGroupColors() {
   const isLight = claro
 
   const setGroupPalette = useCallback((groupId, paletteId) => {
-    setSaved(prev => {
-      const next = { ...prev, [groupId]: paletteId }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-      return next
-    })
+    const next = { ...load(), [groupId]: paletteId }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    setSaved(next)
+    window.dispatchEvent(new CustomEvent('siga:group-palettes', { detail:next }))
   }, [])
 
   return { getColors, getAccent, getSurface, isLight, getPaletteId, getPalette, setGroupPalette }

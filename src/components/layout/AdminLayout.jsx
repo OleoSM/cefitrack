@@ -26,6 +26,7 @@ const SECCIONES = [
     { to:'/admin/alumnos',      label:'Alumnos',                icon:Users },
     { to:'/admin/registrar',    label:'Calificaciones',         icon:TableProperties },
     { to:'/admin/asistencias',  label:'Pasar Lista',            icon:CalendarCheck },
+    { to:'/admin/evaluaciones', label:'Exámenes',                icon:ClipboardList },
   ]},
   { titulo: 'Administración', sectionIcon:ShieldCheck, items: [
     { to:'/admin/pagos',        label:'Pagos',                  icon:Wallet, adminOnly:true },
@@ -50,7 +51,7 @@ const pageTitles = {
   '/admin':              'Dashboard General',
   '/admin/grupos':       'Grupos',
   '/admin/alumnos':      'Alumnos',
-  '/admin/evaluaciones': 'Captura rápida de calificaciones',
+  '/admin/evaluaciones': 'Exámenes',
   '/admin/registrar':    'Calificaciones',
   '/admin/asistencias':  'Pasar Lista',
   '/admin/rankings':     'Rankings',
@@ -100,7 +101,7 @@ function LayoutInner() {
   const [notifLoading, setNotifLoading] = useState(true)
   const [notifError, setNotifError] = useState('')
   const [openSections, setOpenSections] = useState(() => ({
-    'Operación académica': pathname.startsWith('/admin/grupos') || pathname.startsWith('/admin/alumnos') || pathname.startsWith('/admin/registrar') || pathname.startsWith('/admin/asistencias'),
+    'Operación académica': pathname.startsWith('/admin/grupos') || pathname.startsWith('/admin/alumnos') || pathname.startsWith('/admin/registrar') || pathname.startsWith('/admin/asistencias') || pathname.startsWith('/admin/evaluaciones'),
     'Administración': pathname.startsWith('/admin/pagos') || pathname.startsWith('/admin/correos') || pathname.startsWith('/admin/terminos') || pathname.startsWith('/admin/configuracion'),
     'Resultados': pathname.startsWith('/admin/rankings'),
   }))

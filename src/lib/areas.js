@@ -7,11 +7,21 @@
  * la hoja de calificaciones, el alta de alumnos y el portal del alumno digan
  * exactamente lo mismo.
  */
-export const AREAS_UNIVERSIDAD = [
-  { id: 1, corto: 'Área 1', label: 'Área 1 — Físico-Matemáticas e Ingenierías' },
-  { id: 2, corto: 'Área 2', label: 'Área 2 — Ciencias Biológicas, Químicas y de la Salud' },
-  { id: 3, corto: 'Área 3', label: 'Área 3 — Ciencias Sociales' },
-  { id: 4, corto: 'Área 4', label: 'Área 4 — Humanidades y Artes' },
-]
+const CATALOGO = {
+  unam: ['Ciencias Físico-Matemáticas e Ingenierías', 'Ciencias Biológicas, Químicas y de la Salud', 'Ciencias Sociales', 'Humanidades y Artes'],
+  ipn: ['Ingeniería y Ciencias Físico Matemáticas', 'Ciencias Médico Biológicas', 'Ciencias Sociales y Administrativas'],
+  uam: ['Ciencias Básicas e Ingeniería (CBI)', 'Ciencias Biológicas y de la Salud (CBS)', 'Ciencias Sociales y Humanidades (CSH)', 'Ciencias y Artes para el Diseño (CAD)'],
+}
 
-export const areaDe = n => AREAS_UNIVERSIDAD.find(a => a.id === Number(n)) ?? null
+export function areasParaInstituciones(instituciones = []) {
+  const ids = instituciones.filter(id => CATALOGO[id])
+  const vigentes = ids.length ? ids : ['unam', 'ipn', 'uam']
+  return [1, 2, 3, 4].map(id => {
+    const detalles = vigentes.flatMap(inst => CATALOGO[inst][id - 1]
+      ? [`${inst.toUpperCase()}: ${CATALOGO[inst][id - 1]}`] : [])
+    return detalles.length ? { id, corto:`Área ${id}`, label:`Área ${id} — ${detalles.join(' · ')}` } : null
+  }).filter(Boolean)
+}
+
+export const AREAS_UNIVERSIDAD = areasParaInstituciones()
+export const areaDe = (n, instituciones = []) => areasParaInstituciones(instituciones).find(a => a.id === Number(n)) ?? null

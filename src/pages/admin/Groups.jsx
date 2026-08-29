@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, ArrowRight, Filter, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, BookOpen, TrendingUp, Star, Ban, Columns2, Rows3 } from 'lucide-react'
+import { Users, Clock, MapPin, Filter, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, BookOpen, TrendingUp, Star, Ban, Columns2, Rows3, Check, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   fetchGroups, fetchStudents, fetchAttendanceStats,
   computeGroupStats, createGroup, updateGroup, deleteGroup,
@@ -11,9 +11,8 @@ import StudentFormModal from '../../components/admin/StudentFormModal'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import KpiCard from '../../components/ui/KpiCard'
-import { useGroupColors } from '../../hooks/useGroupColors'
-import { logoInstitucion, INSTITUCIONES, estiloLogo } from '../../lib/instituciones'
-import { useAdminTheme } from '../../context/AdminThemeContext'
+import { useGroupColors, COLOR_PALETTES, GRADIENT_PALETTES, SOLID_PALETTES, MATE_PALETTES } from '../../hooks/useGroupColors'
+import { logoInstitucion, INSTITUCIONES } from '../../lib/instituciones'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import IconoCurso from '../../components/ui/IconoCurso'
 import { useAuth } from '../../context/AuthContext'
@@ -47,10 +46,46 @@ function MetricBar({ value, max, suffix = '', thresholds }) {
 
 /* ── Modal de alta / edición de grupo ───────────────────────── */
 // Valores literales a propósito: se guardan en la BD (groups.color).
-const COLORES = ['#2B5F9E','#2F6B41','#8A5A12','#5D3E90','#94356B','#1C6474']
+const ICONOS_GRUPO = [
+  ...INSTITUCIONES,
+  { id:'universidad', alt:'Universidad', src:'/logos/universidad-informe-transparente.png' },
+]
+// Corrección óptica: los archivos traen cantidades distintas de margen interno.
+// La escala compensa ese margen para que los emblemas pesen igual a la vista.
+const ESCALA_ICONO = { ecoems:1.08, unam:1.04, ipn:.9, uam:1.16, universidad:1.52 }
 
-function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
-  const { t: temaAdmin } = useAdminTheme()
+function StudentDock({ students, onOpenStudent }) {
+  const [expanded, setExpanded] = useState(false)
+  const visible = expanded ? students : students.slice(0, 6)
+  if (!students.length) return <span className="text-[10px]" style={{color:'var(--t3)'}}>Sin alumnos</span>
+
+  return <div className="flex items-center gap-2 min-w-0" onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+    <div className={`flex items-center ${expanded ? 'flex-wrap gap-1.5' : '-space-x-2'} min-w-0 py-2`}>
+      {visible.map(student => (
+        <button key={student.id} type="button" onClick={() => onOpenStudent(student.id)}
+          aria-label={`Abrir perfil de ${student.name}`}
+          className="group/avatar relative w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 z-0 hover:z-20 focus-visible:z-20 transition-[transform,margin] duration-200 ease-out hover:scale-[1.45] hover:-translate-y-2 hover:mx-2 focus-visible:scale-[1.45] focus-visible:-translate-y-2 focus-visible:mx-2 focus-visible:outline-none"
+          style={{background:'var(--soft-bg)',border:'2px solid var(--card-bg)',color:'var(--t1)',boxShadow:'0 4px 12px rgba(0,0,0,.2)'}}>
+          {student.avatarSrc
+            ? <img src={student.avatarSrc} alt="" className="w-full h-full rounded-full object-cover"/>
+            : student.name.split(' ').map(n=>n[0]).join('').slice(0,2)}
+          <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 translate-y-1 opacity-0 group-hover/avatar:translate-y-0 group-hover/avatar:opacity-100 group-focus-visible/avatar:translate-y-0 group-focus-visible/avatar:opacity-100 transition-all duration-200 ease-out whitespace-nowrap rounded-lg px-2 py-1 text-[9px] font-bold"
+            style={{background:'var(--panel-bg)',color:'var(--t1)',border:'1px solid var(--card-border)',boxShadow:'0 8px 24px rgba(0,0,0,.28)'}}>
+            {student.name}
+          </span>
+        </button>
+      ))}
+    </div>
+    {students.length > 6 && <button type="button" onClick={() => setExpanded(v=>!v)}
+      className="min-h-10 flex-shrink-0 rounded-xl px-2.5 inline-flex items-center gap-1.5 text-[10px] font-bold transition-colors"
+      style={{background:'var(--soft-bg)',color:'var(--t2)',border:'1px solid var(--card-border)'}}>
+      <Users size={14}/><span className="hidden md:inline">{expanded?'Mostrar menos':'Desplegar todos'}</span>
+      <span>{expanded?'−':`+${students.length-6}`}</span>
+    </button>}
+  </div>
+}
+
+function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved }) {
   const { sucursales: catalogoSucursales } = useSucursales()
   const editing = !!group
   const [form, setForm] = useState({
@@ -58,7 +93,7 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
     subject:  group?.subject ?? '',
     schedule: group?.schedule ?? '',
     room:     group?.room ?? '',
-    color:    group?.color ?? COLORES[0],
+    color:    group?.color ?? COLOR_PALETTES[0].accent,
     sucursal: group?.sucursal ?? '',
     institucion: group?.institucion ?? null,
     curso: group?.curso ?? (group?.institucion && group.institucion !== 'ecoems' ? 'universidad' : 'ecoems'),
@@ -66,6 +101,8 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
+  const [selectedPalette, setSelectedPalette] = useState(paletteId ?? 'ocean')
+  const [showMoreColors, setShowMoreColors] = useState(false)
   const set = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
   const handleSubmit = async e => {
@@ -86,7 +123,7 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
       : await createGroup(payload)
     setSaving(false)
     if (!res.ok) { setError(res.message); return }
-    onSaved()
+    onSaved({ groupId:group?.id ?? res.group?.id, paletteId:selectedPalette })
     onClose()
   }
 
@@ -108,7 +145,11 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--t3)'}}>Curso</label>
-            <select value={form.curso} onChange={e=>set('curso',e.target.value)} className="input-field" required>
+            <select value={form.curso} onChange={e=>setForm(f => ({
+              ...f,
+              curso:e.target.value,
+              instituciones:e.target.value === 'ecoems' ? [] : (f.instituciones.length ? f.instituciones : ['unam']),
+            }))} className="input-field" required>
               <option value="ecoems">ECOEMS</option><option value="universidad">Universidad</option>
             </select>
           </div>
@@ -145,50 +186,84 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
 
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-              style={{ color:'var(--t3)' }}>Color</label>
-            <div className="flex gap-2">
-              {COLORES.map(c => (
-                <button key={c} type="button" onClick={() => set('color', c)}
-                  className="w-7 h-7 rounded-lg transition-transform"
-                  style={{
-                    background:c,
-                    transform: form.color === c ? 'scale(1.15)' : 'scale(1)',
-                    border: form.color === c ? '2px solid var(--card-border)' : '2px solid transparent',
-                  }}/>
-              ))}
+              style={{ color:'var(--t3)' }}>Apariencia de la tarjeta</label>
+            <div className="rounded-2xl p-3 space-y-3" style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
+              {[
+                ['Degradados', GRADIENT_PALETTES],
+                ['Colores sólidos', SOLID_PALETTES],
+                ['Mate', MATE_PALETTES],
+              ].map(([titulo,paletas]) => {
+                const visibles = showMoreColors ? paletas : paletas.slice(0, 5)
+                return <div key={titulo}>
+                  <p className="text-[9px] font-bold uppercase tracking-widest mb-2" style={{color:'var(--t3)'}}>{titulo}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {visibles.map(p => <button key={p.id} type="button" title={p.name}
+                      aria-label={`${titulo}: ${p.name}`} aria-pressed={selectedPalette === p.id}
+                      onClick={() => { setSelectedPalette(p.id); set('color', p.accent) }}
+                      className="relative w-10 h-10 sm:w-11 sm:h-11 flex-none rounded-xl overflow-hidden transition-transform active:scale-95"
+                      style={{
+                        background:p.type === 'gradient' ? `linear-gradient(135deg, ${p.colors[0]}, ${p.colors[1]}, ${p.colors[3]})` : p.accent,
+                        border:selectedPalette === p.id?'3px solid #fff':'1px solid var(--card-border)',
+                        boxShadow:selectedPalette === p.id?'0 0 0 2px var(--accent)':'none',
+                      }}>
+                      {selectedPalette === p.id && <Check size={14} className="absolute inset-0 m-auto text-white drop-shadow" strokeWidth={3}/>}
+                    </button>)}
+                  </div>
+                </div>
+              })}
             </div>
+            <button type="button" onClick={() => setShowMoreColors(v => !v)}
+              className="mt-2 min-h-11 px-3 rounded-xl inline-flex items-center gap-2 text-xs font-bold"
+              style={{color:'var(--accent)',background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
+              {showMoreColors ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+              {showMoreColors ? 'Ver menos' : `Ver más colores (${COLOR_PALETTES.length - 15})`}
+            </button>
           </div>
 
-          {/* Institución a la que apunta el grupo. Se guarda la clave, no la
-              ruta del archivo: el logo es presentación y puede cambiar de
-              formato sin que haya que migrar datos. */}
-          {form.curso === 'universidad' && <div>
+          {/* Selector visual del icono. Los cuatro usan exactamente el mismo
+              marco para que las proporciones distintas de cada escudo no
+              cambien el peso visual ni el área táctil. */}
+          <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-              style={{ color:'var(--t3)' }}>Instituciones objetivo</label>
-            <div className="grid grid-cols-3 gap-2">
-              {INSTITUCIONES.filter(x=>x.id !== 'ecoems').map(inst => {
-                const activo = form.instituciones.includes(inst.id)
-                const logo = inst.id ? logoInstitucion(inst.id) : null
+              style={{ color:'var(--t3)' }}>Icono del grupo</label>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {ICONOS_GRUPO.map(inst => {
+                const activo = inst.id === 'ecoems'
+                  ? form.curso === 'ecoems'
+                  : inst.id === 'universidad'
+                    ? form.curso === 'universidad' && form.instituciones.length > 1
+                    : form.curso === 'universidad' && form.instituciones.length === 1 && form.instituciones[0] === inst.id
+                const logo = inst.src ? {src:inst.src,alt:inst.alt} : logoInstitucion(inst.id)
                 return (
                   <button key={inst.id} type="button"
-                    onClick={() => set('instituciones', activo ? form.instituciones.filter(x=>x!==inst.id) : [...form.instituciones,inst.id])}
+                    aria-pressed={activo}
+                    onClick={() => setForm(f => ({
+                      ...f,
+                      curso:inst.id === 'ecoems' ? 'ecoems' : 'universidad',
+                      instituciones:inst.id === 'ecoems' ? [] : inst.id === 'universidad' ? ['unam','uam','ipn'] : [inst.id],
+                    }))}
                     title={logo?.alt}
-                    className="h-14 rounded-xl flex flex-col items-center justify-center gap-1 p-1.5 transition-all active:scale-95"
+                    className="min-h-[104px] rounded-2xl flex flex-col items-center justify-center gap-2 p-2.5 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2"
                     style={{
-                      background: activo ? 'var(--soft-bg)' : 'transparent',
+                      background: activo ? 'var(--accent)' : 'var(--soft-bg)',
                       border: activo ? '2px solid var(--accent)' : '1px solid var(--card-border)',
+                      boxShadow: activo ? '0 8px 24px color-mix(in srgb, var(--accent) 28%, transparent)' : 'none',
                     }}>
-                    <img src={logo.src} alt={logo.alt} style={estiloLogo(!temaAdmin?.light)}
-                      className="max-h-7 max-w-full object-contain"/>
-                    <span className="text-[8px] font-semibold leading-none truncate w-full text-center"
-                      style={{ color: activo ? 'var(--t1)' : 'var(--t3)' }}>
+                    <span className="w-[4.5rem] h-[4.5rem] flex items-center justify-center p-1 flex-shrink-0 overflow-hidden">
+                      <img src={logo.src} alt={logo.alt}
+                        className="w-full h-full object-contain"
+                        style={{transform:`scale(${inst.id === 'universidad' ? 1.72 : ESCALA_ICONO[inst.id] ?? 1})`,transformOrigin:'center',filter:inst.id==='universidad'?'brightness(0) invert(1)':undefined}}/>
+                    </span>
+                    <span className="text-[10px] font-extrabold leading-none truncate w-full text-center"
+                      style={{ color: activo ? 'var(--accent-contrast)' : 'var(--t2)' }}>
                       {logo.alt}
                     </span>
                   </button>
                 )
               })}
             </div>
-          </div>}
+            <p className="text-[10px] mt-2" style={{color:'var(--t4)'}}>Elige ECOEMS, UNAM, IPN, UAM o el emblema Universidad incluido en el reporte.</p>
+          </div>
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg px-3 py-2"
@@ -212,7 +287,7 @@ function GroupFormModal({ group = null, sucursales, onClose, onSaved }) {
 
 export default function Groups() {
   const navigate      = useNavigate()
-  const { getAccent } = useGroupColors()
+  const { getAccent, getPaletteId, setGroupPalette } = useGroupColors()
   const { currentUser, allowedSucursales, canAccess } = useAuth()
   const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
   const isAdmin = currentUser?.role === 'admin'
@@ -266,8 +341,12 @@ export default function Groups() {
         <GroupFormModal
           group={formFor.group}
           sucursales={sucursalOptions}
+          paletteId={formFor.group ? getPaletteId(formFor.group.id) : 'ocean'}
           onClose={() => setFormFor(null)}
-          onSaved={load}
+          onSaved={async ({groupId,paletteId}) => {
+            if (groupId) setGroupPalette(groupId, paletteId)
+            await load()
+          }}
         />
       )}
       {deleteFor && (
@@ -379,7 +458,7 @@ export default function Groups() {
               key={g.id}
               group={g}
               onClick={() => navigate(`/admin/grupos/${g.id}`)}
-              showPicker
+              showPicker={false}
               footer={
                 <>
                   {/* Metrics */}
@@ -412,23 +491,9 @@ export default function Groups() {
                   </div>
 
                   {/* Avatares + botón */}
-                  <div className="flex items-center justify-end sm:justify-between gap-3">
-                    <div className="hidden sm:flex -space-x-2 overflow-hidden">
-                      {grpStudents.slice(0, 6).map(s => (
-                        <div key={s.id}
-                          className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                          style={{ background:'var(--soft-bg)', border:'2px solid var(--card-bg)', color:'var(--t2)' }}>
-                          {s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}
-                        </div>
-                      ))}
-                      {grpStudents.length > 6 && (
-                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] font-semibold flex-shrink-0"
-                          style={{ background:'var(--soft-bg)', border:'2px solid var(--card-bg)', color:'var(--t3)' }}>
-                          +{grpStudents.length - 6}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                    <StudentDock students={grpStudents} onOpenStudent={id=>navigate(`/admin/alumnos/${id}`)}/>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-auto">
                       {isAdmin && [
                         { icon: UserPlus, title: 'Añadir alumno a este grupo', hover: 'var(--good)', act: () => setAddStudentTo(g) },
                         { icon: Pencil, title: 'Editar grupo',   hover: 'var(--info)', act: () => setFormFor({ group: g }) },
@@ -436,20 +501,13 @@ export default function Groups() {
                       ].map(({ icon: Icon, title, hover, act }) => (
                         <button key={title} title={title}
                           onClick={e => { e.stopPropagation(); act() }}
-                          className="p-1.5 rounded-lg transition-colors"
-                          style={{ color:'var(--t3)' }}
-                          onMouseEnter={e => e.currentTarget.style.color = hover}
-                          onMouseLeave={e => e.currentTarget.style.color = 'var(--t3)'}>
-                          <Icon size={13}/>
+                          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-90"
+                          style={{ color:'var(--t2)',background:'var(--soft-bg)',border:'1px solid var(--card-border)' }}
+                          onMouseEnter={e => {e.currentTarget.style.color = hover;e.currentTarget.style.transform='translateY(-2px) scale(1.06)'}}
+                          onMouseLeave={e => {e.currentTarget.style.color = 'var(--t2)';e.currentTarget.style.transform='none'}}>
+                          <Icon size={18}/>
                         </button>
                       ))}
-                      {/* En móvil sobra: la tarjeta entera ya navega al grupo,
-                          y repetir la acción cuesta una fila completa. */}
-                      <button
-                        onClick={e => { e.stopPropagation(); navigate(`/admin/grupos/${g.id}`) }}
-                        className="btn-secondary text-xs py-1.5 hidden sm:inline-flex">
-                        Ver grupo <ArrowRight size={13}/>
-                      </button>
                     </div>
                   </div>
                 </>

@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback, createContext, useContext } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
+import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import {
   Plus, Minus, Trash2, Check, ChevronDown, ChevronRight,
@@ -22,11 +23,14 @@ import { useAdminTheme } from '../../context/AdminThemeContext'
 import { folioEX, folioEXD } from '../../lib/folios'
 import { supabase } from '../../lib/supabaseClient'
 import { useSucursales } from '../../hooks/useSucursales'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { fetchDocumentosAlumnos } from '../../lib/expedienteData'
 import { fetchPagosDeAlumnos, estadoPagoExamenes } from '../../lib/pagosData'
 import { AREAS_UNIVERSIDAD } from '../../lib/areas'
 import StudentFormModal from '../../components/admin/StudentFormModal'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
+import StudentDock from '../../components/ui/StudentDock'
+import BarraFiltros from '../../components/ui/BarraFiltros'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -99,12 +103,12 @@ function scoreBg(v) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function GroupPicker({ groups, students, loading, onSelect }) {
+  const navigate = useNavigate()
   const { getAccent } = useGroupColors()
-  const { sucursales } = useSucursales()
-  const [sucursal, setSucursal] = useState('todas')
+  const { sucursal, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [query, setQuery] = useState('')
   const [columns, setColumns] = useState(1)
-  const gruposSucursal = sucursal === 'todas' ? groups : groups.filter(g => g.sucursal === sucursal)
+  const gruposSucursal = sucursal === TODAS ? groups : groups.filter(g => g.sucursal === sucursal)
   const gruposVisibles = gruposSucursal.filter(g => `${g.name} ${g.subject}`.toLowerCase().includes(query.trim().toLowerCase()))
 
   return (
@@ -116,27 +120,29 @@ function GroupPicker({ groups, students, loading, onSelect }) {
         </p>
       </div>
 
-      <div className="filter-toolbar items-end">
-        <div>
-          <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>
-            Sucursal
-          </label>
-          <select value={sucursal} onChange={e => setSucursal(e.target.value)} className="input-field text-sm w-auto">
-            <option value="todas">Todas las sucursales</option>
-            {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
-        </div>
-        <p className="text-xs pb-2.5" style={{ color:'var(--t3)' }}>{gruposVisibles.length} grupo(s)</p>
-        <label className="flex items-center gap-2 px-3 rounded-xl flex-1 min-w-[210px] max-w-sm"
-          style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
-          <Search size={14} style={{color:'var(--t3)'}}/>
-          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar grupo…"
-            className="bg-transparent outline-none py-2.5 text-sm min-w-0 w-full" style={{color:'var(--t1)'}}/>
-        </label>
-        <button className="btn-secondary p-2.5" onClick={()=>setColumns(v=>v===1?2:1)} title="Cambiar distribución">
-          {columns===1?<Columns2 size={16}/>:<Rows3 size={16}/>}<span className="hidden sm:inline text-xs">Vista</span>
-        </button>
-      </div>
+      <BarraFiltros
+        filtros={[
+          { id:'sucursal', label:'Sucursal', value:sucursal, onChange:setSucursal,
+            porDefecto:sucursal, options:opcionesConTodas },
+        ]}
+        busqueda={{
+          value: query,
+          onChange: setQuery,
+          placeholder: 'Buscar grupo por nombre',
+          coincidencias: gruposVisibles.map(g => ({
+            id:g.id, label:g.name, sub:g.subject,
+          })),
+          /* Elegir un grupo aquí es abrir su hoja: es lo único que se hace en
+             esta pantalla. */
+          onElegir: id => { const g = groups.find(x => x.id === id); if (g) onSelect(g) },
+        }}
+        resumen={`${gruposVisibles.length} grupo(s)`}
+        acciones={
+          <button className="btn-secondary p-2.5 flex-shrink-0" onClick={()=>setColumns(v=>v===1?2:1)}
+            title="Cambiar distribución" aria-label="Cambiar distribución">
+            {columns===1?<Columns2 size={16}/>:<Rows3 size={16}/>}
+          </button>
+        }/>
 
       {!loading && groups.length === 0 && (
         <div className="card p-8 text-center">
@@ -160,20 +166,11 @@ function GroupPicker({ groups, students, loading, onSelect }) {
               footer={
                 <div className="flex items-center justify-between pt-4 mt-1"
                   style={{ borderTop: '1px solid var(--divider)' }}>
-                  <div className="flex -space-x-2">
-                    {grpStudents.slice(0,6).map(s => (
-                      <div key={s.id} className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
-                        style={{ background: 'var(--soft-bg)', border:'2px solid var(--card-bg)', color: 'var(--t2)' }}>
-                        {s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}
-                      </div>
-                    ))}
-                    {grpStudents.length > 6 && (
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold"
-                        style={{ background: 'var(--soft-bg)', border:'2px solid var(--card-bg)', color: 'var(--t3)' }}>
-                        +{grpStudents.length - 6}
-                      </div>
-                    )}
-                  </div>
+                  {/* Mismo dock que en Grupos: con foto, con el nombre en el
+                      globo y abriendo el perfil al pulsar. Aquí eran iniciales
+                      grises que no llevaban a ninguna parte. */}
+                  <StudentDock students={grpStudents} accent={accent}
+                    onOpenStudent={id => navigate(`/admin/alumnos/${id}`)}/>
                   <button className="btn-secondary text-xs py-1.5 gap-1.5 pointer-events-none">
                     Abrir lista <ChevronRight size={13}/>
                   </button>
@@ -915,8 +912,15 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
      administrativos viven en la BD. Antes todo estaba en localStorage, así que
      lo capturado sólo existía en la máquina de quien lo escribió y no llegaba
      al perfil del alumno, a Evaluaciones ni al portal del alumno. */
+  /* El avatar y el grupo viajan con la fila. Antes esta proyección se
+     quedaba con el id y el nombre, así que `AvatarAlumno` recibía un alumno
+     sin `avatarSrc` ni `groupId` y caía siempre en las iniciales grises: en la
+     hoja donde más se recorre la lista, nadie se reconocía. */
   const rosterFromDb = () => groupStudents.map(s => ({
     id: s.id, name: s.name,
+    avatar: s.avatar,
+    avatarSrc: s.avatarSrc,
+    groupId: s.groupId,
     pago: s.pagoEstado ?? '',
     garantia: s.garantia ?? '',
     firmaGar: !!s.firmaGarantia,
@@ -1002,6 +1006,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const esTactil = useMemo(
     () => window.matchMedia?.('(pointer: coarse)').matches ?? false, [])
   const [avisoGirar, setAvisoGirar] = useState(false)
+  /* Marca que se salió de la pantalla completa a propósito estando en
+     horizontal. Sin ella, el efecto de abajo volvería a entrar en el acto y
+     el botón de salir no serviría de nada. */
+  const salidaManual = useRef(false)
 
   /* Pantalla completa en teléfono y tableta: además del overlay se pide la
      pantalla completa nativa y se fija el apaisado, que es lo único que hace
@@ -1026,12 +1034,39 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     return () => { cancelado = true }
   }, [isFullscreen, esTactil])
 
+  /* Girar el aparato ES la petición: poner el teléfono en horizontal sobre
+     esta hoja sólo puede significar «quiero verla entera», y pedirlo además
+     con un botón sobra. Al volver a vertical se sale, que es igual de
+     inequívoco. Sólo en táctil: en un monitor la orientación no dice nada.
+
+     Ojo con `requestFullscreen`: el navegador la reserva para gestos del
+     usuario y un giro no cuenta, así que puede rechazarla. No importa —el
+     overlay es nuestro y ocupa la ventana igual—; la nativa es una mejora,
+     no el mecanismo. */
+  useEffect(() => {
+    if (!esTactil) return undefined
+    const mq = window.matchMedia('(orientation: landscape)')
+    const alGirar = () => {
+      if (mq.matches) {
+        if (!salidaManual.current) setIsFullscreen(true)
+      } else {
+        salidaManual.current = false
+        setIsFullscreen(false)
+      }
+    }
+    alGirar()
+    mq.addEventListener('change', alGirar)
+    return () => mq.removeEventListener('change', alGirar)
+  }, [esTactil])
+
   /* Salir con Esc o con el botón "atrás" del sistema deja la pantalla completa
      nativa pero no nuestro overlay; hay que sincronizarlos. Sólo en táctil,
      que es donde llegamos a pedirla. */
   useEffect(() => {
     if (!esTactil) return
-    const alCambiarFS = () => { if (!document.fullscreenElement) setIsFullscreen(false) }
+    const alCambiarFS = () => {
+      if (!document.fullscreenElement) { salidaManual.current = true; setIsFullscreen(false) }
+    }
     document.addEventListener('fullscreenchange', alCambiarFS)
     return () => document.removeEventListener('fullscreenchange', alCambiarFS)
   }, [esTactil])
@@ -1777,8 +1812,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                         abajo por fin recorta con puntos suspensivos. */}
                     <div style={{ display:'flex', alignItems:'center', gap:8,
                       width: W.name - 20, maxWidth: W.name - 20 }}>
-                      <AvatarAlumno student={s} size={24}
-                        style={{ background: hcMode ? 'rgba(0,0,0,.08)' : 'var(--card-border)', color: hcMode ? '#1e293b' : 'var(--t2)', border:'none' }}/>
+                      {/* `accent` da el color del grupo a quien no ha elegido
+                          avatar, en vez del gris plano de antes. */}
+                      <AvatarAlumno student={s} size={24} accent={accent}/>
                       {/* `minWidth:0` es lo que permite a un hijo flex encoger
                           por debajo de su contenido; sin él no hay elipsis. */}
                       <span style={{ fontSize:12, fontWeight:500, color: hcMode ? '#0f172a' : 'rgba(255,255,255,.78)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>
@@ -1980,7 +2016,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
           <div style={{ flex:1, minWidth:0 }}>{toolbar}</div>
           {/* Salida. 44 px de lado: el mínimo táctil recomendado, y la hoja se
               usa con el dedo justo en esta vista. */}
-          <button onClick={() => setIsFullscreen(false)}
+          <button onClick={() => { salidaManual.current = true; setIsFullscreen(false) }}
             aria-label="Salir de pantalla completa" title="Salir de pantalla completa"
             style={{ flexShrink:0, width:44, height:44, display:'flex', alignItems:'center', justifyContent:'center',
               borderRadius:12, border:'1px solid var(--card-border)',

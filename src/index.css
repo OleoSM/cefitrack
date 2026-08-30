@@ -753,14 +753,95 @@ table tbody tr:hover { background: var(--soft-bg); }
 }
 
 @media (max-width: 700px) {
-  [data-kpi-grid] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  /* ── Indicadores y filtros: se ENCOGEN, no se apilan ───────────────────────
+     Antes, por debajo de 700 px cada tarjeta pasaba a media pantalla y cada
+     filtro a pantalla completa: cuatro indicadores ocupaban dos filas enteras
+     y cinco filtros, cinco. En un teléfono apaisado —700x530— eso empujaba el
+     contenido real fuera de la pantalla y obligaba a recorrer la cabecera
+     antes de llegar a los datos. Ahora ambos bloques se quedan en UNA fila y
+     lo que cede es el tamaño de sus partes. */
+
+  /* Dos por fila, cada una media pantalla. Nunca una sola a lo ancho: una
+     tarjeta de borde a borde no dice más que a media anchura, y empujaba las
+     tres restantes fuera de la pantalla. */
+  [data-kpi-grid] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .5rem !important;
+  }
+  /* Con un número impar de tarjetas, la última NO se ensancha al doble: se
+     queda en su media columna y deja el hueco a su lado. */
+  [data-kpi-grid] > *:last-child:nth-child(odd) { grid-column: auto !important; }
+
+  /* El contenido se mide contra el viewport para que la tarjeta no dependa de
+     un tamaño fijo pensado para escritorio. */
+  [data-kpi-card] { padding: .7rem !important; height: auto !important; min-height: 96px; }
+  [data-kpi-value] {
+    font-size: clamp(1.4rem, 7vw, 2rem) !important;
+    margin-top: .4rem !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  [data-kpi-label] {
+    font-size: clamp(.66rem, 3vw, .8rem) !important;
+    line-height: 1.2;
+  }
+  [data-kpi-icon] {
+    width: clamp(24px, 7vw, 32px) !important;
+    height: clamp(24px, 7vw, 32px) !important;
+  }
+  [data-kpi-icon] > svg { width: 60%; height: 60%; }
+
+  /* Filtros: se reparten de dos en dos, no uno por fila ni todos apretados
+     en una sola. Forzar una única fila funcionaba para una barra de tres
+     desplegables, pero la de Grupos lleva además el conmutador ECOEMS /
+     Universidad y dos botones de acción: metidos a la fuerza se amontonaban y
+     el botón de alta se estiraba hasta desbordar. */
+  .filter-toolbar {
+    flex-wrap: wrap;
+    gap: .5rem;
+    padding: .6rem;
+  }
+  /* Los controles comparten fila; el `clamp` les da un mínimo legible y un
+     máximo que evita que uno solo se coma el ancho. */
+  .filter-toolbar > select,
+  .filter-toolbar > label,
+  .filter-toolbar > div:not([role]) {
+    flex: 1 1 clamp(140px, 42%, 240px);
+    min-width: 0;
+    width: auto !important;
+    max-width: none !important;
+  }
+  /* Los botones de acción se miden por su contenido: estirarlos era lo que
+     convertía «Nuevo grupo» en una barra enorme. */
+  .filter-toolbar > button {
+    flex: 0 0 auto;
+    width: auto !important;
+    margin-left: 0 !important;
+  }
+  /* El embudo y el contador no son controles: no compiten por el ancho. */
+  .filter-toolbar > svg,
+  .filter-toolbar > p { flex: 0 0 auto; }
+  .filter-toolbar > span { flex: 0 0 auto; white-space: nowrap; }
+  /* Los grupos de botones (vertiente, pestañas) toman su propia fila y se
+     desplazan dentro si no caben, en vez de reventar la barra. */
+  .filter-toolbar > [role='group'],
+  .filter-toolbar > [role='tablist'] {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .filter-toolbar select,
+  .filter-toolbar input,
+  .filter-toolbar .input-field {
+    width: 100%;
+    min-width: 0;
+    font-size: clamp(.68rem, 2.2vw, .78rem);
+  }
   [data-filter-bar] > div,
   [data-filter-bar] label,
   [data-filter-bar] select { width: 100%; min-width: 0 !important; }
-  .filter-toolbar > label,
-  .filter-toolbar > div,
-  .filter-toolbar > select { width: 100%; min-width: 0 !important; max-width: none !important; }
-  .filter-toolbar > button { flex: 1 1 auto; justify-content: center; margin-left: 0 !important; }
   .responsive-table { table-layout: fixed; }
   .responsive-table .table-header,
   .responsive-table .table-cell { padding: .55rem .4rem; font-size: clamp(.6rem, 2.4vw, .78rem); }
@@ -771,16 +852,49 @@ table tbody tr:hover { background: var(--soft-bg); }
 }
 
 @media (max-width: 420px) {
-  [data-kpi-grid] { gap: .55rem !important; }
+  [data-kpi-grid] { gap: .4rem !important; }
   [data-kpi-grid] .card, [data-kpi-grid] .stat-card { padding: .75rem; }
   .responsive-table .table-header,
   .responsive-table .table-cell { padding-inline: .3rem; }
 }
 
 @media (max-width: 420px) {
-  [data-kpi-grid] { grid-template-columns: minmax(0, 1fr) !important; }
-  [data-kpi-grid] > *:last-child:nth-child(odd) { grid-column: auto; }
-  [data-kpi-grid] .h-\[100px\] { height: auto; min-height: 108px; }
+  /* Siguen siendo dos por fila: la regla de ≤700 px ya escala el contenido con
+     el viewport, así que no hay nada que apilar. */
+  [data-kpi-card] { padding: .55rem !important; min-height: 88px; }
+  [data-kpi-grid] .h-\[100px\] { height: auto; min-height: 88px; }
+}
+
+/* ── Accesibilidad ──────────────────────────────────────────────────────────
+   Las dos preferencias del menú de cuenta. Los atributos los pone
+   AdminThemeProvider en <html>, no en el contenedor del panel: `rem` se mide
+   contra la raíz y los portales cuelgan de <body>, así que un contenedor
+   intermedio dejaría fuera a modales y menús. */
+
+/* El 12,5 % sale de 16 → 18 px: un escalón que se nota en las hojas densas sin
+   romper las rejillas de dos columnas. Al ir en la raíz arrastra todo lo que
+   está en `rem`, que es prácticamente toda la interfaz. */
+html[data-texto='grande'] { font-size: 112.5%; }
+
+/* No se desactivan las transiciones a cero —un cambio instantáneo se lee como
+   un parpadeo— sino que se acortan a un valor imperceptible pero continuo. Lo
+   que sí se detiene del todo son los bucles: son los que marean. */
+html[data-movimiento='reducido'] *,
+html[data-movimiento='reducido'] *::before,
+html[data-movimiento='reducido'] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .08s !important;
+  scroll-behavior: auto !important;
+}
+html[data-movimiento='reducido'] .animate-page-in,
+html[data-movimiento='reducido'] .animate-scale-in { animation: none !important; }
+
+/* Quien pide menos movimiento del sistema operativo lo recibe sin tener que
+   volver a pedirlo aquí. */
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-movimiento='normal']) .animate-page-in,
+  html:not([data-movimiento='normal']) .animate-scale-in { animation: none !important; }
 }
 
 .nav-item { min-height: 44px; }

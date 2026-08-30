@@ -12,6 +12,8 @@ import { DataTable, DataTableRow, DataTableAvatar } from '../../components/ui/Da
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { loadSettings, calcularScore } from '../../lib/settings'
 import { useSucursales } from '../../hooks/useSucursales'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
 const trendIcons = {
   up:   <TrendingUp  size={14} className="text-emerald-500"/>,
@@ -29,9 +31,10 @@ function MedalIcon({ pos }) {
 
 export default function Rankings() {
   const navigate = useNavigate()
-  const [sucursalFilter, setSucursal] = useState('all')
+  const { sucursal: sucursalFilter, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [groupFilter, setGroup] = useState('all')
-  const { sucursales, nombreDe } = useSucursales()
+  const [buscaGrupo, setBuscaGrupo] = useState('')
+  const { nombreDe } = useSucursales()
   const { pesos } = loadSettings()
 
   const [students, setStudents] = useState([])
@@ -55,7 +58,7 @@ export default function Rankings() {
   }, [])
 
   // Lugar en el grupo = score ponderado (Exámenes / Tareas / Asistencia según Configuración)
-  const groupsInSucursal = sucursalFilter === 'all'
+  const groupsInSucursal = sucursalFilter === TODAS
     ? groups
     : groups.filter(g => g.sucursal === sucursalFilter)
 
@@ -82,6 +85,16 @@ export default function Rankings() {
   return (
     <div className="space-y-5">
       {/* Podium top 3 */}
+      <BarraFiltros
+        filtros={[
+          { id:'sucursal', label:'Sucursal', value:sucursalFilter, onChange:setSucursal,
+            porDefecto:sucursalFilter, options:opcionesConTodas },
+          { id:'grupo', label:'Grupo', tipo:'grupo', value:groupFilter, onChange:setGroup,
+            porDefecto:'all', grupos:groupsInSucursal, query:buscaGrupo, onQuery:setBuscaGrupo,
+            nombreDe },
+        ]}
+        resumen={`${sorted.length} alumno(s)`}/>
+
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -91,17 +104,10 @@ export default function Rankings() {
               <span className="hidden sm:inline"> — ajustable en Configuración</span>
             </p>
           </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <select value={sucursalFilter} onChange={e=>setSucursal(e.target.value)} className="input-field text-sm w-auto">
-              <option value="all">Todas las sucursales</option>
-              {sucursales.map(s=><option key={s.id} value={s.id}>{nombreDe(s.id)}</option>)}
-            </select>
-            <select value={groupFilter} onChange={e=>setGroup(e.target.value)} className="input-field text-sm w-auto">
-              <option value="all">Todos los grupos</option>
-              {groupsInSucursal.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </div>
         </div>
+
+        {/* La barra va fuera de la cabecera del podio: es de la pantalla
+            entera, no de esa tarjeta. */}
 
         <div className="flex items-end justify-center gap-2 sm:gap-4">
           {/* 2nd */}

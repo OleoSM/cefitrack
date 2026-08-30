@@ -7,11 +7,13 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import {
   DataTable, DataTableRow, DataTableAvatar, DataTableBar,
 } from '../../components/ui/DataTable'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
-import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 import ModalPortal from '../../components/ui/ModalPortal'
 import {
   fetchResumenPagos, fetchPagos, guardarPlan, registrarPago, borrarPago,
@@ -94,8 +96,9 @@ export default function Pagos() {
   const [errorCarga, setError]  = useState(null)
 
   const [query, setQuery]       = useState('')
-  const [sucursal, setSucursal] = useState('todas')
+  const { sucursal, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [grupo, setGrupo]       = useState('todos')
+  const [buscaGrupo, setBuscaGrupo] = useState('')
   const [estado, setEstado]     = useState('todos')
   const [metodo, setMetodo]     = useState('todos')
   const [orden, setOrden]       = useState('nombre')
@@ -131,7 +134,7 @@ export default function Pagos() {
     return [...vistos.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
   }, [filas])
 
-  const gruposVisibles = sucursal === 'todas'
+  const gruposVisibles = sucursal === TODAS
     ? grupos
     : grupos.filter(g => g.sucursal === sucursal)
 
@@ -157,7 +160,7 @@ export default function Pagos() {
       .filter(f => {
         const est = estadoDe(f)
         const met = metodosPorPlan[f.planId]
-        return (sucursal === 'todas' || f.sucursal === sucursal)
+        return (sucursal === TODAS || f.sucursal === sucursal)
           && (grupo === 'todos' || f.groupId === grupo)
           && (estado === 'todos' || est === estado)
           && (metodo === 'todos' || (met && met.has(metodo)))
@@ -221,76 +224,28 @@ export default function Pagos() {
       )}
 
       {/* ── Filtros: primero acotar, después los datos ──────────────────── */}
-      <FilterBar activos={activos}>
-        <>
-          {/* Sucursal — botones, es el corte que más se usa */}
-          <div className="w-full">
-            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-              style={{ color: 'var(--t3)' }}>
-              <Building2 size={10} className="inline mr-1 -mt-0.5"/> Sucursal
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {[{ v: 'todas', l: 'Todas' }, ...sucursales.map(s => ({ v: s, l: nombreDe(s) }))].map(o => (
-                <Chip key={o.v} activo={sucursal === o.v} onClick={() => setSucursal(o.v)}>
-                  {o.l}
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          {/* Grupo — botones acotados a la sucursal elegida */}
-          <div className="w-full">
-            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-              style={{ color: 'var(--t3)' }}>
-              <Users size={10} className="inline mr-1 -mt-0.5"/> Grupo
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              <Chip activo={grupo === 'todos'} onClick={() => setGrupo('todos')}>Todos</Chip>
-              {gruposVisibles.map(g => (
-                <Chip key={g.id} activo={grupo === g.id} onClick={() => setGrupo(g.id)}>
-                  {g.name}
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-              style={{ color: 'var(--t3)' }}>Buscar</label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2"
-                style={{ color: 'var(--t4)' }}/>
-              <input value={query} onChange={e => setQuery(e.target.value)}
-                placeholder="Nombre o correo…" className="input-field pl-9"/>
-            </div>
-          </div>
-
-          {[
-            { label: 'Estado', value: estado, set: setEstado,
-              opts: [{ v: 'todos', l: 'Todos' },
-                     ...Object.entries(ESTADO_LABEL).map(([v, l]) => ({ v, l }))] },
-            { label: 'Forma de pago', value: metodo, set: setMetodo,
-              opts: [{ v: 'todos', l: 'Todas' },
-                     ...METODOS.map(m => ({ v: m, l: METODO_LABEL[m] }))] },
-            { label: 'Ordenar', value: orden, set: setOrden,
-              opts: [{ v: 'nombre', l: 'Nombre A-Z' }, { v: 'avance', l: 'Menor avance' },
-                     { v: 'saldo', l: 'Mayor saldo' }, { v: 'reciente', l: 'Pago más reciente' }] },
-          ].map(({ label, value, set, opts }) => (
-            <div key={label}>
-              <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--t3)' }}>{label}</label>
-              <select value={value} onChange={e => set(e.target.value)} className="input-field text-sm">
-                {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-              </select>
-            </div>
-          ))}
-
-          <div className="flex items-end pb-0.5">
-            <NeonCheckbox checked={soloAdeudo} onChange={e => setSoloAdeudo(e.target.checked)}
-              label="Sólo con adeudo" color="#00ffaa"/>
-          </div>
-        </>
-      </FilterBar>
+      <BarraFiltros
+        filtros={[
+          { id:'sucursal', label:'Sucursal', value:sucursal, onChange:setSucursal,
+            porDefecto:sucursal, options:opcionesConTodas },
+          { id:'grupo', label:'Grupo', tipo:'grupo', value:grupo, onChange:setGrupo,
+            porDefecto:'todos', grupos:gruposVisibles, query:buscaGrupo, onQuery:setBuscaGrupo,
+            nombreDe },
+          { id:'estado', label:'Estado', value:estado, onChange:setEstado, porDefecto:'todos',
+            options:[{ value:'todos', label:'Todos' },
+              ...Object.entries(ESTADO_LABEL).map(([k, l]) => ({ value:k, label:l }))] },
+          { id:'metodo', label:'Forma de pago', value:metodo, onChange:setMetodo, porDefecto:'todos',
+            options:[{ value:'todos', label:'Todas' },
+              ...METODOS.map(m => ({ value:m, label:METODO_LABEL[m] }))] },
+          { id:'orden', label:'Ordenar', value:orden, onChange:setOrden, porDefecto:'nombre',
+            options:[{ value:'nombre', label:'Nombre A-Z' }, { value:'avance', label:'Menor avance' },
+              { value:'saldo', label:'Mayor saldo' }, { value:'reciente', label:'Pago más reciente' }] },
+        ]}
+        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno o correo…' }}
+        resumen={`${filtradas.length} alumno(s)`}>
+        <NeonCheckbox checked={soloAdeudo} onChange={e => setSoloAdeudo(e.target.checked)}
+          label="Sólo con adeudo" color="#00ffaa"/>
+      </BarraFiltros>
 
       {/* ── Totales del conjunto filtrado ───────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

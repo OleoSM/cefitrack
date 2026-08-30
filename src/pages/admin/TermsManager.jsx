@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { createPortal } from 'react-dom'
-import { fetchStudents, resetTerms } from '../../lib/supabaseData'
+import { fetchStudents, fetchGroups, resetTerms } from '../../lib/supabaseData'
 import {
   CheckCircle2, Clock, FileText, Trash2, Upload, Check, X, PenLine,
   Shield, AlertTriangle, Search, Eye, RefreshCw, ShieldCheck,
 } from 'lucide-react'
 import clsx from 'clsx'
 import KpiCard from '../../components/ui/KpiCard'
-import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 import ModalPortal from '../../components/ui/ModalPortal'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useSucursales } from '../../hooks/useSucursales'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import {
   fetchDocumentosAlumnos, validarDocumento, validarGarantia,
   fetchTerminosActivo, publicarTerminos, urlDocumento,
@@ -69,6 +72,13 @@ function CeldaDocumento({ etiqueta, doc, onVer, onAprobar, onRechazar, ocupado }
 
 export default function TermsManager() {
   const [list, setList]         = useState([])
+  const [grupos, setGrupos]     = useState([])
+  /* Esta pantalla no tenía forma de acotar: volcaba los alumnos de las cinco
+     sedes juntos y había que buscarlos por nombre uno a uno. */
+  const { sucursal, setSucursal, opcionesConTodas } = useSucursalActiva()
+  const { nombreDe } = useSucursales()
+  const [grupoFiltro, setGrupoFiltro] = useState('todos')
+  const [buscaGrupo, setBuscaGrupo]   = useState('')
   const [search, setSearch]     = useState('')
   const [filter, setFilter]     = useState('todos')
   const [preview, setPreview]   = useState(null)   // alumno seleccionado para ver firma
@@ -91,7 +101,14 @@ export default function TermsManager() {
     n + (s.documents?.filter(d => d.status === 'entregado').length ?? 0)
       + (s.garantiaEstado === 'entregada' ? 1 : 0), 0)
 
+  const gruposEnSucursal = sucursal === TODAS
+    ? grupos
+    : grupos.filter(g => g.sucursal === sucursal)
+  const idsEnSucursal = new Set(gruposEnSucursal.map(g => g.id))
+
   const filtered = list.filter(s => {
+    if (sucursal !== TODAS && !idsEnSucursal.has(s.groupId)) return false
+    if (grupoFiltro !== 'todos' && s.groupId !== grupoFiltro) return false
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase())
     const matchFilter =
         filter === 'todos'      ? true
@@ -104,11 +121,18 @@ export default function TermsManager() {
 
   const load = useCallback(async () => {
     try {
-      const students = await fetchStudents()
+      const [students, grs] = await Promise.all([fetchStudents(), fetchGroups()])
       const docs = await fetchDocumentosAlumnos(students.map(s=>s.id))
+      setGrupos(grs)
       setList(students.map(s=>({ ...s, documents:docs.filter(d=>d.student_id===s.id) })))
     } catch { /* lista vacía */ }
   }, [])
+
+  /* Si al cambiar de sucursal el grupo elegido ya no está, el filtro dejaría
+     la lista vacía sin que se entienda por qué. */
+  useEffect(() => {
+    if (grupoFiltro !== 'todos' && !gruposEnSucursal.some(g => g.id === grupoFiltro)) setGrupoFiltro('todos')
+  }, [sucursal, grupoFiltro, gruposEnSucursal])
 
   const verDocumento = async doc => {
     setAviso('')
@@ -232,31 +256,24 @@ export default function TermsManager() {
         </div>
       </div>
 
-      {/* Barra de búsqueda + filtro */}
-      <FilterBar activos={(search ? 1 : 0) + (filter !== 'todos' ? 1 : 0)}>
-        <div className="flex-1 min-w-[180px] flex items-center gap-2 px-3 rounded-xl"
-          style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-          <Search size={14} style={{ color:'var(--t3)', flexShrink:0 }}/>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar alumno…"
-            className="flex-1 bg-transparent py-2.5 text-sm outline-none"
-            style={{ color:'var(--t1)', caretColor:'var(--t1)' }}
-          />
-        </div>
-        <select
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          className="text-xs font-semibold px-3 py-2 rounded-xl appearance-none cursor-pointer"
-          style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t1)', outline:'none' }}>
-          <option value="todos">Todos</option>
-          <option value="revisar">Por revisar ({porRevisar})</option>
-          <option value="firmado">Firmados</option>
-          <option value="pendiente">Sin firmar</option>
-          <option value="activo">Acceso activo</option>
-        </select>
-      </FilterBar>
+      <BarraFiltros
+        filtros={[
+          { id:'sucursal', label:'Sucursal', value:sucursal, onChange:setSucursal,
+            porDefecto:sucursal, options:opcionesConTodas },
+          { id:'grupo', label:'Grupo', tipo:'grupo', value:grupoFiltro, onChange:setGrupoFiltro,
+            porDefecto:'todos', grupos:gruposEnSucursal, query:buscaGrupo, onQuery:setBuscaGrupo,
+            nombreDe },
+          { id:'estado', label:'Estado del expediente', value:filter, onChange:setFilter, porDefecto:'todos',
+            options:[
+              { value:'todos', label:'Todos' },
+              { value:'revisar', label:`Por revisar (${porRevisar})` },
+              { value:'firmado', label:'Firmados' },
+              { value:'pendiente', label:'Sin firmar' },
+              { value:'activo', label:'Acceso activo' },
+            ] },
+        ]}
+        busqueda={{ value: search, onChange: setSearch, placeholder:'Buscar alumno…' }}
+        resumen={`${filtered.length} alumno(s)`}/>
 
       {/* Tabla de alumnos */}
       <div className="card overflow-hidden">

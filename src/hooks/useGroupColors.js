@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useAdminTheme } from '../context/AdminThemeContext'
+import { supabase } from '../lib/supabaseClient'
 
 /*
  * Cada paleta tiene:
@@ -137,23 +138,87 @@ export const SHADER_CONFIG = {
 
 const DEFAULTS  = { g1:'ocean', g2:'forest', g3:'sunset' }
 const STORAGE_KEY = 'edutrack_group_palettes'
+const SEMBRADO_KEY = 'siga_paletas_migradas'
 
-function load() {
+/* ── Almacén compartido ────────────────────────────────────────────────────
+   La paleta de un grupo vive en `groups.paleta`, no en localStorage. Guardarla
+   en el navegador significaba que cada administrador veía una combinación
+   distinta y que lo que uno cambiaba no existía para los demás.
+
+   El almacén es de módulo, no de componente: hay una tarjeta —y por tanto una
+   instancia del hook— por grupo, y no tendría sentido que cada una pidiera la
+   lista entera. Se carga una vez y todas escuchan los cambios. */
+let paletas = {}
+let carga = null
+const oyentes = new Set()
+let canal = null
+
+function avisar() { oyentes.forEach(fn => fn(paletas)) }
+
+function leerLocalesAntiguas() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} }
 }
 
+/* Migración de una sola vez por navegador: las elecciones que ya existían en
+   local se suben para los grupos que aún no tienen color en la base, de modo
+   que nadie pierda lo que ya había ajustado. Los fallos se ignoran a
+   propósito: un sub-admin no puede escribir en grupos que no le tocan, y eso
+   no debe romper la carga. */
+async function sembrarDesdeLocal(enBd) {
+  if (localStorage.getItem(SEMBRADO_KEY)) return
+  localStorage.setItem(SEMBRADO_KEY, '1')
+  const locales = leerLocalesAntiguas()
+  const pendientes = Object.entries(locales).filter(([id]) => !enBd[id])
+  await Promise.all(pendientes.map(([id, pid]) =>
+    supabase.rpc('set_paleta_grupo', { p_group_id: id, p_paleta: pid })
+      .then(({ error }) => { if (!error) paletas = { ...paletas, [id]: pid } })
+      .catch(() => {})))
+  if (pendientes.length) avisar()
+}
+
+function cargarPaletas() {
+  carga ??= supabase.from('groups').select('id, paleta').then(({ data, error }) => {
+    if (error) { carga = null; return paletas }
+    paletas = Object.fromEntries(data.filter(g => g.paleta).map(g => [g.id, g.paleta]))
+    avisar()
+    sembrarDesdeLocal(paletas)
+    return paletas
+  })
+  return carga
+}
+
+/* Tiempo real: si otro administrador cambia el color, se ve aquí sin recargar.
+   Es el mismo canal para toda la aplicación. */
+function escucharCambios() {
+  if (canal) return
+  canal = supabase.channel('paletas-de-grupo')
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'groups' }, ({ new: fila }) => {
+      if (!fila?.id) return
+      const actual = paletas[fila.id]
+      const nueva  = fila.paleta || undefined
+      if (actual === nueva) return
+      const copia = { ...paletas }
+      if (nueva) copia[fila.id] = nueva; else delete copia[fila.id]
+      paletas = copia
+      avisar()
+    })
+    .subscribe()
+}
+
 export function useGroupColors() {
-  const [saved, setSaved] = useState(load)
+  const [saved, setSaved] = useState(paletas)
   const { t } = useAdminTheme()
   const claro = !!t?.light          // IPN o UNAM
 
-  /* Cada tarjeta usa su propia instancia del hook. Sin este evento, cambiar
-     la paleta desde el modal actualizaba localStorage pero las tarjetas ya
-     montadas conservaban su estado anterior hasta recargar la página. */
+  /* Cada tarjeta usa su propia instancia del hook, así que todas se apuntan al
+     mismo almacén: sin esto, cambiar la paleta desde el modal no llegaba a las
+     tarjetas ya montadas hasta recargar la página. */
   useEffect(() => {
-    const sync = event => setSaved(event.detail ?? load())
-    window.addEventListener('siga:group-palettes', sync)
-    return () => window.removeEventListener('siga:group-palettes', sync)
+    cargarPaletas()
+    escucharCambios()
+    const sync = next => setSaved(next)
+    oyentes.add(sync)
+    return () => { oyentes.delete(sync) }
   }, [])
 
   const getPalette = useCallback((groupId) => {
@@ -192,11 +257,16 @@ export function useGroupColors() {
   /** True si la identidad activa es clara — lo usan las tarjetas con shader. */
   const isLight = claro
 
-  const setGroupPalette = useCallback((groupId, paletteId) => {
-    const next = { ...load(), [groupId]: paletteId }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    setSaved(next)
-    window.dispatchEvent(new CustomEvent('siga:group-palettes', { detail:next }))
+  /* Optimista: la tarjeta cambia de color en el acto y la escritura viaja
+     después. Si la base la rechaza se vuelve a leer, que es la única fuente
+     de verdad. */
+  const setGroupPalette = useCallback(async (groupId, paletteId) => {
+    paletas = { ...paletas, [groupId]: paletteId }
+    avisar()
+    const { error } = await supabase.rpc('set_paleta_grupo', {
+      p_group_id: groupId, p_paleta: paletteId,
+    })
+    if (error) { carga = null; cargarPaletas() }
   }, [])
 
   return { getColors, getAccent, getSurface, isLight, getPaletteId, getPalette, setGroupPalette }

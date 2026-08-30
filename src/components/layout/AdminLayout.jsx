@@ -13,6 +13,7 @@ import clsx from 'clsx'
 import { fetchNotificaciones, marcarLeida, marcarTodasLeidas } from '../../lib/comunicacionesData'
 import { supabase } from '../../lib/supabaseClient'
 import { AdminThemeProvider, useAdminTheme } from '../../context/AdminThemeContext'
+import MenuPerfil from '../ui/MenuPerfil'
 
 /* Once entradas planas mezclaban entidades, tareas, análisis y administración
    al mismo nivel: había que leer la lista entera para orientarse. Agrupadas en
@@ -562,19 +563,18 @@ function LayoutInner() {
               )}
             </div>
 
-            <div className="flex items-center gap-2.5 pl-2" style={{ borderLeft: `1px solid ${identity ? identity.sideBorder : 'var(--card-border)'}` }}>
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
-                style={{
-                  background: identity ? `${identity.t1}1f` : 'var(--t4)',
-                  border: `1px solid ${t.sideT1}26`,
-                  color: t.sideT1,
-                }}>
-                {initials}
-              </div>
-              <span className="text-sm font-semibold hidden md:block" style={{ color: t.sideT2 }}>
-                {currentUser?.name.split(' ').slice(0, 2).join(' ')}
-              </span>
-            </div>
+            <MenuPerfil
+              usuario={currentUser}
+              iniciales={initials}
+              onIrAConfiguracion={() => navigate('/admin/configuracion')}
+              onCerrarSesion={handleLogout}
+              tema={{
+                borde: identity ? identity.sideBorder : 'var(--card-border)',
+                avatarBg: identity ? `${identity.t1}1f` : 'var(--t4)',
+                avatarBorde: `${t.sideT1}26`,
+                texto: t.sideT1,
+                textoSuave: t.sideT2,
+              }}/>
           </div>
         </header>
 

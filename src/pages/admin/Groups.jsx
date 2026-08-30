@@ -15,6 +15,10 @@ import { useGroupColors, COLOR_PALETTES, GRADIENT_PALETTES, SOLID_PALETTES, MATE
 import { logoInstitucion, INSTITUCIONES } from '../../lib/instituciones'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import IconoCurso from '../../components/ui/IconoCurso'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import StudentDock from '../../components/ui/StudentDock'
+import { filtrarGrupos } from '../../components/ui/BuscadorGrupo'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
 
@@ -54,36 +58,6 @@ const ICONOS_GRUPO = [
 // La escala compensa ese margen para que los emblemas pesen igual a la vista.
 const ESCALA_ICONO = { ecoems:1.08, unam:1.04, ipn:.9, uam:1.16, universidad:1.52 }
 
-function StudentDock({ students, onOpenStudent }) {
-  const [expanded, setExpanded] = useState(false)
-  const visible = expanded ? students : students.slice(0, 6)
-  if (!students.length) return <span className="text-[10px]" style={{color:'var(--t3)'}}>Sin alumnos</span>
-
-  return <div className="flex items-center gap-2 min-w-0" onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
-    <div className={`flex items-center ${expanded ? 'flex-wrap gap-1.5' : '-space-x-2'} min-w-0 py-2`}>
-      {visible.map(student => (
-        <button key={student.id} type="button" onClick={() => onOpenStudent(student.id)}
-          aria-label={`Abrir perfil de ${student.name}`}
-          className="group/avatar relative w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 z-0 hover:z-20 focus-visible:z-20 transition-[transform,margin] duration-200 ease-out hover:scale-[1.45] hover:-translate-y-2 hover:mx-2 focus-visible:scale-[1.45] focus-visible:-translate-y-2 focus-visible:mx-2 focus-visible:outline-none"
-          style={{background:'var(--soft-bg)',border:'2px solid var(--card-bg)',color:'var(--t1)',boxShadow:'0 4px 12px rgba(0,0,0,.2)'}}>
-          {student.avatarSrc
-            ? <img src={student.avatarSrc} alt="" className="w-full h-full rounded-full object-cover"/>
-            : student.name.split(' ').map(n=>n[0]).join('').slice(0,2)}
-          <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 translate-y-1 opacity-0 group-hover/avatar:translate-y-0 group-hover/avatar:opacity-100 group-focus-visible/avatar:translate-y-0 group-focus-visible/avatar:opacity-100 transition-all duration-200 ease-out whitespace-nowrap rounded-lg px-2 py-1 text-[9px] font-bold"
-            style={{background:'var(--panel-bg)',color:'var(--t1)',border:'1px solid var(--card-border)',boxShadow:'0 8px 24px rgba(0,0,0,.28)'}}>
-            {student.name}
-          </span>
-        </button>
-      ))}
-    </div>
-    {students.length > 6 && <button type="button" onClick={() => setExpanded(v=>!v)}
-      className="min-h-10 flex-shrink-0 rounded-xl px-2.5 inline-flex items-center gap-1.5 text-[10px] font-bold transition-colors"
-      style={{background:'var(--soft-bg)',color:'var(--t2)',border:'1px solid var(--card-border)'}}>
-      <Users size={14}/><span className="hidden md:inline">{expanded?'Mostrar menos':'Desplegar todos'}</span>
-      <span>{expanded?'−':`+${students.length-6}`}</span>
-    </button>}
-  </div>
-}
 
 function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved }) {
   const { sucursales: catalogoSucursales } = useSucursales()
@@ -301,8 +275,11 @@ export default function Groups() {
   const [deleteFor, setDeleteFor] = useState(null)
   const [addStudentTo, setAddStudentTo] = useState(null)  // grupo al que se le agrega alumno
   const [lastCred, setLastCred] = useState(null)
-  const [sucursal, setSucursal] = useState('todas')
+  /* La sucursal ya no arranca en «todas»: se hereda de la vista anterior o
+     cae en la primera a la que se tiene acceso. Ver useSucursalActiva. */
+  const { sucursal, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [curso, setCurso] = useState('todos')
+  const [buscaGrupo, setBuscaGrupo] = useState('')
   const [cardColumns, setCardColumns] = useState(1)
 
   const load = useCallback(async () => {
@@ -326,8 +303,9 @@ export default function Groups() {
   const sucursalOptions = catalogoSucursales
     .filter(s => isAdmin || allowedSucursales.includes(s.id))
     .map(s => s.id)
-  const bySucursal = sucursal === 'todas' ? visibleGroups : visibleGroups.filter(g => g.sucursal === sucursal)
-  const filteredGroups = curso === 'todos' ? bySucursal : bySucursal.filter(g=>g.curso===curso)
+  const bySucursal = sucursal === TODAS ? visibleGroups : visibleGroups.filter(g => g.sucursal === sucursal)
+  const porCurso = curso === 'todos' ? bySucursal : bySucursal.filter(g=>g.curso===curso)
+  const filteredGroups = filtrarGrupos(porCurso, buscaGrupo)
   const filteredStudents = students.filter(s => filteredGroups.some(g => g.id === s.groupId))
 
   const globalGrades = filteredStudents.map(s => s.avgGrade).filter(Number.isFinite)
@@ -373,15 +351,46 @@ export default function Groups() {
 
       {lastCred && <CredentialsPanel cred={lastCred} onClose={() => setLastCred(null)}/>}
 
-      {/* Filtro sucursal + alta */}
-      <div className="filter-toolbar">
-        <Filter size={14} style={{ color:'var(--t3)' }} />
-        <FilterSelect value={sucursal} onChange={setSucursal}
-          options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:nombreDe(s) }))]} />
-        {/* Botones, no desplegable: la lista de grupos es larga y separarla en
-            ECOEMS / Universidad es el corte que más se usa. Con un <select> hay
-            que abrirlo para ver que existe la división. */}
-        <div className="flex items-center gap-1 p-1 rounded-xl"
+      {/* Misma barra que el resto del panel: una entrada a los filtros, las
+          fichas de lo que está puesto y la búsqueda con coincidencias. */}
+      <BarraFiltros
+        filtros={[
+          { id:'sucursal', label:'Sucursal', value:sucursal, onChange:setSucursal,
+            porDefecto:sucursal, options:opcionesConTodas },
+          { id:'curso', label:'Vertiente', value:curso, onChange:setCurso, porDefecto:'todos',
+            options:[
+              { value:'todos', label:`Todas (${bySucursal.length})` },
+              { value:'ecoems', label:`ECOEMS (${bySucursal.filter(g=>g.curso==='ecoems').length})` },
+              { value:'universidad', label:`Universidad (${bySucursal.filter(g=>g.curso==='universidad').length})` },
+            ] },
+        ]}
+        busqueda={{
+          value: buscaGrupo,
+          onChange: setBuscaGrupo,
+          placeholder: 'Buscar grupo por nombre',
+          coincidencias: filtrarGrupos(porCurso, buscaGrupo).map(g => ({
+            id:g.id, label:g.name, sub:[g.subject, g.sucursal ? nombreDe(g.sucursal) : null].filter(Boolean).join(' · '),
+          })),
+          onElegir: () => {},
+        }}
+        resumen={`${filteredGroups.length} grupo(s)`}
+        acciones={
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button type="button" onClick={() => setCardColumns(v => v === 1 ? 2 : 1)}
+              className="btn-secondary p-2.5" title={cardColumns === 1 ? 'Mostrar dos columnas' : 'Mostrar una columna'}
+              aria-label={cardColumns === 1 ? 'Mostrar dos columnas' : 'Mostrar una columna'}>
+              {cardColumns === 1 ? <Columns2 size={16}/> : <Rows3 size={16}/>}
+            </button>
+            {isAdmin && (
+              <button onClick={() => setFormFor({ group: null })} className="btn-primary">
+                <Plus size={14}/> <span className="hidden sm:inline">Nuevo grupo</span>
+              </button>
+            )}
+          </div>
+        }>
+        {/* La vertiente también como botones: es el corte que más se usa y con
+            el escudo delante se reconoce sin leer. */}
+        <div className="flex items-center gap-1 p-1 rounded-xl w-fit max-w-full overflow-x-auto"
           style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
           role="group" aria-label="Filtrar por vertiente">
           {[
@@ -394,7 +403,7 @@ export default function Groups() {
             return (
               <button key={o.value} type="button" onClick={() => setCurso(o.value)}
                 aria-pressed={activo}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 flex-shrink-0"
                 style={activo
                   ? { background:'var(--accent)', color:'var(--accent-contrast)' }
                   : { background:'transparent', color:'var(--t3)' }}>
@@ -405,17 +414,7 @@ export default function Groups() {
             )
           })}
         </div>
-        <button type="button" onClick={() => setCardColumns(v => v === 1 ? 2 : 1)}
-          className="btn-secondary p-2.5" title={cardColumns === 1 ? 'Mostrar dos columnas' : 'Mostrar una columna'}
-          aria-label={cardColumns === 1 ? 'Mostrar dos columnas' : 'Mostrar una columna'}>
-          {cardColumns === 1 ? <Columns2 size={16}/> : <Rows3 size={16}/>}<span className="hidden sm:inline text-xs">Vista</span>
-        </button>
-        {isAdmin && (
-          <button onClick={() => setFormFor({ group: null })} className="btn-primary ml-auto">
-            <Plus size={14}/> Nuevo grupo
-          </button>
-        )}
-      </div>
+      </BarraFiltros>
 
       {loadError && (
         <div className="card p-4 flex items-center gap-2">
@@ -492,7 +491,8 @@ export default function Groups() {
 
                   {/* Avatares + botón */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-                    <StudentDock students={grpStudents} onOpenStudent={id=>navigate(`/admin/alumnos/${id}`)}/>
+                    <StudentDock students={grpStudents} accent={getAccent(g.id)}
+                      onOpenStudent={id=>navigate(`/admin/alumnos/${id}`)}/>
                     <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-auto">
                       {isAdmin && [
                         { icon: UserPlus, title: 'Añadir alumno a este grupo', hover: 'var(--good)', act: () => setAddStudentTo(g) },

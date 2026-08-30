@@ -16,11 +16,22 @@ const UNIVERSIDAD = ['unam', 'uam', 'ipn']
 
 export default function IconoCurso({ curso, instituciones = [], size = 20, sobreColor = false, className = '' }) {
   if (curso === 'universidad') {
-    return <span className={`inline-flex flex-shrink-0 overflow-visible ${className}`}
-      style={{width:size,height:size}}>
+    /* El emblema conjunto va con SUS colores y dentro de su caja.
+       Antes llevaba `brightness(0) invert(1)`, que lo aplastaba a una mancha
+       blanca —el filtro sirve para un escudo de un solo trazo, no para un
+       montaje de tres—, y un `scale(1.82)` con `overflow-visible` que lo
+       derramaba fuera del recuadro. Juntos parecía la imagen rota del
+       navegador en la esquina de la tarjeta. */
+    return <span className={`inline-flex flex-shrink-0 items-center justify-center ${className}`}
+      style={{ width:size, height:size }}
+      title="Universidad — UNAM, UAM e IPN">
       <img src="/logos/universidad-informe-transparente.png" alt="Universidad: UNAM, UAM e IPN"
         className="w-full h-full object-contain"
-        style={{transform:'scale(1.82)',transformOrigin:'center',filter:sobreColor?'brightness(0) invert(1)':undefined}}/>
+        /* Sobre el color del grupo el emblema es oscuro y se perdería: se le
+           pone un halo claro detrás en vez de recolorearlo. */
+        style={sobreColor
+          ? { filter:'drop-shadow(0 0 1px rgba(255,255,255,.95)) drop-shadow(0 0 3px rgba(255,255,255,.65))' }
+          : undefined}/>
     </span>
   }
   const escudos = curso === 'ecoems'

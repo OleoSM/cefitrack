@@ -354,10 +354,16 @@ function LayoutInner() {
                 document.body,
               )}
             </div>
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
-              style={{ background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.20)' }}>
-              {initials}
-            </div>
+            {/* El avatar es la puerta al perfil: es donde todo el mundo va a
+                buscarlo, y hasta ahora era un adorno que no hacía nada. */}
+            <button type="button" onClick={() => navigate('/student/configuracion')}
+              title="Mi perfil y configuración" aria-label="Mi perfil y configuración"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold overflow-hidden transition-transform hover:scale-105 active:scale-95"
+              style={{ background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.28)' }}>
+              {student?.avatarSrc
+                ? <img src={student.avatarSrc} alt="" className="w-full h-full object-cover"/>
+                : initials}
+            </button>
             <button onClick={handleLogout} className="p-1.5 rounded-xl transition-colors text-white/45 hover:text-red-300">
               <LogOut size={16} />
             </button>

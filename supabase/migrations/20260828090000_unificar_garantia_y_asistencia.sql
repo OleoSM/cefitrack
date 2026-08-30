@@ -36,9 +36,12 @@ begin
   return public.recalcular_acceso_alumno(p_student_id);
 end $$;
 
-update public.attendance set status='ausente' where status='justificado';
-alter table public.attendance drop constraint if exists attendance_status_check;
-alter table public.attendance add constraint attendance_status_check
+-- La tabla es `attendance_records`, no `attendance`: con el nombre equivocado
+-- la migracion entera abortaba y ni siquiera llegaban a crearse las funciones
+-- de garantia de arriba.
+update public.attendance_records set status='ausente' where status='justificado';
+alter table public.attendance_records drop constraint if exists attendance_records_status_check;
+alter table public.attendance_records add constraint attendance_records_status_check
   check (status in ('presente','tardanza','ausente'));
 
 revoke execute on function public.recalcular_acceso_alumno(text),

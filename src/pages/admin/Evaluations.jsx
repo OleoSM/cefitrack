@@ -1,17 +1,24 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, CheckCircle, Search, Trash2, AlertCircle } from 'lucide-react'
+import { Plus, X, CheckCircle, Trash2, AlertCircle, ClipboardCheck, MonitorCheck, GraduationCap } from 'lucide-react'
 import {
   fetchEvaluations, fetchStudents, fetchGroups,
   saveEvaluation, deleteEvaluation,
 } from '../../lib/supabaseData'
 import { DataTable, DataTableRow, DataTableAvatar } from '../../components/ui/DataTable'
-import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 import ModalPortal from '../../components/ui/ModalPortal'
 import { useSucursales } from '../../hooks/useSucursales'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
 // Las cuatro categorías autorizadas por CEFIMAT (requisito EVA-01).
 // Las anteriores (Examen Parcial, Proyecto, Examen Final, Quíz, Práctica) se retiran.
-const tipos = ['Tarea','Actividad en clase','Examen digital','Examen de simulación']
+const EXAMENES = [
+  { tipo:'Simulacro base', total:6, icon:ClipboardCheck, desc:'Seis aplicaciones presenciales programadas' },
+  { tipo:'Simulacro digital', total:5, icon:MonitorCheck, desc:'Cinco aplicaciones en plataforma' },
+  { tipo:'Examen general', total:1, icon:GraduationCap, desc:'Una evaluación integral final' },
+]
+const tipos = EXAMENES.map(x => x.tipo)
 
 const gradeColor = c =>
   c >= 8 ? { bg:'bg-emerald-500/15', text:'text-emerald-400', border:'border-emerald-500/30' }
@@ -154,8 +161,9 @@ const COLUMNS = [
 export default function Evaluations() {
   const [showModal, setShowModal] = useState(false)
   const [query, setQuery]         = useState('')
-  const [sucursalFilter, setSucursal] = useState('all')
+  const { sucursal: sucursalFilter, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [groupFilter, setGroup]   = useState('all')
+  const [buscaGrupo, setBuscaGrupo] = useState('')
   const [typeFilter, setType]     = useState('all')
 
   const [evaluations, setEvaluations] = useState([])
@@ -181,7 +189,7 @@ export default function Evaluations() {
 
   useEffect(() => { load() }, [load])
 
-  const groupsInSucursal = sucursalFilter === 'all'
+  const groupsInSucursal = sucursalFilter === TODAS
     ? groups
     : groups.filter(g => g.sucursal === sucursalFilter)
 
@@ -201,7 +209,7 @@ export default function Evaluations() {
     const q = query.toLowerCase()
     return (s.name.toLowerCase().includes(q) || e.materia.toLowerCase().includes(q))
       && (groupFilter === 'all' || s.groupId === groupFilter)
-      && (sucursalFilter === 'all' || group?.sucursal === sucursalFilter)
+      && (sucursalFilter === TODAS || group?.sucursal === sucursalFilter)
       && (typeFilter  === 'all' || e.tipo === typeFilter)
   })
 
@@ -211,41 +219,35 @@ export default function Evaluations() {
         <Modal students={students} onClose={() => setShowModal(false)} onSaved={load}/>
       )}
 
-      {/* Toolbar */}
-      <FilterBar
-        activos={[sucursalFilter, groupFilter, typeFilter].filter(v => v !== 'all').length + (query ? 1 : 0)}
-        acciones={
-          <button onClick={() => setShowModal(true)} disabled={students.length === 0} className="btn-primary">
-            <Plus size={14}/> <span className="hidden sm:inline">Agregar evaluación</span>
-          </button>
-        }>
-        <>
-          <div className="relative flex-1 min-w-[160px]">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2"
-              style={{ color:'var(--t4)' }}/>
-            <input value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="Buscar alumno o materia…" className="input-field pl-9"/>
-          </div>
-
-          {[
-            { label:'Sucursal', value:sucursalFilter, setter:setSucursal,
-              opts:[{v:'all',l:'Todas las sucursales'}, ...sucursales.map(s=>({v:s.id,l:nombreDe(s.id)}))] },
-            { label:'Grupo', value:groupFilter, setter:setGroup,
-              opts:[{v:'all',l:'Todos los grupos'}, ...groupsInSucursal.map(g=>({v:g.id,l:g.name}))] },
-            { label:'Tipo', value:typeFilter, setter:setType,
-              opts:[{v:'all',l:'Todos los tipos'}, ...tipos.map(t=>({v:t,l:t}))] },
-          ].map(({ label, value, setter, opts }) => (
-            <div key={label}>
-              <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'var(--t3)' }}>{label}</label>
-              <select value={value} onChange={e => setter(e.target.value)} className="input-field text-sm">
-                {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-              </select>
+      <section aria-label="Estructura de exámenes" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {EXAMENES.map(({tipo,total,icon:Icon,desc}) => {
+          const capturados = evaluations.filter(e => e.tipo === tipo).length
+          return <button key={tipo} type="button" onClick={() => setType(typeFilter === tipo ? 'all' : tipo)}
+            className="card p-4 text-left min-h-[120px] transition-transform active:scale-[.99]"
+            style={{border:typeFilter===tipo?'1px solid var(--accent)':'1px solid var(--card-border)'}}>
+            <div className="flex items-start justify-between gap-3">
+              <Icon size={20} style={{color:'var(--accent)'}}/>
+              <span className="text-2xl font-black" style={{color:'var(--t1)'}}>{total}</span>
             </div>
-          ))}
+            <p className="text-sm font-bold mt-2" style={{color:'var(--t1)'}}>{tipo}</p>
+            <p className="text-[11px] mt-1" style={{color:'var(--t3)'}}>{desc} · {capturados} registros</p>
+          </button>
+        })}
+      </section>
 
-        </>
-      </FilterBar>
+      {/* Toolbar */}
+      <BarraFiltros
+        filtros={[
+          { id:'sucursal', label:'Sucursal', value:sucursalFilter, onChange:setSucursal,
+            porDefecto:sucursalFilter, options:opcionesConTodas },
+          { id:'grupo', label:'Grupo', tipo:'grupo', value:groupFilter, onChange:setGroup,
+            porDefecto:'all', grupos:groupsInSucursal, query:buscaGrupo, onQuery:setBuscaGrupo,
+            nombreDe },
+          { id:'tipo', label:'Tipo', value:typeFilter, onChange:setType, porDefecto:'all',
+            options:[{ value:'all', label:'Todos los tipos' }, ...tipos.map(t => ({ value:t, label:t }))] },
+        ]}
+        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno o materia…' }}
+        resumen={`${filtered.length} evaluación(es)`}/>
 
       <p className="text-[11px] px-1" style={{ color:'var(--t3)' }}>
         {loading ? 'Cargando…' : `${filtered.length} evaluaciones`}

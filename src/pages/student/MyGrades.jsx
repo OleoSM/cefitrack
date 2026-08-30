@@ -6,7 +6,7 @@ import {
 import {
   Layers, Sigma, Atom, FlaskConical, Dna, Landmark, Globe2,
   BookOpen, Languages, Cpu, BookMarked, ArrowLeft, ChevronRight,
-  GraduationCap, ClipboardList, AlertTriangle,
+  GraduationCap, ClipboardList, AlertTriangle, Compass,
 } from 'lucide-react'
 import MateriaBarChart from '../../components/ui/MateriaBarChart'
 import { useStudentData } from '../../hooks/useStudentData'
@@ -15,6 +15,7 @@ import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
 import KpiCard from '../../components/ui/KpiCard'
+import { areaDe } from '../../lib/areas'
 
 /* Color personalizado por materia (línea de acento de cada card) */
 const MATERIA_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa', '#f472b6', '#22d3ee', '#fb7185', '#facc15']
@@ -51,6 +52,7 @@ export default function MyGrades() {
   const { student: s, evaluations } = useStudentData({ withEvaluations: true })
 
   const [scope, setScope] = useState('general')      // 'general' | nombre de materia
+  const area = areaDe(s?.universidadArea)
 
   // Se normalizan a escala 10 para que convivan evaluaciones con distinto máximo.
   const evals = useMemo(
@@ -117,6 +119,16 @@ export default function MyGrades() {
           <p className="text-sm mt-1" style={{ color: t.t3 }}>
             {scope === 'general' ? 'Historial completo de evaluaciones — solo lectura.' : `Desglose de ${scope}.`}
           </p>
+          {/* El área es el dato que decide qué examen presenta el alumno, así
+              que vive donde mira sus notas y no sólo en la hoja del profesor.
+              Sólo aplica a universidad: ECOEMS no se divide por áreas. */}
+          {area && (
+            <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold"
+              title={area.label}
+              style={{ background: t.soft ?? 'rgba(255,255,255,.07)', color: t.t2, border: `1px solid ${t.border ?? 'rgba(255,255,255,.12)'}` }}>
+              <Compass size={12}/> {area.label}
+            </span>
+          )}
         </div>
         {/* En teléfono el selector no cabe junto al título y bajaba a su propia
             línea pegado a la izquierda; su panel, anclado a la derecha del
@@ -170,11 +182,20 @@ export default function MyGrades() {
             const Icon = materiaIcon(mat)
             return (
               <button key={mat} onClick={() => setScope(mat)}
-                className="stat-card text-left transition-all active:scale-[.97] group relative overflow-hidden"
+                className="stat-card text-left transition-all active:scale-[.97] group relative overflow-hidden !p-0"
                 style={{ borderTop: `3px solid ${accent}` }}>
-                <span className="absolute inset-x-0 top-0 h-16 opacity-30 pointer-events-none"
-                  style={{backgroundImage:"linear-gradient(to bottom,transparent,var(--card-bg)),url('/materias-atlas-v1.png')",backgroundSize:'400% 200%',backgroundPosition:`${(materiaTile(mat)%4)*33.333}% ${materiaTile(mat)>3?100:0}%`}}/>
-                <div className="relative">
+                {/* Cada celda del atlas mide 3:4. El contenedor conserva esa
+                    proporciÃ³n y el fondo 4x2 muestra la celda completa, sin
+                    estirarla ni recortar instrumentos, libros o retratos. */}
+                <span className="block w-full pointer-events-none"
+                  style={{
+                    aspectRatio:'3 / 4',
+                    backgroundImage:"url('/materias-atlas-v1.png')",
+                    backgroundSize:'400% 200%',
+                    backgroundPosition:`${(materiaTile(mat)%4)*33.333}% ${materiaTile(mat)>3?100:0}%`,
+                    backgroundRepeat:'no-repeat',
+                  }}/>
+                <div className="relative p-3 sm:p-4" style={{borderTop:'1px solid var(--divider)'}}>
                 <div className="flex items-center justify-between">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: accent }}>

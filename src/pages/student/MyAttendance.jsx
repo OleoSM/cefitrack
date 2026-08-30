@@ -7,9 +7,9 @@ import ProgressiveList from '../../components/ui/ProgressiveList'
 import KpiCard from '../../components/ui/KpiCard'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import Dropdown from '../../components/ui/Dropdown'
-import { CheckCircle2, Clock, XCircle, ShieldAlert, Calendar, CalendarCheck, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, Calendar, CalendarCheck, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 
-const PIE_COLORS = ['#34d399', '#fbbf24', '#f87171', '#60a5fa']
+const PIE_COLORS = ['#34d399', '#fbbf24', '#f87171']
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 /* ── Helpers de fechas ── */
@@ -31,7 +31,6 @@ function TodayCard({ record, tardanzasRestantes, tardanzasConvertidas, lastRecor
     presente:    { label: 'Asistencia registrada hoy', icon: CheckCircle2, ring: 'rgba(52,211,153,.25)', glow: 'rgba(52,211,153,.12)', color: '#34d399' },
     tardanza:    { label: 'Registrado hoy con retardo', icon: Clock,       ring: 'rgba(251,191,36,.25)', glow: 'rgba(251,191,36,.10)', color: '#fbbf24' },
     ausente:     { label: 'Sin registro de entrada hoy', icon: XCircle,    ring: 'rgba(248,113,113,.25)', glow: 'rgba(248,113,113,.08)', color: '#f87171' },
-    justificado: { label: 'Ausencia justificada hoy',  icon: ShieldAlert,  ring: 'rgba(96,165,250,.25)', glow: 'rgba(96,165,250,.10)', color: '#60a5fa' },
     pendiente:   { label: 'Aún sin registro hoy',      icon: Clock,        ring: t.cardBorder,           glow: t.softBg,               color: t.t3 },
   }
   const st = record ? statusMap[record.status] : statusMap.pendiente
@@ -394,7 +393,6 @@ export default function MyAttendance() {
               { value: 'presente',    label: 'Presentes' },
               { value: 'tardanza',    label: 'Retardos' },
               { value: 'ausente',     label: 'Ausencias' },
-              { value: 'justificado', label: 'Justificados' },
             ]}/>
         </div>
 

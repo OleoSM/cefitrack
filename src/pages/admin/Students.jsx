@@ -1,21 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Users, Plus, Pencil, Trash2, KeyRound } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, KeyRound } from 'lucide-react'
 import { statusConfig, getStatusConfig } from '../../data/mockData'
 import { fetchStudents, fetchGroups, deleteStudent, fetchAttendanceStats } from '../../lib/supabaseData'
 import {
   DataTable, DataTableRow,
   DataTableAvatar, DataTableBadge, DataTableBar,
 } from '../../components/ui/DataTable'
-import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import { useAuth } from '../../context/AuthContext'
 import StudentFormModal from '../../components/admin/StudentFormModal'
 import ResetPasswordModal from '../../components/admin/ResetPasswordModal'
 import ConfirmDialog from '../../components/admin/ConfirmDialog'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
-import ProgressiveList, { FilterBar } from '../../components/ui/ProgressiveList'
+import ProgressiveList from '../../components/ui/ProgressiveList'
 import { useSucursales } from '../../hooks/useSucursales'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
 const attColor   = r => r >= 90 ? 'var(--good)' : r >= 75 ? 'var(--info)' : 'var(--bad)'
 const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
@@ -43,11 +44,11 @@ export default function Students() {
   const [loading, setLoading]     = useState(true)
 
   const [query, setQuery]         = useState('')
-  const [sucursalFilter, setSucursalFilter] = useState('all')
+  const { sucursal: sucursalFilter, setSucursal: setSucursalFilter, opcionesConTodas } = useSucursalActiva()
   const [groupFilter, setGroup]   = useState('all')
+  const [buscaGrupo, setBuscaGrupo] = useState('')
   const [statusFilter, setStatus] = useState('all')
   const [sort, setSort]           = useState('name')
-  const [visual, setVisual]       = useState(false)   // ← modo visual
 
   /* CRUD */
   const [formFor, setFormFor]     = useState(null)   // { student } | { student:null } para alta
@@ -72,7 +73,7 @@ export default function Students() {
     .filter(s => isAdmin || allowedSucursales.includes(s.id))
     .map(s => s.id)
   const visibleGroupIds = new Set(visibleGroups.map(g => g.id))
-  const groupsInSucursal = sucursalFilter === 'all'
+  const groupsInSucursal = sucursalFilter === TODAS
     ? visibleGroups
     : visibleGroups.filter(g => g.sucursal === sucursalFilter)
 
@@ -86,7 +87,7 @@ export default function Students() {
       const q = query.toLowerCase()
       const grp = groups.find(g => g.id === s.groupId)
       return (s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q))
-        && (sucursalFilter === 'all' || grp?.sucursal === sucursalFilter)
+        && (sucursalFilter === TODAS || grp?.sucursal === sucursalFilter)
         && (groupFilter === 'all' || s.groupId === groupFilter)
         && (statusFilter === 'all' || s.status === statusFilter)
     })
@@ -130,72 +131,32 @@ export default function Students() {
       {lastCred && <CredentialsPanel cred={lastCred} onClose={() => setLastCred(null)}/>}
 
       {/* ── Filtros ─────────────────────────────────────────── */}
-      <FilterBar
-        activos={[sucursalFilter, groupFilter, statusFilter].filter(v => v !== 'all').length + (query ? 1 : 0)}
+      <BarraFiltros
+        filtros={[
+          { id:'sucursal', label:'Sucursal', value:sucursalFilter, onChange:setSucursalFilter,
+            porDefecto:sucursalFilter, options:opcionesConTodas },
+          { id:'grupo', label:'Grupo', tipo:'grupo', value:groupFilter, onChange:setGroup,
+            porDefecto:'all', grupos:groupsInSucursal, query:buscaGrupo, onQuery:setBuscaGrupo,
+            nombreDe },
+          { id:'estado', label:'Estado', value:statusFilter, onChange:setStatus, porDefecto:'all',
+            options:[{ value:'all', label:'Todos' },
+              ...Object.entries(statusConfig).map(([k,v]) => ({ value:k, label:v.label }))] },
+          { id:'orden', label:'Ordenar', value:sort, onChange:setSort, porDefecto:'name',
+            options:[{ value:'name', label:'Nombre A-Z' }, { value:'grade', label:'Mayor promedio' },
+              { value:'attend', label:'Mayor asistencia' }, { value:'rank', label:'Ranking' }] },
+        ]}
+        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno…' }}
+        resumen={`${filtered.length} de ${students.length}`}
         acciones={
           <button onClick={() => setFormFor({ student: null })} disabled={visibleGroups.length === 0}
-            className="btn-primary sm:ml-auto">
+            className="btn-primary flex-shrink-0">
             <Plus size={14}/> <span className="hidden sm:inline">Nuevo alumno</span>
           </button>
-        }>
-        <>
-          <div className="flex-1 min-w-[160px]">
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2"
-                style={{ color:'var(--t4)' }} />
-              <input value={query} onChange={e => setQuery(e.target.value)}
-                placeholder="Buscar alumno…" className="input-field pl-9" />
-            </div>
-          </div>
-
-          {[
-            { label:'Sucursal', value:sucursalFilter, setter:setSucursalFilter,
-              opts:[{v:'all',l: isAdmin ? 'Todas' : 'Mis sucursales'}, ...sucursalOptions.map(s=>({v:s,l:nombreDe(s)}))] },
-            { label:'Grupo', value:groupFilter, setter:setGroup,
-              opts:[{v:'all',l:'Todos los grupos'}, ...groupsInSucursal.map(g=>({v:g.id,l:g.name}))] },
-            { label:'Estado', value:statusFilter, setter:setStatus,
-              opts:[{v:'all',l:'Todos'}, ...Object.entries(statusConfig).map(([k,v])=>({v:k,l:v.label}))] },
-            { label:'Ordenar', value:sort, setter:setSort,
-              opts:[{v:'name',l:'Nombre A-Z'},{v:'grade',l:'Mayor promedio'},{v:'attend',l:'Mayor asistencia'},{v:'rank',l:'Ranking'}] },
-          ].map(({ label, value, setter, opts }) => (
-            <div key={label}>
-              <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color:'var(--t3)' }}>{label}</label>
-              <select value={value} onChange={e => setter(e.target.value)} className="input-field text-sm">
-                {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-              </select>
-            </div>
-          ))}
-
-          {/* ── Checkbox modo visual ──────────────────────────── */}
-          <div className="flex items-end pb-0.5">
-            <NeonCheckbox
-              checked={visual}
-              onChange={e => setVisual(e.target.checked)}
-              label="Vista por grupo"
-              color="#5D3E90"
-            />
-          </div>
-
-        </>
-      </FilterBar>
+        }/>
 
       <p className="text-[11px] flex items-center gap-1.5 px-1" style={{ color:'var(--t3)' }}>
         <Users size={11} />
         {filtered.length} de {students.length} alumnos
-        {visual && (
-          <span className="ml-2 hidden sm:flex items-center gap-1.5">
-            {visibleGroups.map(g => {
-              const accent = getAccent(g.id)
-              return (
-                <span key={g.id} className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full" style={{ background: accent }} />
-                  <span style={{ color:'var(--t3)' }}>{g.name}</span>
-                </span>
-              )
-            })}
-          </span>
-        )}
       </p>
 
       {/* ── Tabla ───────────────────────────────────────────── */}
@@ -213,13 +174,10 @@ export default function Students() {
           const ac          = attColor(s.attendanceRate ?? 0)
           const groupAccent = getAccent(s.groupId)   // mismo color que Groups / Attendance / Registrar
 
-          /* En modo visual: la fila toma el color del grupo */
-          const rowStyle = visual
-            ? {
-                borderLeft:  `3px solid ${groupAccent}`,
-                background:  `${groupAccent}0d`,
-              }
-            : {}
+          /* La lista es de ALUMNOS: se recorre buscando a una persona, y el
+             grupo ya viaja en su propia columna. Teñir la fila entera del
+             color del grupo convertía la búsqueda en una lectura por bloques
+             de color y competía con los indicadores de riesgo. */
 
           // El avatar siempre muestra el color del grupo (coincide con el resto de la app)
           const avatarColor = ac
@@ -228,7 +186,6 @@ export default function Students() {
             <DataTableRow
               key={s.id}
               onClick={() => navigate(`/admin/alumnos/${s.id}`)}
-              style={rowStyle}
               cells={[
                 /* Alumno */
                 {
@@ -252,11 +209,8 @@ export default function Students() {
                   className: 'w-28 hidden md:flex',
                   content: (
                     <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full transition-all duration-300"
-                      style={visual
-                        ? { background:`${groupAccent}25`, color: groupAccent, border:`1px solid ${groupAccent}55` }
-                        : { background:'var(--soft-bg)', color:'var(--t2)' }
-                      }>
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background:'var(--soft-bg)', color:'var(--t2)' }}>
                       {grp?.name}
                     </span>
                   ),
@@ -269,7 +223,7 @@ export default function Students() {
                     : (
                       <DataTableBar
                         value={s.attendanceRate}
-                        color={visual ? groupAccent : ac}
+                        color={ac}
                         label={`${s.attendanceRate}%`}
                       />
                     ),
@@ -293,7 +247,7 @@ export default function Students() {
                       <DataTableBar
                         value={s.assignmentsDone}
                         max={s.assignmentsTotal}
-                        color={visual ? groupAccent : 'var(--info)'}
+                        color="var(--info)"
                         label={`${s.assignmentsDone}/${s.assignmentsTotal}`}
                       />
                     )

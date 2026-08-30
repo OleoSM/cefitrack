@@ -54,6 +54,7 @@ export default function KpiCard({
 
   return (
     <Root
+      data-kpi-card
       onClick={onClick}
       /* En móvil la tarjeta baja de 216 px a 100 px. No es la de escritorio
          encogida: se eliminan el subtítulo, el pill y el birrete, y el icono y
@@ -79,17 +80,18 @@ export default function KpiCard({
       </div>
 
       <div className="relative flex items-start justify-between">
-        <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-lg sm:rounded-2xl flex items-center justify-center flex-shrink-0"
+        <div data-kpi-icon
+          className="w-7 h-7 sm:w-11 sm:h-11 rounded-lg sm:rounded-2xl flex items-center justify-center flex-shrink-0"
           style={{ background:'#ffffff', boxShadow:'0 2px 8px rgba(0,0,0,.18)' }}>
           {Icon && <Icon className="w-4 h-4 sm:w-[21px] sm:h-[21px]" style={{ color: accent }} />}
         </div>
-        {onClick && <ArrowUpRight className="w-4 h-4 sm:w-[18px] sm:h-[18px]" style={{ color:'rgba(255,255,255,.75)' }} />}
+        {onClick && <ArrowUpRight data-kpi-arrow className="w-4 h-4 sm:w-[18px] sm:h-[18px]" style={{ color:'rgba(255,255,255,.75)' }} />}
       </div>
 
-      <p className="relative text-[28px] sm:text-4xl font-bold mt-1.5 sm:mt-4 leading-none tracking-tight text-white">
+      <p data-kpi-value className="relative text-[28px] sm:text-4xl font-bold mt-1.5 sm:mt-4 leading-none tracking-tight text-white">
         {value}
       </p>
-      <p className="relative text-[11px] sm:text-sm font-semibold mt-0.5 sm:mt-1.5 text-white leading-tight">{label}</p>
+      <p data-kpi-label className="relative text-[11px] sm:text-sm font-semibold mt-0.5 sm:mt-1.5 text-white leading-tight">{label}</p>
       {sub && (
         <p className="relative hidden sm:block text-xs mt-0.5" style={{ color:'rgba(255,255,255,.72)' }}>{sub}</p>
       )}

@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   Users, TrendingUp, CalendarCheck, ClipboardList,
-  AlertTriangle, CheckCircle, ArrowRight, Filter, Star, Search, RefreshCw
+  AlertTriangle, CheckCircle, ArrowRight, Filter, Star, RefreshCw
 } from 'lucide-react'
 import {
   fetchGroups, fetchStudents, fetchEvaluations,
@@ -16,6 +16,8 @@ import {
 import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useAuth } from '../../context/AuthContext'
 import KpiCard from '../../components/ui/KpiCard'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import { useSucursales } from '../../hooks/useSucursales'
 
@@ -178,7 +180,7 @@ export default function Dashboard() {
     .filter(s => isAdmin || allowedSucursales.includes(s.id))
     .map(s => s.id)
 
-  const [sucursal, setSucursal] = useState('todas')
+  const { sucursal, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [grupoId, setGrupoId]   = useState('todos')
   const [curso, setCurso]       = useState('todos')
   const [trendGroupId, setTrendGroupId] = useState('')
@@ -187,7 +189,7 @@ export default function Dashboard() {
   const [rankingView, setRankingView] = useState('promedio')
   const [subjectName, setSubjectName] = useState('')
 
-  const groupsInSucursalBase = sucursal === 'todas'
+  const groupsInSucursalBase = sucursal === TODAS
     ? visibleGroups
     : visibleGroups.filter(g => g.sucursal === sucursal)
   const groupsInSucursal = curso === 'todos' ? groupsInSucursalBase : groupsInSucursalBase.filter(g=>g.curso===curso)
@@ -280,23 +282,57 @@ export default function Dashboard() {
           <button className="btn-secondary min-h-11 inline-flex items-center justify-center gap-2" onClick={()=>setReloadKey(k=>k+1)}><RefreshCw size={15}/>Reintentar</button>
         </div>
       )}
-      {/* Filtro sucursal / grupo */}
-      <div className="filter-toolbar">
-        <Filter size={14} style={{ color: 'var(--t3)' }} />
-        <FilterSelect value={sucursal} onChange={handleSucursalChange}
-          options={[{ value:'todas', label: isAdmin ? 'Todas las sucursales' : 'Mis sucursales' }, ...sucursalOptions.map(s => ({ value:s, label:nombreDe(s) }))]} />
-        <FilterSelect value={curso} onChange={v=>{setCurso(v);setGrupoId('todos')}} options={[
-          {value:'todos',label:'Todos los cursos'},{value:'ecoems',label:'ECOEMS'},{value:'universidad',label:'Universidad'},
-        ]}/>
-        <FilterSelect value={grupoId} onChange={setGrupoId}
-          options={[{ value:'todos', label:'Todos los grupos' }, ...queriedGroups.map(g => ({ value:g.id, label:g.name }))]} />
-        <label className="relative flex-1 min-w-[180px]" data-filter-bar>
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color:'var(--t3)'}}/>
-          <input value={groupQuery} onChange={e=>{setGroupQuery(e.target.value);setGrupoId('todos')}} placeholder="Buscar grupo por nombre"
-            className="input-field w-full min-h-11 pl-9 pr-3 text-xs" aria-label="Buscar grupo por nombre"/>
-        </label>
-        <span className="text-[11px] whitespace-nowrap" style={{color:'var(--t3)'}}>{queriedGroups.length} resultado(s)</span>
-      </div>
+      {/* Una sola entrada a los filtros. Los que estan puestos se ven como
+          fichas debajo, para no tener que abrir el panel solo para recordar
+          por que la lista salio corta. */}
+      <BarraFiltros
+        filtros={[
+          {
+            id: 'sucursal',
+            label: 'Sucursal',
+            value: sucursal,
+            onChange: handleSucursalChange,
+            /* La sucursal ya no cuenta como filtro «puesto»: ahora es el
+               punto de partida, no una excepción. Lo excepcional es mirar
+               todas a la vez. */
+            porDefecto: sucursal,
+            options: opcionesConTodas,
+          },
+          {
+            id: 'curso',
+            label: 'Curso',
+            value: curso,
+            onChange: v => { setCurso(v); setGrupoId('todos') },
+            porDefecto: 'todos',
+            options: [
+              { value:'todos', label:'Todos los cursos' },
+              { value:'ecoems', label:'ECOEMS' },
+              { value:'universidad', label:'Universidad' },
+            ],
+          },
+          {
+            id: 'grupo',
+            label: 'Grupo',
+            value: grupoId,
+            onChange: setGrupoId,
+            porDefecto: 'todos',
+            options: [
+              { value:'todos', label:'Todos los grupos' },
+              ...queriedGroups.map(g => ({ value:g.id, label:g.name })),
+            ],
+          },
+        ]}
+        busqueda={{
+          value: groupQuery,
+          onChange: v => { setGroupQuery(v); setGrupoId('todos') },
+          placeholder: 'Buscar grupo por nombre',
+          coincidencias: queriedGroups.map(g => ({
+            id: g.id, label: g.name, sub: g.sucursal ? nombreDe(g.sucursal) : null,
+          })),
+          onElegir: id => { setGrupoId(id); setGroupQuery('') },
+        }}
+        resumen={`${queriedGroups.length} grupo(s)`}
+      />
 
       {loading && <p className="card p-4 text-sm" role="status" style={{color:'var(--t2)'}}>Cargando indicadores…</p>}
 

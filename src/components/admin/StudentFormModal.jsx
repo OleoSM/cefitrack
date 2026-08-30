@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { X, Plus, Save, AlertCircle, RefreshCw, Eye, EyeOff } from 'lucide-react'
+import { X, Plus, Save, AlertCircle, RefreshCw, Eye, EyeOff, Building2 } from 'lucide-react'
 import { createStudent, updateStudent } from '../../lib/supabaseData'
 import { generarPassword, generarUsuario, DOMINIO_CORREO } from '../../lib/credentials'
+import { useSucursales } from '../../hooks/useSucursales'
+import { areasParaInstituciones } from '../../lib/areas'
 import ModalPortal from '../ui/ModalPortal'
 
 /**
@@ -13,6 +15,19 @@ export default function StudentFormModal({
   student = null, groups, defaultGroupId = null, onClose, onSaved,
 }) {
   const editing = !!student
+  const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
+
+  /* El alumno pertenece a la sucursal DE SU GRUPO: `sucursal` no se elige, se
+     deriva. Este filtro existe sólo para acotar la lista de grupos, que con
+     todas las sedes abiertas es demasiado larga para encontrar el correcto. */
+  const [sucursalFiltro, setSucursalFiltro] = useState(() => {
+    const inicial = student?.groupId ?? defaultGroupId
+    return groups.find(g => g.id === inicial)?.sucursal ?? 'todas'
+  })
+  const [cursoFiltro, setCursoFiltro] = useState(() => {
+    const inicial = student?.groupId ?? defaultGroupId
+    return groups.find(g => g.id === inicial)?.curso ?? 'ecoems'
+  })
 
   const [form, setForm] = useState({
     name:        student?.name ?? '',
@@ -63,6 +78,11 @@ export default function StudentFormModal({
     }
   }
 
+  const gruposVisibles = groups.filter(g =>
+    g.curso === cursoFiltro && (sucursalFiltro === 'todas' || g.sucursal === sucursalFiltro))
+  const grupoElegido = groups.find(g => g.id === form.groupId) ?? null
+  const areasDisponibles = areasParaInstituciones(grupoElegido?.instituciones ?? [])
+
   const campo = (label, key, props = {}) => (
     <div>
       <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
@@ -100,6 +120,22 @@ export default function StudentFormModal({
             </p>
           </div>
 
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--t3)'}}>Curso</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[['ecoems','ECOEMS'],['universidad','Universidad']].map(([id,label]) => (
+                <button key={id} type="button" onClick={() => {
+                  setCursoFiltro(id)
+                  if (groups.find(g => g.id === form.groupId)?.curso !== id) set('groupId','')
+                  if (id === 'ecoems') set('universidadArea','')
+                }} className="min-h-11 rounded-xl text-xs font-bold"
+                  style={{background:cursoFiltro===id?'var(--accent)':'var(--soft-bg)',color:cursoFiltro===id?'var(--accent-contrast)':'var(--t2)',border:'1px solid var(--card-border)'}}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {campo('Correo personal', 'personalEmail', { type:'email', placeholder:'alumno@gmail.com' })}
             {campo('WhatsApp del alumno', 'whatsapp', { type:'tel', placeholder:'55 0000 0000' })}
@@ -127,20 +163,46 @@ export default function StudentFormModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
-              style={{ color: 'var(--t3)' }}>Grupo</label>
-            {/* Sin grupo el alumno no aparecería en ninguna lista filtrada, así que es obligatorio. */}
-            <select required value={form.groupId} onChange={e => set('groupId', e.target.value)} className="input-field">
-              <option value="">Seleccionar grupo…</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name} — {g.subject}</option>)}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
+                style={{ color: 'var(--t3)' }}>Sucursal</label>
+              <select value={sucursalFiltro} className="input-field"
+                onChange={e => {
+                  const suc = e.target.value
+                  setSucursalFiltro(suc)
+                  // Si el grupo elegido es de otra sede, deja de ser válido.
+                  if (suc !== 'todas' && groups.find(g => g.id === form.groupId)?.sucursal !== suc) set('groupId', '')
+                }}>
+                <option value="todas">Todas las sucursales</option>
+                {catalogoSucursales.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
+                style={{ color: 'var(--t3)' }}>Grupo</label>
+              {/* Sin grupo el alumno no aparecería en ninguna lista filtrada, así que es obligatorio. */}
+              <select required value={form.groupId} onChange={e => set('groupId', e.target.value)} className="input-field">
+                <option value="">Seleccionar grupo…</option>
+                {gruposVisibles.map(g => <option key={g.id} value={g.id}>{g.name} — {g.subject}</option>)}
+              </select>
+            </div>
           </div>
 
-          {groups.find(g=>g.id===form.groupId)?.curso === 'universidad' && <div>
+          {grupoElegido && (
+            <p className="flex items-center gap-1.5 text-[10px] -mt-1" style={{ color:'var(--t4)' }}>
+              <Building2 size={11}/>
+              El alumno queda registrado en <strong style={{ color:'var(--t3)' }}>
+                {grupoElegido.sucursal ? nombreDe(grupoElegido.sucursal) : 'la sucursal del grupo'}
+              </strong>, la sucursal de {grupoElegido.name}.
+            </p>
+          )}
+
+          {grupoElegido?.curso === 'universidad' && <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--t3)'}}>Área universitaria</label>
             <select required value={form.universidadArea} onChange={e=>set('universidadArea',e.target.value)} className="input-field">
-              <option value="">Seleccionar área…</option>{[1,2,3,4].map(n=><option key={n} value={n}>Área {n}</option>)}
+              <option value="">Seleccionar área…</option>
+              {areasDisponibles.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
             </select>
           </div>}
 

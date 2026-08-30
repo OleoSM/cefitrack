@@ -101,6 +101,10 @@ export async function fetchResumenPagos() {
     movimientos: r.movimientos ?? 0,
     ultimoPago: r.ultimo_pago,
     liquidadoDeContado: !!r.liquidado_de_contado,
+    // La inscripción va aparte del curso: se cobra una vez y no forma parte
+    // de las mensualidades, así que sumarla al plan descuadraba el saldo.
+    inscripcion: num(r.inscripcion),
+    inscripcionPagada: num(r.inscripcion_pagada) ?? 0,
   }))
 }
 
@@ -137,9 +141,58 @@ export async function fetchPagos(planIds) {
     referencia: p.referencia,
     nota: p.nota,
     concepto: p.concepto ?? 'Pago de curso',
+    esInscripcion: !!p.es_inscripcion,
+    // Quién recibió el dinero, escrito a mano al cobrar. `createdBy` es la
+    // CUENTA abierta, que en un mostrador compartido no es la misma persona.
+    registradoPor: p.registrado_por,
     createdBy: p.created_by,
     createdByName: creatorNames[p.created_by] ?? 'Administrador',
   }))
+}
+
+/**
+ * Movimientos de un lote de alumnos, sin pasar por sus planes.
+ *
+ * La hoja de calificaciones necesita saber si el alumno ya pagó los exámenes
+ * adicionales, y allí sólo se tienen ids de alumno. Pedir antes el plan de cada
+ * uno sería un viaje de más para un dato que la política de `pagos` ya deja
+ * leer directamente.
+ */
+export async function fetchPagosDeAlumnos(studentIds) {
+  const ids = (studentIds ?? []).filter(Boolean)
+  if (ids.length === 0) return []
+  const { data, error } = await supabase
+    .from('pagos')
+    .select('student_id, monto, concepto, fecha, es_inscripcion')
+    .in('student_id', ids)
+  if (error) throw error
+  return data.map(p => ({
+    studentId: p.student_id,
+    monto: num(p.monto),
+    concepto: p.concepto ?? '',
+    fecha: p.fecha,
+    esInscripcion: !!p.es_inscripcion,
+  }))
+}
+
+/**
+ * ¿Cubrió el alumno los exámenes adicionales (5 digitales + 1 general)?
+ *
+ * Se reconoce por el CONCEPTO del movimiento, que es texto libre: quien cobra
+ * escribe "examen general", "exámenes digitales", "5 digitales"… Cualquier
+ * concepto que hable de exámenes cuenta. Es una heurística deliberada: obligar
+ * a un concepto exacto haría que un cobro real no se reflejara por una tilde.
+ */
+export const PAGO_EXAMENES_RE = /ex[áa]men|exam\b|digitales|simulacro/i
+
+export function estadoPagoExamenes(pagosDelAlumno = []) {
+  const relevantes = pagosDelAlumno.filter(p => PAGO_EXAMENES_RE.test(p.concepto))
+  if (!relevantes.length) return { pagado: false, monto: 0, conceptos: [] }
+  return {
+    pagado: true,
+    monto: relevantes.reduce((a, p) => a + (p.monto ?? 0), 0),
+    conceptos: relevantes.map(p => p.concepto),
+  }
 }
 
 /* ── Escritura (RPC) ─────────────────────────────────────────────────────── */
@@ -152,6 +205,7 @@ const MENSAJES = {
   plan_not_found: 'El plan de pago ya no existe.',
   pago_not_found: 'El movimiento ya no existe.',
   plan_con_pagos: 'Este plan tiene pagos registrados: desactívalo en lugar de borrarlo.',
+  falta_quien_registra: 'Escribe tu nombre en «Registro»: debe constar quién recibió el pago.',
 }
 
 function traducir(error) {
@@ -171,6 +225,7 @@ function traducir(error) {
 export async function guardarPlan({
   id = null, studentId, total, modalidad = 'mensualidades',
   mensualidades = 1, inicio = null, concepto = 'Curso', notas = null, activo = true,
+  inscripcion = null,
 }) {
   const { data, error } = await supabase.rpc('guardar_plan_pago', {
     p_id: id,
@@ -184,6 +239,15 @@ export async function guardarPlan({
     p_activo: activo,
   })
   if (error) return { ok: false, message: traducir(error) }
+  /* El importe de inscripción se guarda aparte: `guardar_plan_pago` es una RPC
+     compartida y ampliar su firma obligaría a tocar a todos sus llamadores. */
+  if (data?.id ?? id) {
+    const { error: e2 } = await supabase.rpc('set_inscripcion_plan', {
+      p_plan_id: data?.id ?? id,
+      p_inscripcion: inscripcion,
+    })
+    if (e2) return { ok: false, message: traducir(e2) }
+  }
   return { ok: true, plan: data }
 }
 
@@ -199,6 +263,7 @@ export async function guardarPlan({
 export async function registrarPago({
   id = null, planId, monto, metodo, fecha = null,
   periodo = null, cubreTotal = false, concepto = 'Pago de curso', referencia = null, nota = null,
+  registradoPor = null, esInscripcion = false,
 }) {
   const { data, error } = await supabase.rpc('registrar_pago_v2', {
     p_id: id,
@@ -211,6 +276,8 @@ export async function registrarPago({
     p_concepto: concepto,
     p_referencia: referencia,
     p_nota: nota,
+    p_registrado_por: registradoPor,
+    p_es_inscripcion: esInscripcion,
   })
   if (error) return { ok: false, message: traducir(error) }
   return { ok: true, pago: data }

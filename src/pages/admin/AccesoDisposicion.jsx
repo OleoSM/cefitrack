@@ -15,6 +15,8 @@ import { generarPassword } from '../../lib/credentials'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import ModalPortal from '../../components/ui/ModalPortal'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
 // Las sucursales salen del catálogo oficial. Una sede sin grupos también debe
 // aparecer para que se pueda conceder acceso antes de abrir su primer grupo.
@@ -50,8 +52,9 @@ export default function AccesoDisposicion() {
   const [rolFiltro, setRolFiltro] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [grupoFiltro, setGrupoFiltro] = useState('todos')
-  const [sucursalFiltro, setSucursalFiltro] = useState('todas')
-  const gruposFiltrables = sucursalFiltro === 'todas'
+  const [buscaGrupo, setBuscaGrupo] = useState('')
+  const { sucursal: sucursalFiltro, setSucursal: setSucursalFiltro, opcionesConTodas } = useSucursalActiva()
+  const gruposFiltrables = sucursalFiltro === TODAS
     ? groups
     : groups.filter(g => g.sucursal === sucursalFiltro)
 
@@ -70,7 +73,7 @@ export default function AccesoDisposicion() {
     const porRol = rolFiltro === 'todos'
       || (rolFiltro === 'retiradas' ? a.activo === false : a.role === rolFiltro)
     return porRol
-      && (sucursalFiltro === 'todas' || a.sucursal === sucursalFiltro
+      && (sucursalFiltro === TODAS || a.sucursal === sucursalFiltro
           || (a.role === 'sub_admin' && (accessByUser[a.id] ?? []).some(x => x.sucursal === sucursalFiltro)))
       && (grupoFiltro === 'todos' || a.grupoId === grupoFiltro
           || (a.role === 'sub_admin' && (accessByUser[a.id] ?? []).some(x => x.groupId === grupoFiltro)))
@@ -275,33 +278,24 @@ export default function AccesoDisposicion() {
 
         {loading && <p className="text-sm" style={{ color: 'var(--t3)' }}>Cargando…</p>}
 
-        {/* Filtros */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-[180px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color:'var(--t4)' }}/>
-            <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
-              placeholder="Buscar por nombre o correo…" className="input-field pl-9 text-sm"/>
-          </div>
-          <select value={rolFiltro} onChange={e => setRolFiltro(e.target.value)}
-            className="input-field text-sm w-auto">
-            {[['todos', `Todos (${staff.length})`],
-              ['admin', `Administradores (${conteo.admin})`],
-              ['sub_admin', `Sub-admins (${conteo.sub_admin})`],
-              ['student', `Alumnos (${conteo.student})`],
-              ['retiradas', `Retiradas (${conteo.retiradas})`]].map(([v, l]) =>
-                <option key={v} value={v}>{l}</option>)}
-          </select>
-          <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)}
-            className="input-field text-sm w-auto">
-            <option value="todas">Todas las sucursales</option>
-            {catalogoSucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
-          <select value={grupoFiltro} onChange={e => setGrupoFiltro(e.target.value)}
-            className="input-field text-sm w-auto">
-            <option value="todos">Todos los grupos</option>
-            {gruposFiltrables.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
-        </div>
+        <BarraFiltros
+          filtros={[
+            { id:'rol', label:'Tipo de cuenta', value:rolFiltro, onChange:setRolFiltro, porDefecto:'todos',
+              options:[
+                { value:'todos', label:`Todos (${staff.length})` },
+                { value:'admin', label:`Administradores (${conteo.admin})` },
+                { value:'sub_admin', label:`Sub-admins (${conteo.sub_admin})` },
+                { value:'student', label:`Alumnos (${conteo.student})` },
+                { value:'retiradas', label:`Retiradas (${conteo.retiradas})` },
+              ] },
+            { id:'sucursal', label:'Sucursal', value:sucursalFiltro, onChange:setSucursalFiltro,
+              porDefecto:sucursalFiltro, options:opcionesConTodas },
+            { id:'grupo', label:'Grupo', tipo:'grupo', value:grupoFiltro, onChange:setGrupoFiltro,
+              porDefecto:'todos', grupos:gruposFiltrables, query:buscaGrupo, onQuery:setBuscaGrupo,
+              nombreDe },
+          ]}
+          busqueda={{ value: busqueda, onChange: setBusqueda, placeholder:'Buscar por nombre o correo…' }}
+          resumen={`${filtradas.length} de ${staff.length}`}/>
 
         <p className="text-[11px]" style={{ color:'var(--t3)' }}>
           {filtradas.length} de {staff.length} cuentas

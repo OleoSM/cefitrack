@@ -1,8 +1,9 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../../context/AuthContext'
-import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ScrollText, Settings, Bell } from 'lucide-react'
+import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ChevronDown, ScrollText, Settings, Bell } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
 import { StudentThemeProvider, useStudentTheme } from '../../context/StudentThemeContext'
@@ -10,14 +11,22 @@ import { useSucursales } from '../../hooks/useSucursales'
 import { fetchNotificaciones, marcarLeida } from '../../lib/comunicacionesData'
 import { supabase } from '../../lib/supabaseClient'
 
-const nav = [
-  { to:'/student',                label:'Mi Panel',       icon:LayoutDashboard, exact:true },
-  { to:'/student/calificaciones', label:'Calificaciones', icon:BookOpen },
-  { to:'/student/asistencias',    label:'Asistencias',    icon:CalendarCheck },
-  { to:'/student/mi-qr',          label:'Mi QR',          icon:QrCode },
-  { to:'/student/terminos',       label:'T&C / Firma',    icon:ScrollText, badge:'terms' },
-  { to:'/student/configuracion',  label:'Configuración',  icon:Settings },
+const STUDENT_SECTIONS = [
+  { title:null, items:[
+    { to:'/student', label:'Mi Panel', icon:LayoutDashboard, exact:true },
+  ]},
+  { title:'Operación académica', sectionIcon:BookOpen, items:[
+    { to:'/student/calificaciones', label:'Calificaciones', icon:BookOpen },
+    { to:'/student/asistencias', label:'Asistencias', icon:CalendarCheck },
+    { to:'/student/mi-qr', label:'Mi QR', icon:QrCode },
+  ]},
+  { title:'Administración', sectionIcon:Settings, items:[
+    { to:'/student/terminos', label:'T&C / Firma', icon:ScrollText, badge:'terms' },
+    { to:'/student/configuracion', label:'Configuración', icon:Settings },
+  ]},
 ]
+
+const nav = STUDENT_SECTIONS.flatMap(section => section.items)
 
 const GRID_OVERLAY = {
   backgroundImage: 'linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)',
@@ -28,13 +37,31 @@ function LayoutInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const notifButtonRef = useRef(null)
+  const notifPanelRef = useRef(null)
+  const [notifPosition, setNotifPosition] = useState(null)
   const { pathname } = useLocation()
+  const [openSections, setOpenSections] = useState(() => ({
+    'Operación académica': ['/student/calificaciones','/student/asistencias','/student/mi-qr'].some(route => pathname.startsWith(route)),
+    'Administración': ['/student/terminos','/student/configuracion'].some(route => pathname.startsWith(route)),
+  }))
   const { currentUser, logout } = useAuth()
   const navigate = useNavigate()
   const { appearance, t } = useStudentTheme()
   const { student, group: grp } = useStudentData()
   const { nombreDe } = useSucursales()
   const initials = student?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'AL'
+  const avatarBorder = appearance === 'default' ? '#ffffff' : '#000000'
+  const toggleSection = title => setOpenSections(current => ({ ...current, [title]: !current[title] }))
+
+  const positionNotifications = useCallback(() => {
+    const rect = notifButtonRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setNotifPosition({
+      top: Math.min(rect.bottom + 8, window.innerHeight - 80),
+      right: Math.max(12, window.innerWidth - rect.right),
+    })
+  }, [])
 
   useEffect(() => {
     const load=()=>fetchNotificaciones().then(setNotifications).catch(()=>{})
@@ -42,6 +69,25 @@ function LayoutInner() {
     const channel=supabase.channel(`student-notifications-${currentUser?.id}`).on('postgres_changes',{event:'*',schema:'public',table:'notifications'},load).subscribe()
     return()=>{supabase.removeChannel(channel)}
   },[currentUser?.id])
+
+  useEffect(() => {
+    if (!notifOpen) return
+    positionNotifications()
+    const closeOnEscape = event => { if (event.key === 'Escape') setNotifOpen(false) }
+    window.addEventListener('resize', positionNotifications)
+    window.addEventListener('scroll', positionNotifications, true)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('resize', positionNotifications)
+      window.removeEventListener('scroll', positionNotifications, true)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [notifOpen, positionNotifications])
+
+  const toggleNotifications = () => {
+    positionNotifications()
+    setNotifOpen(open => !open)
+  }
 
   const handleLogout = () => { logout(); navigate('/login') }
   const closeSidebar  = () => setSidebarOpen(false)
@@ -151,8 +197,24 @@ function LayoutInner() {
         <div className="relative mx-5 my-3 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
 
         {/* Nav */}
-        <nav className="relative flex-1 px-3 py-1 space-y-0.5 overflow-y-auto">
-          {nav.map(({ to, label, icon: Icon, exact, badge }) => {
+        <nav className="relative flex-1 px-3 py-1 space-y-0.5 overflow-y-auto" aria-label="Navegación principal">
+          {STUDENT_SECTIONS.map(({ title, sectionIcon: SectionIcon, items }) => (
+            <div key={title ?? 'inicio'} className="space-y-0.5 mb-1">
+              {title && (
+                <button type="button" onClick={() => toggleSection(title)}
+                  aria-expanded={!!openSections[title]} aria-controls={`student-nav-${title.replace(/\s+/g, '-').toLowerCase()}`}
+                  className="mt-2 min-h-11 w-full px-3 rounded-xl flex items-center justify-between gap-2 text-left transition-colors"
+                  style={{ color:t.sideT2, background:openSections[title] ? 'rgba(255,255,255,.08)' : 'transparent' }}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <SectionIcon size={15} className="flex-shrink-0" aria-hidden="true" />
+                    <span className="truncate text-[10px] font-bold uppercase tracking-widest">{title}</span>
+                  </span>
+                  <ChevronDown size={15} className={clsx('flex-shrink-0 transition-transform duration-200', openSections[title] && 'rotate-180')} />
+                </button>
+              )}
+              <div id={title ? `student-nav-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}
+                hidden={!!title && !openSections[title]} className="space-y-0.5">
+          {items.map(({ to, label, icon: Icon, exact, badge }) => {
             const showPending = badge === 'terms' && student?.termsStatus !== 'firmado'
             return (
               <NavLink key={to} to={to} end={exact} onClick={closeSidebar}
@@ -184,24 +246,25 @@ function LayoutInner() {
               </NavLink>
             )
           })}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        {/* Divider */}
-        <div className="relative mx-5 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-
         {/* User footer */}
-        <div className="relative px-3 py-4">
-          <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl transition-colors group hover:bg-white/5">
+        <div className="relative mt-1 px-3 py-3"
+          style={{ borderTop:'1px solid rgba(255,255,255,.22)', background:'rgba(255,255,255,.055)' }}>
+          <div className="flex items-center gap-3 px-1 py-1 rounded-xl transition-colors group hover:bg-white/5">
             <div className="relative flex-shrink-0">
               {/* El avatar elegido sustituye a las iniciales; si no hay, se
                   mantienen como respaldo. */}
               {student?.avatarSrc ? (
                 <img src={student.avatarSrc} alt=""
-                  className="w-8 h-8 rounded-full object-cover"
-                  style={{ border: '2px solid rgba(255,255,255,.25)' }}/>
+                  className="w-10 h-10 rounded-full object-cover"
+                  style={{ border: `2px solid ${avatarBorder}`, boxShadow:`0 0 0 3px ${appearance === 'default' ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.12)'}` }}/>
               ) : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                  style={{ background: t.light ? 'rgba(255,255,255,.30)' : '#f59e0b', border: '2px solid rgba(255,255,255,.25)' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-extrabold"
+                  style={{ background: t.light ? 'rgba(255,255,255,.30)' : '#f59e0b', border: `2px solid ${avatarBorder}`, boxShadow:`0 0 0 3px ${appearance === 'default' ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.12)'}` }}>
                   {initials}
                 </div>
               )}
@@ -209,12 +272,13 @@ function LayoutInner() {
                 style={{ border: `2px solid ${t.light ? t.sideBg : '#0d1630'}` }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-xs font-semibold truncate leading-none">{student?.name ?? currentUser?.name}</p>
-              <p className="text-[10px] mt-0.5 font-medium text-white/40">Solo lectura</p>
+              <p className="text-white text-sm font-bold truncate leading-tight" title={student?.name ?? currentUser?.name}>{student?.name ?? currentUser?.name}</p>
+              <p className="text-[10px] mt-1 font-bold uppercase tracking-[0.08em] text-white/80">Alumno</p>
+              <p className="text-[10px] mt-0.5 font-medium text-white/55">Acceso de consulta</p>
             </div>
             <button onClick={handleLogout} title="Cerrar sesión" aria-label="Cerrar sesión"
-              className="p-1.5 rounded-lg transition-colors text-white/40 hover:text-red-300 hover:bg-red-500/15">
-              <LogOut size={14} />
+              className="min-w-11 min-h-11 flex items-center justify-center rounded-xl transition-colors text-red-200 bg-red-500/10 border border-red-300/25 hover:text-red-100 hover:bg-red-500/20">
+              <LogOut size={17} />
             </button>
           </div>
         </div>
@@ -245,16 +309,61 @@ function LayoutInner() {
 
           <div className="flex items-center gap-2">
             <div className="relative">
-              <button aria-label="Notificaciones" onClick={()=>setNotifOpen(v=>!v)} className="relative p-1.5 rounded-xl text-white/70 hover:bg-white/10"><Bell size={17}/>{notifications.some(n=>!n.read_at)&&<span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-400"/>}</button>
-              {notifOpen&&<div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-24px)] max-h-80 overflow-y-auto rounded-xl z-50" style={{background:'var(--panel-bg)',border:'1px solid var(--card-border)',boxShadow:'0 18px 50px rgba(0,0,0,.35)'}}>
-                <p className="p-3 text-sm font-bold">Notificaciones</p>{notifications.length===0&&<p className="p-4 text-xs" style={{color:'var(--t3)'}}>Sin notificaciones.</p>}
-                {notifications.map(n=><button key={n.id} className="block w-full text-left p-3" style={{borderTop:'1px solid var(--divider)',background:n.read_at?'transparent':'var(--info-soft)'}} onClick={async()=>{await marcarLeida(n.id);setNotifications(v=>v.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))}}><b className="block text-xs">{n.title}</b><span className="text-xs" style={{color:'var(--t2)'}}>{n.body}</span></button>)}
-              </div>}
+              <button ref={notifButtonRef} aria-label="Notificaciones" aria-expanded={notifOpen}
+                onClick={toggleNotifications}
+                className="relative min-w-11 min-h-11 flex items-center justify-center rounded-xl text-white/70 hover:bg-white/10">
+                <Bell size={17}/>
+                {notifications.some(n=>!n.read_at)&&<span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-400" aria-hidden="true"/>}
+              </button>
+              {notifOpen && notifPosition && createPortal(
+                <>
+                  <button type="button" aria-label="Cerrar notificaciones" onClick={()=>setNotifOpen(false)}
+                    className="fixed inset-0 z-[10000] bg-black/35 lg:bg-transparent cursor-default" />
+                  <section ref={notifPanelRef} role="dialog" aria-modal="true" aria-label="Notificaciones"
+                    className="fixed z-[10001] w-80 max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl animate-scale-in"
+                    style={{
+                      top:notifPosition.top, right:notifPosition.right,
+                      background:t.light ? '#ffffff' : '#08080f',
+                      border:'1px solid var(--card-border)',
+                      boxShadow:'0 24px 72px rgba(0,0,0,.52)',
+                    }}>
+                    <div className="flex items-center justify-between gap-2 px-4 py-3" style={{borderBottom:'1px solid var(--divider)'}}>
+                      <p className="text-sm font-bold" style={{color:'var(--t1)'}}>Notificaciones</p>
+                      <button type="button" onClick={()=>setNotifOpen(false)} aria-label="Cerrar"
+                        className="min-w-11 min-h-11 flex items-center justify-center rounded-xl" style={{color:'var(--t2)'}}>
+                        <X size={16}/>
+                      </button>
+                    </div>
+                    <div className="overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{maxHeight:'min(24rem, calc(100dvh - 8rem))', WebkitOverflowScrolling:'touch'}}>
+                      {notifications.length===0&&<p className="p-4 text-xs" style={{color:'var(--t3)'}}>Sin notificaciones.</p>}
+                      {notifications.map(n=><button key={n.id} type="button" className="block w-full min-h-11 text-left p-3"
+                        style={{borderTop:'1px solid var(--divider)',background:n.read_at?'transparent':'var(--info-soft)'}}
+                        onClick={async()=>{
+                          const previous = notifications
+                          setNotifications(v=>v.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))
+                          try { await marcarLeida(n.id) }
+                          catch { setNotifications(previous) }
+                        }}>
+                        <b className="block text-xs" style={{color:'var(--t1)'}}>{n.title}</b>
+                        <span className="text-xs" style={{color:'var(--t2)'}}>{n.body}</span>
+                      </button>)}
+                    </div>
+                  </section>
+                </>,
+                document.body,
+              )}
             </div>
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
-              style={{ background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.20)' }}>
-              {initials}
-            </div>
+            {/* El avatar es la puerta al perfil: es donde todo el mundo va a
+                buscarlo, y hasta ahora era un adorno que no hacía nada. */}
+            <button type="button" onClick={() => navigate('/student/configuracion')}
+              title="Mi perfil y configuración" aria-label="Mi perfil y configuración"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold overflow-hidden transition-transform hover:scale-105 active:scale-95"
+              style={{ background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.28)' }}>
+              {student?.avatarSrc
+                ? <img src={student.avatarSrc} alt="" className="w-full h-full object-cover"/>
+                : initials}
+            </button>
             <button onClick={handleLogout} className="p-1.5 rounded-xl transition-colors text-white/45 hover:text-red-300">
               <LogOut size={16} />
             </button>

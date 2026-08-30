@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { useSucursales } from '../../hooks/useSucursales'
+import { filtrarGrupos } from '../../components/ui/BuscadorGrupo'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { Html5Qrcode } from 'html5-qrcode'
 import * as XLSX from 'xlsx'
 import { getLastSimulacro } from '../../data/mockData'
@@ -15,7 +18,7 @@ import {
   ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
   FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
   ChevronRight, UserCheck, CheckSquare, RotateCw,
-  Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown, Download
+  Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown, Download, X
 } from 'lucide-react'
 
 const QR_PREFIX   = 'EDUTRACK:'
@@ -35,7 +38,8 @@ export default function Attendance() {
   const [evaluations,    setEvaluations]   = useState([])  // para la columna de calificación del Excel
   const [view,           setView]          = useState('pick')  // 'pick' | 'scan'
   const [selectedGrp,    setSelectedGrp]   = useState(null)
-  const [sucursalFiltro, setSucursalFiltro] = useState('todas')
+  const { sucursal: sucursalFiltro, setSucursal: setSucursalFiltro, opcionesConTodas } = useSucursalActiva()
+  const [buscaGrupo, setBuscaGrupo] = useState('')
   const [selectedDate,   setSelectedDate]  = useState(todayISO())
   const [scanning,       setScanning]      = useState(false)
   const [camError,       setCamError]      = useState('')
@@ -388,9 +392,10 @@ export default function Attendance() {
      VIEW: GROUP PICKER
   ══════════════════════════════════════════════════════════════ */
   if (view === 'pick') {
-    const gruposVisibles = sucursalFiltro === 'todas'
+    const gruposEnSucursal = sucursalFiltro === TODAS
       ? groups
       : groups.filter(g => g.sucursal === sucursalFiltro)
+    const gruposVisibles = filtrarGrupos(gruposEnSucursal, buscaGrupo)
     return (
       <div className="w-full space-y-6">
         <div>
@@ -400,20 +405,24 @@ export default function Attendance() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>
-              Sucursal
-            </label>
-            <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)} className="input-field text-sm w-auto">
-              <option value="todas">Todas las sucursales</option>
-              {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-            </select>
-          </div>
-          <p className="text-xs pb-2.5" style={{ color:'var(--t3)' }}>
-            {gruposVisibles.length} grupo(s)
-          </p>
-        </div>
+        <BarraFiltros
+          filtros={[
+            { id:'sucursal', label:'Sucursal', value:sucursalFiltro, onChange:setSucursalFiltro,
+              porDefecto:sucursalFiltro, options:opcionesConTodas },
+          ]}
+          busqueda={{
+            value: buscaGrupo,
+            onChange: setBuscaGrupo,
+            placeholder: 'Buscar grupo por nombre',
+            coincidencias: gruposVisibles.map(g => ({
+              id:g.id, label:g.name,
+              sub:[g.subject, g.sucursal ? nombreDe(g.sucursal) : null].filter(Boolean).join(' · '),
+            })),
+            /* Aquí elegir un grupo ES entrar a pasarle lista: no hay un paso
+               intermedio que valga la pena. */
+            onElegir: id => id && selectGroup(id),
+          }}
+          resumen={`${gruposVisibles.length} grupo(s)`}/>
 
         <div className="grid gap-3 sm:gap-4">
           {gruposVisibles.map(g => {

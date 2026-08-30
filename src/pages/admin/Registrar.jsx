@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback, createContext, useContext } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
+import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import {
   Plus, Minus, Trash2, Check, ChevronDown, ChevronRight,
@@ -12,6 +13,7 @@ import {
   fetchGroups, fetchStudents,
   fetchColumnasRegistro, fetchCeldasRegistro, fetchAsistenciaRegistro,
   setCeldaRegistro, crearColumnaRegistro, borrarColumnaRegistro, setRegistroAdmin,
+  actualizarContactoAlumno,
 } from '../../lib/supabaseData'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
@@ -21,9 +23,14 @@ import { useAdminTheme } from '../../context/AdminThemeContext'
 import { folioEX, folioEXD } from '../../lib/folios'
 import { supabase } from '../../lib/supabaseClient'
 import { useSucursales } from '../../hooks/useSucursales'
+import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { fetchDocumentosAlumnos } from '../../lib/expedienteData'
+import { fetchPagosDeAlumnos, estadoPagoExamenes } from '../../lib/pagosData'
+import { AREAS_UNIVERSIDAD } from '../../lib/areas'
 import StudentFormModal from '../../components/admin/StudentFormModal'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
+import StudentDock from '../../components/ui/StudentDock'
+import BarraFiltros from '../../components/ui/BarraFiltros'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -50,6 +57,7 @@ const HC = {
   docs:   '#2B5F9E',
   sims:   '#8A5A12',
   online: '#5D3E90',
+  area:   '#7A3F63',
   att:    'var(--bad)',
 }
 
@@ -95,12 +103,12 @@ function scoreBg(v) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function GroupPicker({ groups, students, loading, onSelect }) {
+  const navigate = useNavigate()
   const { getAccent } = useGroupColors()
-  const { sucursales } = useSucursales()
-  const [sucursal, setSucursal] = useState('todas')
+  const { sucursal, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [query, setQuery] = useState('')
   const [columns, setColumns] = useState(1)
-  const gruposSucursal = sucursal === 'todas' ? groups : groups.filter(g => g.sucursal === sucursal)
+  const gruposSucursal = sucursal === TODAS ? groups : groups.filter(g => g.sucursal === sucursal)
   const gruposVisibles = gruposSucursal.filter(g => `${g.name} ${g.subject}`.toLowerCase().includes(query.trim().toLowerCase()))
 
   return (
@@ -112,27 +120,29 @@ function GroupPicker({ groups, students, loading, onSelect }) {
         </p>
       </div>
 
-      <div className="filter-toolbar items-end">
-        <div>
-          <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>
-            Sucursal
-          </label>
-          <select value={sucursal} onChange={e => setSucursal(e.target.value)} className="input-field text-sm w-auto">
-            <option value="todas">Todas las sucursales</option>
-            {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
-        </div>
-        <p className="text-xs pb-2.5" style={{ color:'var(--t3)' }}>{gruposVisibles.length} grupo(s)</p>
-        <label className="flex items-center gap-2 px-3 rounded-xl flex-1 min-w-[210px] max-w-sm"
-          style={{background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
-          <Search size={14} style={{color:'var(--t3)'}}/>
-          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar grupo…"
-            className="bg-transparent outline-none py-2.5 text-sm min-w-0 w-full" style={{color:'var(--t1)'}}/>
-        </label>
-        <button className="btn-secondary p-2.5" onClick={()=>setColumns(v=>v===1?2:1)} title="Cambiar distribución">
-          {columns===1?<Columns2 size={16}/>:<Rows3 size={16}/>}<span className="hidden sm:inline text-xs">Vista</span>
-        </button>
-      </div>
+      <BarraFiltros
+        filtros={[
+          { id:'sucursal', label:'Sucursal', value:sucursal, onChange:setSucursal,
+            porDefecto:sucursal, options:opcionesConTodas },
+        ]}
+        busqueda={{
+          value: query,
+          onChange: setQuery,
+          placeholder: 'Buscar grupo por nombre',
+          coincidencias: gruposVisibles.map(g => ({
+            id:g.id, label:g.name, sub:g.subject,
+          })),
+          /* Elegir un grupo aquí es abrir su hoja: es lo único que se hace en
+             esta pantalla. */
+          onElegir: id => { const g = groups.find(x => x.id === id); if (g) onSelect(g) },
+        }}
+        resumen={`${gruposVisibles.length} grupo(s)`}
+        acciones={
+          <button className="btn-secondary p-2.5 flex-shrink-0" onClick={()=>setColumns(v=>v===1?2:1)}
+            title="Cambiar distribución" aria-label="Cambiar distribución">
+            {columns===1?<Columns2 size={16}/>:<Rows3 size={16}/>}
+          </button>
+        }/>
 
       {!loading && groups.length === 0 && (
         <div className="card p-8 text-center">
@@ -156,20 +166,11 @@ function GroupPicker({ groups, students, loading, onSelect }) {
               footer={
                 <div className="flex items-center justify-between pt-4 mt-1"
                   style={{ borderTop: '1px solid var(--divider)' }}>
-                  <div className="flex -space-x-2">
-                    {grpStudents.slice(0,6).map(s => (
-                      <div key={s.id} className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
-                        style={{ background: 'var(--soft-bg)', border:'2px solid var(--card-bg)', color: 'var(--t2)' }}>
-                        {s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}
-                      </div>
-                    ))}
-                    {grpStudents.length > 6 && (
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold"
-                        style={{ background: 'var(--soft-bg)', border:'2px solid var(--card-bg)', color: 'var(--t3)' }}>
-                        +{grpStudents.length - 6}
-                      </div>
-                    )}
-                  </div>
+                  {/* Mismo dock que en Grupos: con foto, con el nombre en el
+                      globo y abriendo el perfil al pulsar. Aquí eran iniciales
+                      grises que no llevaban a ninguna parte. */}
+                  <StudentDock students={grpStudents} accent={accent}
+                    onOpenStudent={id => navigate(`/admin/alumnos/${id}`)}/>
                   <button className="btn-secondary text-xs py-1.5 gap-1.5 pointer-events-none">
                     Abrir lista <ChevronRight size={13}/>
                   </button>
@@ -626,19 +627,58 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
 }
 
 function AutoStatusCell({ value, bg }) {
-  const ok = value === 'validado' || value === 'firmado'
-  return <td style={{minWidth:72,textAlign:'center',fontSize:10,fontWeight:700,background:bg,color:ok?'var(--good)':value==='entregado'?'var(--warn)':'var(--t4)'}}>
+  const ok    = value === 'validado' || value === 'firmado' || value === 'validada' || value === 'pagado'
+  const medio = value === 'entregado' || value === 'entregada'
+  return <td style={{minWidth:72,textAlign:'center',fontSize:10,fontWeight:700,background:bg,
+    color: ok ? 'var(--good)' : medio ? 'var(--warn)' : value === 'rechazado' ? 'var(--bad)' : 'var(--t4)'}}>
     {value || 'Pendiente'}
   </td>
 }
 
-function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52, rowSpan, style: extraStyle }) {
+function AreaCell({ value, onChange, bg, sc }) {
+  const hc = useHC()
+  return (
+    <td style={{ minWidth:76, textAlign:'center', background: hc ? `${sc}06` : bg,
+      border:`1px solid ${sc}${hc ? '45' : '40'}`, padding:'0 2px', verticalAlign:'middle' }}>
+      <select
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        aria-label="Área del alumno"
+        title={AREAS_UNIVERSIDAD.find(a => a.id === value)?.label ?? 'Sin área asignada'}
+        style={{ width:'100%', fontSize:11, fontWeight:700, textAlign:'center',
+          background:'transparent', border:'none', outline:'none', cursor:'pointer',
+          color: value ? (hc ? sc : 'var(--t1)') : 'var(--t4)',
+          appearance:'none', padding:'4px 2px' }}>
+        <option value="">—</option>
+        {AREAS_UNIVERSIDAD.map(a => (
+          <option key={a.id} value={a.id} style={{ background:'var(--panel-bg)', color:'var(--t1)' }}>
+            {a.corto}
+          </option>
+        ))}
+      </select>
+    </td>
+  )
+}
+
+/* `locked` marca las columnas del esqueleto de la hoja —documentos, pago,
+   garantía, área, asistencia y las secciones de la plantilla base—. No se
+   renombran ni se borran: renombrarlas rompe el significado de la columna para
+   quien la lea después, y borrarlas por accidente se lleva las notas. */
+function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52, rowSpan, style: extraStyle, locked }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   const inputRef = useRef(null)
   const textColor = light ? '#0f172a' : '#ffffff'
 
   useEffect(() => { if (!editing) setDraft(value) }, [value, editing])
+
+  if (locked) return (
+    <th rowSpan={rowSpan} title="Columna fija de la hoja"
+      style={{ minWidth, padding:'4px 2px', textAlign:'center', fontSize:9,
+        fontWeight:700, color:textColor, borderRight:'1px solid var(--divider)', ...extraStyle }}>
+      {value}
+    </th>
+  )
 
   const startEditing = () => {
     setDraft(value)
@@ -872,8 +912,15 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
      administrativos viven en la BD. Antes todo estaba en localStorage, así que
      lo capturado sólo existía en la máquina de quien lo escribió y no llegaba
      al perfil del alumno, a Evaluaciones ni al portal del alumno. */
+  /* El avatar y el grupo viajan con la fila. Antes esta proyección se
+     quedaba con el id y el nombre, así que `AvatarAlumno` recibía un alumno
+     sin `avatarSrc` ni `groupId` y caía siempre en las iniciales grises: en la
+     hoja donde más se recorre la lista, nadie se reconocía. */
   const rosterFromDb = () => groupStudents.map(s => ({
     id: s.id, name: s.name,
+    avatar: s.avatar,
+    avatarSrc: s.avatarSrc,
+    groupId: s.groupId,
     pago: s.pagoEstado ?? '',
     garantia: s.garantia ?? '',
     firmaGar: !!s.firmaGarantia,
@@ -959,6 +1006,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const esTactil = useMemo(
     () => window.matchMedia?.('(pointer: coarse)').matches ?? false, [])
   const [avisoGirar, setAvisoGirar] = useState(false)
+  /* Marca que se salió de la pantalla completa a propósito estando en
+     horizontal. Sin ella, el efecto de abajo volvería a entrar en el acto y
+     el botón de salir no serviría de nada. */
+  const salidaManual = useRef(false)
 
   /* Pantalla completa en teléfono y tableta: además del overlay se pide la
      pantalla completa nativa y se fija el apaisado, que es lo único que hace
@@ -983,12 +1034,39 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     return () => { cancelado = true }
   }, [isFullscreen, esTactil])
 
+  /* Girar el aparato ES la petición: poner el teléfono en horizontal sobre
+     esta hoja sólo puede significar «quiero verla entera», y pedirlo además
+     con un botón sobra. Al volver a vertical se sale, que es igual de
+     inequívoco. Sólo en táctil: en un monitor la orientación no dice nada.
+
+     Ojo con `requestFullscreen`: el navegador la reserva para gestos del
+     usuario y un giro no cuenta, así que puede rechazarla. No importa —el
+     overlay es nuestro y ocupa la ventana igual—; la nativa es una mejora,
+     no el mecanismo. */
+  useEffect(() => {
+    if (!esTactil) return undefined
+    const mq = window.matchMedia('(orientation: landscape)')
+    const alGirar = () => {
+      if (mq.matches) {
+        if (!salidaManual.current) setIsFullscreen(true)
+      } else {
+        salidaManual.current = false
+        setIsFullscreen(false)
+      }
+    }
+    alGirar()
+    mq.addEventListener('change', alGirar)
+    return () => mq.removeEventListener('change', alGirar)
+  }, [esTactil])
+
   /* Salir con Esc o con el botón "atrás" del sistema deja la pantalla completa
      nativa pero no nuestro overlay; hay que sincronizarlos. Sólo en táctil,
      que es donde llegamos a pedirla. */
   useEffect(() => {
     if (!esTactil) return
-    const alCambiarFS = () => { if (!document.fullscreenElement) setIsFullscreen(false) }
+    const alCambiarFS = () => {
+      if (!document.fullscreenElement) { salidaManual.current = true; setIsFullscreen(false) }
+    }
     document.addEventListener('fullscreenchange', alCambiarFS)
     return () => document.removeEventListener('fullscreenchange', alCambiarFS)
   }, [esTactil])
@@ -1014,11 +1092,14 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const cargarHoja = useCallback(async () => {
     setErrorHoja(null)
     try {
-      const [cols, celdas, asis, docs] = await Promise.all([
+      const [cols, celdas, asis, docs, pagosAlumnos] = await Promise.all([
         fetchColumnasRegistro(group.id),
         fetchCeldasRegistro(group.id),
         fetchAsistenciaRegistro(group.id),
         fetchDocumentosAlumnos(groupStudents.map(s=>s.id)),
+        // El cobro de los exámenes adicionales se refleja solo en la hoja: no
+        // hay que marcarlo dos veces, en Pagos y aquí.
+        fetchPagosDeAlumnos(groupStudents.map(s=>s.id)).catch(() => []),
       ])
 
       // Las columnas llegan planas; la hoja las dibuja agrupadas por materia.
@@ -1054,12 +1135,18 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         }
       }
       setAttendance(att)
-      setStudents(rosterFromDb().map(student => ({ ...student,
-        curpEstado:docs.find(d=>d.student_id===student.id&&d.document_type==='curp')?.status ?? 'pendiente',
-        ineEstado:docs.find(d=>d.student_id===student.id&&d.document_type==='ine_tutor')?.status ?? 'pendiente',
-        area:groupStudents.find(s=>s.id===student.id)?.universidadArea,
-        garantiaEstado:groupStudents.find(s=>s.id===student.id)?.garantiaEstado ?? 'pendiente',
-      })))
+      setStudents(rosterFromDb().map(student => {
+        const alumno = groupStudents.find(s => s.id === student.id)
+        const examenes = estadoPagoExamenes(pagosAlumnos.filter(p => p.studentId === student.id))
+        return { ...student,
+          curpEstado:docs.find(d=>d.student_id===student.id&&d.document_type==='curp')?.status ?? 'pendiente',
+          ineEstado:docs.find(d=>d.student_id===student.id&&d.document_type==='ine_tutor')?.status ?? 'pendiente',
+          area:alumno?.universidadArea ?? null,
+          garantiaEstado:alumno?.garantiaEstado ?? 'pendiente',
+          accesoEstado:alumno?.accesoEstado ?? 'pendiente',
+          examenesEstado: examenes.pagado ? 'pagado' : 'pendiente',
+        }
+      }))
     } catch (err) {
       setErrorHoja('No se pudo cargar la hoja. Revisa tu conexión y vuelve a intentar.')
     } finally {
@@ -1143,6 +1230,30 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     catch { setErrorHoja('No se pudo guardar el estado de pago.') }
   }
 
+  /* El área vive en `students.universidad_area`, no en la hoja: es un dato del
+     alumno que también necesitan su perfil y su propio panel, no una nota. */
+  const setArea = async (sid, val) => {
+    const alumno = groupStudents.find(s => s.id === sid)
+    /* La RPC reescribe los tres datos de contacto junto con el área. Sin la
+       fila del alumno a mano se enviarían tres `null` y se borrarían sus
+       correos y teléfonos: mejor no guardar nada. */
+    if (!alumno) { setErrorHoja('No se pudo guardar el área: recarga la hoja e inténtalo de nuevo.'); return }
+    const previo = students.find(s => s.id === sid)?.area ?? null
+    setStudents(p => p.map(s => s.id === sid ? { ...s, area: val } : s))
+    try {
+      await actualizarContactoAlumno({
+        id: sid,
+        personalEmail: alumno.personalEmail ?? null,
+        whatsapp: alumno.whatsapp ?? null,
+        tutorWhatsapp: alumno.tutor?.whatsapp ?? null,
+        universidadArea: val,
+      })
+    } catch {
+      setStudents(p => p.map(s => s.id === sid ? { ...s, area: previo } : s))
+      setErrorHoja('No se pudo guardar el área del alumno.')
+    }
+  }
+
   // La asistencia es espejo de Pasar Lista: aquí no se edita.
   const toggleAtt = () => {}
   const toggleSection = id => setCollapsed(p=>({...p,[id]:!p[id]}))
@@ -1164,6 +1275,13 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     })
   }
   const resetCollapsed = () => setCollapsed({})
+
+  /* Las secciones que crea `asegurar_plantilla_base` son el esqueleto de la
+     hoja: se distinguen porque sus columnas vienen marcadas `es_fija`. Ni se
+     renombran ni se borran —el error que se quiere evitar es quedarse sin la
+     sección de documentos o de exámenes por un clic de más—. */
+  const esSeccionFija = subj => subj.cols.some(c => c.esFija)
+  const esUniversidad = (group.curso ?? (group.institucion === 'ecoems' ? 'ecoems' : 'universidad')) === 'universidad'
 
   const showSummary = tableFocus === 'all' || tableFocus === 'summary'
   const showDocs = tableFocus === 'all' || tableFocus === 'docs'
@@ -1336,10 +1454,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
      254 px a 132, y en un teléfono de 411 px quedan ~247 px de zona de registro
      en vez de ~125: la diferencia entre ver una columna y ver tres. */
   const W = isMobile
-    ? { num:0,  name:116, pago:82,  gar:76 }   // teléfono
+    ? { num:0,  name:116, pago:82,  gar:76, area:64 }   // teléfono
     : esCompacto
-      ? { num:0,  name:168, pago:104, gar:88 } // tableta
-      : { num:44, name:210, pago:114, gar:92 } // portátil y monitor
+      ? { num:0,  name:168, pago:104, gar:88, area:76 } // tableta
+      : { num:44, name:210, pago:114, gar:92, area:84 } // portátil y monitor
   const L = { num:0, name: esCompacto ? 0 : W.num }   // ← only # and Alumno are sticky
 
   const solidBg = hcMode ? HC.solidBg : SOLID_BG
@@ -1542,29 +1660,37 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                 style={{ ...thStickyStyle(L.name), textAlign:'left', padding:'8px 12px' }}/>
               {/* PAGO y GARANTÍA: NO sticky */}
               {showSummary && <>
-                <EditableColumnHeader rowSpan={2} minWidth={W.pago} light={hcMode}
-                  value={headerName('payment','PAGO')} onChange={v=>renameHeader('payment',v)}
+                <EditableColumnHeader locked rowSpan={2} minWidth={W.pago} light={hcMode}
+                  value="PAGO"
                   style={{ background:hcMode?`${HC.pago}14`:solidBg, borderBottom:`3px solid ${HC.pago}` }}/>
-                <EditableColumnHeader rowSpan={2} minWidth={W.gar} light={hcMode}
-                  value={headerName('guarantee','GARANTÍA')} onChange={v=>renameHeader('guarantee',v)}
+                <EditableColumnHeader locked rowSpan={2} minWidth={W.gar} light={hcMode}
+                  value="GARANTÍA"
                   style={{ background:hcMode?`${HC.gar}14`:solidBg, borderBottom:`3px solid ${HC.gar}` }}/>
+                {esUniversidad && (
+                  <EditableColumnHeader locked rowSpan={2} minWidth={W.area} light={hcMode}
+                    value="ÁREA"
+                    style={{ background:hcMode?`${HC.area}14`:solidBg, borderBottom:`3px solid ${HC.area}` }}/>
+                )}
               </>}
 
-              {showDocs && <SectionHeader label={headerName('section:docs','DOCUMENTOS')}
-                onRename={v=>renameHeader('section:docs',v)} cols={collapsed['docs']?1:4}
+              {showDocs && <SectionHeader label="DOCUMENTOS"
+                cols={collapsed['docs']?1:5}
                 collapsed={!!collapsed['docs']} onToggle={()=>toggleSection('docs')}/>}
 
-              {subjects.filter(subj=>showSubject(subj.id)).map(subj => (
+              {subjects.filter(subj=>showSubject(subj.id)).map(subj => {
+                const fija = esSeccionFija(subj)
+                return (
                 <SectionHeader key={subj.id}
-                  label={headerName(`section:${subj.id}`,subj.name.toUpperCase())} color={subj.color}
-                  onRename={v=>renameHeader(`section:${subj.id}`,v)}
+                  label={fija ? subj.name.toUpperCase() : headerName(`section:${subj.id}`,subj.name.toUpperCase())}
+                  color={subj.color}
+                  onRename={fija ? undefined : v=>renameHeader(`section:${subj.id}`,v)}
                   cols={collapsed[subj.id] ? 1 : subj.cols.length+1}
                   collapsed={!!collapsed[subj.id]}
                   onToggle={()=>toggleSection(subj.id)}
                   onAdd={()=>setAddColModal(subj.id)}
-                  onRemoveItem={subj.cols.some(c=>c.esFija) ? undefined : ()=>removeSubject(subj.id)}
+                  onRemoveItem={fija ? undefined : ()=>removeSubject(subj.id)}
                 />
-              ))}
+              )})}
 
               {showSims && <SectionHeader label={headerName('section:sims','SIMULACROS (EX)')}
                 onRename={v=>renameHeader('section:sims',v)} color="var(--warn)"
@@ -1582,8 +1708,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                 onAdd={()=>setOnlineCount(n=>n+1)}
                 onRemoveItem={()=>setOnlineCount(n=>Math.max(1,n-1))}
               />}
-              {showAttendance && <SectionHeader label={headerName('section:attendance','ASISTENCIAS')}
-                onRename={v=>renameHeader('section:attendance',v)} color="var(--good)"
+              {showAttendance && <SectionHeader label="ASISTENCIAS" color="var(--good)"
                 cols={1} collapsed={false} onToggle={()=>{}}/>}
             </tr>
 
@@ -1597,9 +1722,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                     ['doc_ine','INE tutor'],
                     ['doc_terms','Firma T&C'],
                     ['doc_guarantee','Garantía'],
+                    ['doc_exams','Exámenes'],
                   ].map(([key,fallback]) => (
-                    <EditableColumnHeader key={key} minWidth={68} light={hcMode}
-                      value={headerName(key,fallback)} onChange={v=>renameHeader(key,v)}
+                    <EditableColumnHeader locked key={key} minWidth={68} light={hcMode}
+                      value={fallback}
                       style={{ background:hcMode?`${HC.docs}0d`:`${HC.docs}0a`,
                         borderBottom:`${hcMode?2:1}px solid ${HC.docs}${hcMode?'80':'60'}` }}/>
                   ))
@@ -1611,7 +1737,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                 return [
                   ...subj.cols.map(col => (
                     <EditableColumnHeader key={`${subj.id}_${col.id}`} minWidth={76} light={hcMode}
-                      value={headerName(`col:${col.id}`,col.name)}
+                      locked={col.esFija}
+                      value={col.esFija ? col.name : headerName(`col:${col.id}`,col.name)}
                       onChange={v=>renameHeader(`col:${col.id}`,v)}
                       onRemove={col.esFija ? undefined : ()=>removeCol(subj.id,col.id)}/>
                   )),
@@ -1651,8 +1778,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
               )}
 
               {/* Asistencias */}
-              {showAttendance && <EditableColumnHeader minWidth={88} light={hcMode}
-                value={headerName('attendance','% ASIST.')} onChange={v=>renameHeader('attendance',v)}/>}
+              {showAttendance && <EditableColumnHeader locked minWidth={88} light={hcMode}
+                value="% ASIST."/>}
             </tr>
           </thead>
 
@@ -1685,8 +1812,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                         abajo por fin recorta con puntos suspensivos. */}
                     <div style={{ display:'flex', alignItems:'center', gap:8,
                       width: W.name - 20, maxWidth: W.name - 20 }}>
-                      <AvatarAlumno student={s} size={24}
-                        style={{ background: hcMode ? 'rgba(0,0,0,.08)' : 'var(--card-border)', color: hcMode ? '#1e293b' : 'var(--t2)', border:'none' }}/>
+                      {/* `accent` da el color del grupo a quien no ha elegido
+                          avatar, en vez del gris plano de antes. */}
+                      <AvatarAlumno student={s} size={24} accent={accent}/>
                       {/* `minWidth:0` es lo que permite a un hijo flex encoger
                           por debajo de su contenido; sin él no hay elipsis. */}
                       <span style={{ fontSize:12, fontWeight:500, color: hcMode ? '#0f172a' : 'rgba(255,255,255,.78)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>
@@ -1711,6 +1839,12 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                     bg={rowBg} sc={HC.gar}
                   />}
 
+                  {/* Área — sólo en grupos de universidad: ECOEMS no se
+                      divide por áreas y la columna sobraría en la hoja. */}
+                  {showSummary && esUniversidad && (
+                    <AreaCell value={s.area} onChange={v=>setArea(s.id,v)} bg={rowBg} sc={HC.area}/>
+                  )}
+
                   {/* Documentos */}
                   {showDocs && (collapsed['docs']
                     ? <td style={{ minWidth:52, background: hcMode ? `${HC.docs}06` : rowBg }}/>
@@ -1719,6 +1853,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                         <AutoStatusCell value={s.ineEstado} bg={rowBg}/>
                         <AutoStatusCell value={s.firmaTyC?'firmado':'pendiente'} bg={rowBg}/>
                         <AutoStatusCell value={s.garantiaEstado} bg={rowBg}/>
+                        <AutoStatusCell value={s.examenesEstado} bg={rowBg}/>
                       </>
                   )}
 
@@ -1773,7 +1908,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   // ── Add student bar ──────────────────────────────────────────────────────────
   const legend = (
     <div className="flex flex-wrap gap-4 mt-2" style={{ fontSize:11, color: 'var(--t4)' }}>
-      {[['≥8','var(--good)'],['6–7.9','var(--warn)'],['<6','var(--bad)'],['NP','var(--t4)']].map(([l,c])=>(
+      {[['≥8','var(--good)'],['6–7.9','var(--warn)'],['<6','var(--bad)'],['NP','var(--bad)']].map(([l,c])=>(
         <span key={l} className="flex items-center gap-1.5">
           <span style={{ width:10, height:10, borderRadius:3, background:c, opacity:.6, flexShrink:0 }}/>
           {l}
@@ -1881,7 +2016,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
           <div style={{ flex:1, minWidth:0 }}>{toolbar}</div>
           {/* Salida. 44 px de lado: el mínimo táctil recomendado, y la hoja se
               usa con el dedo justo en esta vista. */}
-          <button onClick={() => setIsFullscreen(false)}
+          <button onClick={() => { salidaManual.current = true; setIsFullscreen(false) }}
             aria-label="Salir de pantalla completa" title="Salir de pantalla completa"
             style={{ flexShrink:0, width:44, height:44, display:'flex', alignItems:'center', justifyContent:'center',
               borderRadius:12, border:'1px solid var(--card-border)',

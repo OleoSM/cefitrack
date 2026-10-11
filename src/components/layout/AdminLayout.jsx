@@ -1,6 +1,7 @@
+import { nombreCanal } from '../../lib/realtime'
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import LoadingPage from '../LoadingPage'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -14,30 +15,34 @@ import { fetchNotificaciones, marcarLeida, marcarTodasLeidas } from '../../lib/c
 import { supabase } from '../../lib/supabaseClient'
 import { AdminThemeProvider, useAdminTheme } from '../../context/AdminThemeContext'
 import MenuPerfil from '../ui/MenuPerfil'
+import {
+  IconPanel, IconGrupos2, IconAlumno, IconHojaCalificaciones, IconPasarLista, IconExamen,
+  IconCobros, IconCorreoMasivo, IconFirma, IconAjustes, IconAcceso, IconPodio,
+} from '../ui/SigaAdminIcons'
 
 /* Once entradas planas mezclaban entidades, tareas, análisis y administración
    al mismo nivel: había que leer la lista entera para orientarse. Agrupadas en
    cuatro bloques con encabezado, cada una se busca en el bloque que le toca. */
 const SECCIONES = [
   { titulo: null, items: [
-    { to:'/admin',              label:'Dashboard',              icon:LayoutDashboard, exact:true },
+    { to:'/admin',              label:'Dashboard',              icon:IconPanel, exact:true },
   ]},
-  { titulo: 'Operación académica', sectionIcon:BookOpen, items: [
-    { to:'/admin/grupos',       label:'Grupos',                 icon:BookOpen },
-    { to:'/admin/alumnos',      label:'Alumnos',                icon:Users },
-    { to:'/admin/registrar',    label:'Calificaciones',         icon:TableProperties },
-    { to:'/admin/asistencias',  label:'Pasar Lista',            icon:CalendarCheck },
-    { to:'/admin/evaluaciones', label:'Exámenes',                icon:ClipboardList },
+  { titulo: 'Operación académica', sectionIcon:IconGrupos2, items: [
+    { to:'/admin/grupos',       label:'Grupos',                 icon:IconGrupos2 },
+    { to:'/admin/alumnos',      label:'Alumnos',                icon:IconAlumno },
+    { to:'/admin/registrar',    label:'Calificaciones',         icon:IconHojaCalificaciones },
+    { to:'/admin/asistencias',  label:'Pasar Lista',            icon:IconPasarLista },
+    { to:'/admin/evaluaciones', label:'Exámenes',                icon:IconExamen },
   ]},
-  { titulo: 'Administración', sectionIcon:ShieldCheck, items: [
-    { to:'/admin/pagos',        label:'Pagos',                  icon:Wallet, adminOnly:true },
-    { to:'/admin/correos',      label:'Enviar correos',         icon:Mail, adminOnly:true },
-    { to:'/admin/terminos',     label:'T&C / Firmas',           icon:ScrollText },
-    { to:'/admin/configuracion',label:'Configuración',          icon:SlidersHorizontal },
-    { to:'/admin/configuracion/acceso', label:'Acceso y Disposición', icon:ShieldCheck, adminOnly:true },
+  { titulo: 'Administración', sectionIcon:IconAcceso, items: [
+    { to:'/admin/pagos',        label:'Pagos',                  icon:IconCobros, adminOnly:true },
+    { to:'/admin/correos',      label:'Enviar correos',         icon:IconCorreoMasivo, adminOnly:true },
+    { to:'/admin/terminos',     label:'T&C / Firmas',           icon:IconFirma },
+    { to:'/admin/configuracion',label:'Configuración',          icon:IconAjustes },
+    { to:'/admin/configuracion/acceso', label:'Acceso y Disposición', icon:IconAcceso, adminOnly:true },
   ]},
-  { titulo: 'Resultados', sectionIcon:Trophy, items: [
-    { to:'/admin/rankings',     label:'Rankings',               icon:Trophy },
+  { titulo: 'Resultados', sectionIcon:IconPodio, items: [
+    { to:'/admin/rankings',     label:'Rankings',               icon:IconPodio },
   ]},
 ]
 
@@ -93,6 +98,7 @@ const NOTIF_COLOR = {
 
 function LayoutInner() {
   const { pathname } = useLocation()
+  const { currentUser, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -126,7 +132,7 @@ function LayoutInner() {
     loadNotifications()
     /* Tiempo real: cada INSERT entra sin recargar la lista entera, para que la
        notificacion aparezca en el acto y no tras un viaje de ida y vuelta. */
-    const channel = supabase.channel('admin-notifications')
+    const channel = supabase.channel(nombreCanal('admin-notifications'))
       .on('postgres_changes', { event:'INSERT', schema:'public', table:'notifications' },
         payload => setNotifications(prev =>
           prev.some(n => n.id === payload.new.id) ? prev : [payload.new, ...prev].slice(0, 40)))
@@ -138,7 +144,14 @@ function LayoutInner() {
     return () => { supabase.removeChannel(channel) }
   }, [loadNotifications])
 
-  const noLeidas = notifications.filter(n => !n.read_at).length
+  /* Las notificaciones del expediente van dirigidas al ALUMNO
+     (`recipient_student_id`) y comparten un único `read_at` con él: si el
+     admin las marcara como leídas, el alumno perdería su aviso. Aquí sólo
+     cuentan y se marcan las propias del personal; las del alumno se muestran
+     como informativas. Separar el estado de lectura por destinatario exige
+     un cambio de esquema (ver informe). */
+  const esPropia = n => !n.recipient_student_id || n.recipient_user_id === currentUser?.id
+  const noLeidas = notifications.filter(n => esPropia(n) && !n.read_at).length
 
   /* La posicion se recalcula al abrir y mientras el panel esta abierto: si la
      ventana cambia de tamano o se hace scroll, el panel debe seguir al boton. */
@@ -167,21 +180,22 @@ function LayoutInner() {
      BD para apagar el punto rojo. Si la escritura falla, el realtime devuelve
      la fila a su estado real. */
   const leerNotificacion = (n) => {
-    if (n.read_at) return
+    if (n.read_at || !esPropia(n)) return
     setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x))
     marcarLeida(n.id).catch(() => loadNotifications())
   }
 
   const leerTodas = () => {
-    const ids = notifications.filter(n => !n.read_at).map(n => n.id)
+    const ids = notifications.filter(n => esPropia(n) && !n.read_at).map(n => n.id)
     if (!ids.length) return
     const ahora = new Date().toISOString()
-    setNotifications(prev => prev.map(n => n.read_at ? n : { ...n, read_at: ahora }))
+    const marcar = new Set(ids)
+    setNotifications(prev => prev.map(n => marcar.has(n.id) ? { ...n, read_at: ahora } : n))
     marcarTodasLeidas(ids).catch(() => loadNotifications())
   }
 
   const filteredNotifications = notifications.filter(n => {
-    if (notifOnlyUnread && n.read_at) return false
+    if (notifOnlyUnread && (n.read_at || !esPropia(n))) return false
     const q = notifQuery.trim().toLocaleLowerCase('es-MX')
     return !q || `${n.title ?? ''} ${n.body ?? ''}`.toLocaleLowerCase('es-MX').includes(q)
   })
@@ -204,7 +218,6 @@ function LayoutInner() {
       document.removeEventListener('keydown', escape)
     }
   }, [notifOpen])
-  const { currentUser, logout } = useAuth()
   const { appearance, t } = useAdminTheme()
   const navigate    = useNavigate()
 
@@ -215,7 +228,10 @@ function LayoutInner() {
   // 'default' conserva exactamente el look original de SIGA (crimson/navy).
   const identity = appearance !== 'default' ? t : null
   const accent    = identity?.accent    ?? '#b23348'
-  const accentSoft= identity?.accent    ?? '#c95f72'
+  const accentSoft= t.brandSoft ?? '#c95f72'   // «CEFIMAT» del logo: legible sobre la barra oscura de cada identidad
+  // Marca de la entrada activa: el acento institucional es el MISMO color que
+  // la barra en IPN/UNAM y desaparecía; se usa el tono de navegación del tema.
+  const marcaActiva = identity ? t.navActive : accent
 
   const pageTitle = Object.entries(pageTitles)
     .sort((a, b) => b[0].length - a[0].length)
@@ -254,6 +270,7 @@ function LayoutInner() {
     // Relleno mate: color pleno y opaco, siempre con texto blanco encima.
     '--good-solid': t.goodSolid, '--info-solid': t.infoSolid,
     '--warn-solid': t.warnSolid, '--bad-solid': t.badSolid,
+    '--neutral-solid': t.neutralSolid,
     // Sombra con presencia: la anterior era tan tenue que las tarjetas se
     // perdían contra el fondo blanco y parecían flotar sin definición.
     '--card-shadow': t.light
@@ -273,7 +290,7 @@ function LayoutInner() {
   }, [appearance, t])
 
   return (
-    <div className="flex h-screen overflow-hidden transition-[background] duration-500"
+    <div className="flex h-dvh overflow-hidden transition-[background] duration-500"
       data-theme={appearance}
       data-theme-light={t.light ? '' : undefined}
       style={{
@@ -310,22 +327,27 @@ function LayoutInner() {
 
         {/* Logo area */}
         <div className="relative px-5 py-4 flex items-center gap-3">
-          <div className="relative flex-shrink-0">
-            <img src="/logo.jpeg" alt="SIGA CEFIMAT"
-              className="w-9 h-9 rounded-full object-cover"
-              style={{ border:'1px solid rgba(255,255,255,.18)', boxShadow:'0 0 12px rgba(161,28,51,.25)' }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm leading-none tracking-tight" style={{ color: t.sideT1 }}>
-              SIGA <span style={{ color: accentSoft }}>CEFIMAT</span>
-            </p>
-            <p className="text-[10px] mt-0.5 font-medium" style={{ color: t.sideT3 }}>Gestión Académica</p>
-          </div>
+          {/* El logo lleva al dashboard: es el atajo "volver al inicio" que
+              todo el mundo espera de la marca. */}
+          <Link to="/admin" onClick={closeSidebar} title="Ir a mi dashboard" aria-label="Ir a mi dashboard"
+            className="flex-1 min-w-0 flex items-center gap-3 rounded-xl -m-1 p-1 transition-colors hover:bg-white/5">
+            <span className="relative flex-shrink-0">
+              <img src="/logo.jpeg" alt=""
+                className="w-9 h-9 rounded-full object-cover"
+                style={{ border:'1px solid rgba(255,255,255,.18)', boxShadow:'0 0 12px rgba(161,28,51,.25)' }} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block font-bold text-sm leading-none tracking-tight" style={{ color: t.sideT1 }}>
+                SIGA <span style={{ color: accentSoft }}>CEFIMAT</span>
+              </span>
+              <span className="block text-[10px] mt-0.5 font-medium" style={{ color: t.sideT3 }}>Gestión Académica</span>
+            </span>
+          </Link>
           <button onClick={closeSidebar} aria-label="Cerrar menú"
             className="lg:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg transition-colors"
             style={{ color: t.sideT2 }}
-            onMouseEnter={e => { e.currentTarget.style.color='var(--t2)'; e.currentTarget.style.background='rgba(255,255,255,.07)' }}
-            onMouseLeave={e => { e.currentTarget.style.color='var(--t3)'; e.currentTarget.style.background='transparent' }}>
+            onMouseEnter={e => { e.currentTarget.style.color=t.sideT1; e.currentTarget.style.background='rgba(255,255,255,.07)' }}
+            onMouseLeave={e => { e.currentTarget.style.color=t.sideT2; e.currentTarget.style.background='transparent' }}>
             <X size={17} />
           </button>
         </div>
@@ -344,7 +366,7 @@ function LayoutInner() {
             <button type="button" onClick={() => toggleSection(titulo)}
               aria-expanded={!!openSections[titulo]} aria-controls={`admin-nav-${titulo.replace(/\s+/g, '-').toLowerCase()}`}
               className="mt-2 min-h-11 w-full px-3 rounded-xl flex items-center justify-between gap-2 text-left transition-colors"
-              style={{ color:t.sideT2, background:openSections[titulo] ? `${t.sideT1}0D` : 'transparent' }}>
+              style={{ color:t.sideT2, background:openSections[titulo] ? 'rgba(255,255,255,.05)' : 'transparent' }}>
               <span className="flex min-w-0 items-center gap-2">
                 <SectionIcon size={15} className="flex-shrink-0" aria-hidden="true" />
                 <span className="truncate text-[10px] font-bold uppercase tracking-widest">{titulo}</span>
@@ -374,13 +396,13 @@ function LayoutInner() {
                   {isActive && (
                     <span className="absolute inset-0 rounded-xl pointer-events-none"
                       style={identity
-                        ? { background: `${accent}14`, border: `1px solid ${accent}33` }
+                        ? { background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.18)" }
                         : { background: 'var(--card-border)', border: '1px solid rgba(255,255,255,.1)' }} />
                   )}
                   {/* Left accent bar (marca institucional) */}
                   {isActive && (
                     <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
-                      style={{ background: accent }} />
+                      style={{ background: marcaActiva }} />
                   )}
                   <Icon size={17} className="flex-shrink-0 relative z-10" />
                   <span className="flex-1 text-sm font-medium relative z-10">{label}</span>
@@ -403,7 +425,7 @@ function LayoutInner() {
         <div className="relative mt-1 px-3 py-3"
           style={{
             borderTop: `1px solid ${identity ? identity.sideBorder : 'rgba(255,255,255,.18)'}`,
-            background: identity ? `${t.sideT1}0A` : 'rgba(255,255,255,.035)',
+            background: identity ? 'rgba(255,255,255,.04)' : 'rgba(255,255,255,.035)',
           }}>
           <div
             className="flex items-center gap-3 px-1 py-1 rounded-xl transition-colors"
@@ -418,15 +440,15 @@ function LayoutInner() {
             <div className="relative flex-shrink-0">
               <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-extrabold"
                 style={{
-                  background: `${t.sideT1}22`,
+                  background: 'rgba(255,255,255,.13)',
                   border: `2px solid ${avatarBorder}`,
                   boxShadow: `0 0 0 3px ${appearance === 'default' ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.12)'}`,
                   color: t.sideT1,
                 }}>
                 {initials}
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full"
-                style={{ border: `2px solid ${identity ? identity.sideBg : ORIGINAL_BG}` }} />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full"
+                style={{ background: t.sideGood, border: `2px solid ${identity ? identity.sideBg : ORIGINAL_BG}` }} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold truncate leading-tight" style={{ color: t.sideT1 }} title={currentUser?.name}>{currentUser?.name}</p>
@@ -435,9 +457,9 @@ function LayoutInner() {
             </div>
             <button onClick={handleLogout} title="Cerrar sesión" aria-label="Cerrar sesión"
               className="min-w-11 min-h-11 flex items-center justify-center rounded-xl transition-colors"
-              style={{ color: '#fca5a5', background:'rgba(239,68,68,.10)', border:'1px solid rgba(248,113,113,.24)' }}
-              onMouseEnter={e => { e.currentTarget.style.color='rgba(248,113,113,.9)'; e.currentTarget.style.background='rgba(239,68,68,.10)' }}
-              onMouseLeave={e => { e.currentTarget.style.color='#fca5a5'; e.currentTarget.style.background='rgba(239,68,68,.10)' }}>
+              style={{ color: t.sideT2, background:'rgba(255,255,255,.06)', border:`1px solid ${identity ? identity.sideBorder : 'rgba(255,255,255,.12)'}` }}
+              onMouseEnter={e => { e.currentTarget.style.color=t.sideT1; e.currentTarget.style.background='var(--bad-solid)' }}
+              onMouseLeave={e => { e.currentTarget.style.color=t.sideT2; e.currentTarget.style.background='rgba(255,255,255,.06)' }}>
               <LogOut size={17} />
             </button>
           </div>
@@ -466,12 +488,13 @@ function LayoutInner() {
             <div className="flex items-center gap-2 min-w-0">
               {parentRoute && (
                 <button onClick={() => navigate(parentRoute)} aria-label="Regresar"
-                  className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
+                  className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
                   style={{ color:t.sideT1, background:'rgba(255,255,255,.10)', border:'1px solid rgba(255,255,255,.16)' }}>
                   <ArrowLeft size={19}/>
                 </button>
               )}
-              <span className="text-[11px] font-medium hidden sm:block" style={{ color: t.sideT3 }}>SIGA CEFIMAT</span>
+              <Link to="/admin" title="Ir a mi dashboard"
+                className="text-[11px] font-medium hidden sm:block hover:underline underline-offset-2" style={{ color: t.sideT3 }}>SIGA CEFIMAT</Link>
               <ChevronRight size={12} className="hidden sm:block flex-shrink-0" style={{ color: t.sideT3 }} />
               <h1 className="text-sm font-bold truncate" style={{ color: t.sideT1 }}>{pageTitle}</h1>
             </div>
@@ -487,7 +510,7 @@ function LayoutInner() {
                 <Bell size={17} />
                 {noLeidas > 0 && (
                   <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center text-[9px] font-black"
-                    style={{ background:'#ef4444', color:'#fff' }} aria-hidden>
+                    style={{ background:t.sideBad, color:'#fff' }} aria-hidden>
                     {noLeidas > 9 ? '9+' : noLeidas}
                   </span>
                 )}
@@ -538,19 +561,23 @@ function LayoutInner() {
                     {!notifLoading && !notifError && filteredNotifications.slice(0, notifLimit).map(a => {
                       const Icon = activityIcon[NOTIF_ICONO[a.event_type]] ?? Bell
                       const color = NOTIF_COLOR[a.event_type] ?? 'var(--info)'
-                      const leida = !!a.read_at
+                      const propia = esPropia(a)
+                      const leida = !propia || !!a.read_at
                       return (
                         <button key={a.id} type="button" onClick={() => leerNotificacion(a)}
                           className="w-full text-left flex items-start gap-3 px-4 py-3 transition-colors"
                           style={{ borderBottom:'1px solid var(--divider)', background: leida ? 'transparent' : 'var(--soft-bg)' }}>
                           <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                            style={{ background:'var(--info-soft)', border:'1px solid var(--info-line)' }}>
+                            style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
                             <Icon size={13} style={{ color }} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold leading-snug" style={{ color:'var(--t1)' }}>{a.title}</p>
                             <p className="text-xs leading-snug" style={{ color:'var(--t2)' }}>{a.body}</p>
-                            <p className="text-[10px] mt-0.5" style={{ color:'var(--t3)' }}>{new Date(a.created_at).toLocaleString('es-MX')}</p>
+                            <p className="text-[10px] mt-0.5" style={{ color:'var(--t3)' }}>
+                              {new Date(a.created_at).toLocaleString('es-MX')}
+                              {!propia && ' · aviso del alumno'}
+                            </p>
                           </div>
                           {!leida && <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ background:'var(--accent)' }} aria-label="No leída"/>}
                         </button>
@@ -570,8 +597,8 @@ function LayoutInner() {
               onCerrarSesion={handleLogout}
               tema={{
                 borde: identity ? identity.sideBorder : 'var(--card-border)',
-                avatarBg: identity ? `${identity.t1}1f` : 'var(--t4)',
-                avatarBorde: `${t.sideT1}26`,
+                avatarBg: identity ? 'rgba(255,255,255,.13)' : 'var(--t4)',
+                avatarBorde: 'rgba(255,255,255,.15)',
                 texto: t.sideT1,
                 textoSuave: t.sideT2,
               }}/>
@@ -579,7 +606,7 @@ function LayoutInner() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 pb-24 lg:pb-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-6">
           <Suspense fallback={<LoadingPage />}>
             <div key={pathname} className="animate-page-in">
               <Outlet />
@@ -588,7 +615,7 @@ function LayoutInner() {
         </main>
 
         {/* Bottom nav mobile (accesos rápidos + botón "Más" para el resto) */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex"
+        <nav data-bottom-nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex"
           style={{
             background: identity ? identity.bottomBg : 'rgba(5,5,10,.90)',
             backdropFilter: identity?.light ? 'none' : 'blur(16px)',
@@ -602,16 +629,16 @@ function LayoutInner() {
               {({ isActive }) => (
                 <>
                   <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8}
-                    style={{ color: isActive ? (identity?.t1 ?? 'white') : (identity?.t3 ?? '#94a3b8') }} />
-                  <span style={{ color: isActive ? (identity?.t1 ?? 'var(--t1)') : (identity?.t3 ?? '#94a3b8') }}>{label}</span>
-                  {isActive && <span className="absolute bottom-0 w-6 h-0.5 rounded-t-full" style={{ background: accent }} />}
+                    style={{ color: isActive ? t.sideT1 : t.sideT3 }} />
+                  <span style={{ color: isActive ? t.sideT1 : t.sideT3 }}>{label}</span>
+                  {isActive && <span className="absolute bottom-0 w-6 h-0.5 rounded-t-full" style={{ background: marcaActiva }} />}
                 </>
               )}
             </NavLink>
           ))}
           <button onClick={() => setSidebarOpen(true)} aria-label="Más opciones"
             className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors text-[10px] font-medium active:scale-95"
-            style={{ color: identity?.t3 ?? '#94a3b8' }}>
+            style={{ color: t.sideT3 }}>
             <Menu size={20} strokeWidth={1.8} />
             <span>Más</span>
           </button>

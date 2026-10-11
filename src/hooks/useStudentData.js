@@ -21,11 +21,14 @@ export function useStudentData({ withAttendance = false, withEvaluations = false
   const [attendance, setAttendance] = useState([])
   const [evaluations, setEvaluations] = useState([])
   const [loading, setLoading] = useState(!!studentId)
+  // Error de la carga inicial: la vista lo muestra en vez de quedarse vacía.
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!studentId) { setLoading(false); return }
     let alive = true
     setLoading(true)
+    setError(null)
     fetchStudentById(studentId)
       .then(async s => {
         if (!alive) return
@@ -40,7 +43,7 @@ export function useStudentData({ withAttendance = false, withEvaluations = false
         setAttendance(att)
         setEvaluations(evs)
       })
-      .catch(() => {})
+      .catch(e => { if (alive) setError(e) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [studentId, withAttendance, withEvaluations])
@@ -128,5 +131,5 @@ export function useStudentData({ withAttendance = false, withEvaluations = false
     }
   }, [studentId, student?.groupId, withAttendance, withEvaluations])
 
-  return { student, setStudent, group, attendance, evaluations, loading }
+  return { student, setStudent, group, attendance, evaluations, loading, error }
 }

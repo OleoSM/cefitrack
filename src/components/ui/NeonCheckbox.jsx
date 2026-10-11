@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAdminTheme } from '../../context/AdminThemeContext'
+import { useStudentTheme } from '../../context/StudentThemeContext'
 
 /**
  * NeonCheckbox — checkbox animado con efecto neon.
@@ -22,8 +23,13 @@ export function NeonCheckbox({
   color = '#00ffaa',
   ...props
 }) {
+  /* Vale en las dos mitades de la app. Cada hook devuelve tokens OSCUROS
+     cuando se usa fuera de su proveedor, así que basta con que uno de los
+     dos diga "claro": en admin manda AdminThemeContext y en el portal del
+     alumno, StudentThemeContext. */
   const { t } = useAdminTheme()
-  const claro = !!t?.light
+  const { t: tAlumno } = useStudentTheme()
+  const claro = !!t?.light || !!tAlumno?.light
 
   const [internal, setInternal] = useState(defaultChecked)
   const isControlled = controlledChecked !== undefined
@@ -37,8 +43,10 @@ export function NeonCheckbox({
   // En identidad clara el efecto neón entero queda fuera: el color por defecto
   // (#00ffaa), el resplandor, el blur y las partículas. Se sirve el acento del
   // tema, sin brillo. Ver la regla de color al inicio de index.css.
-  const tono   = claro ? (t.accent ?? '#881126') : color
-  const glow   = tono + '33'
+  // En claro el color sale del token (--accent), relleno pleno y palomita en
+  // --accent-contrast: sin alfa, que sobre blanco se leía como desteñido.
+  const tono   = claro ? 'var(--accent)' : color
+  const glow   = claro ? 'transparent' : tono + '33'
 
   return (
     <label
@@ -58,7 +66,9 @@ export function NeonCheckbox({
         <div
           className="absolute inset-0 rounded-md transition-all duration-300"
           style={{
-            background:  isChecked ? `${tono}18` : (claro ? 'var(--card-bg)' : 'rgba(0,0,0,.60)'),
+            background:  isChecked
+              ? (claro ? 'var(--accent)' : `${tono}18`)
+              : (claro ? 'var(--card-bg)' : 'rgba(0,0,0,.60)'),
             border:      `2px solid ${isChecked ? tono : (claro ? 'var(--card-border)' : tono + '55')}`,
             boxShadow:   isChecked && !claro ? `0 0 10px ${glow}, inset 0 0 6px ${glow}` : 'none',
           }}>
@@ -69,7 +79,7 @@ export function NeonCheckbox({
             className="absolute inset-[2px] w-[calc(100%-4px)] h-[calc(100%-4px)] transition-all duration-300"
             style={{
               fill:            'none',
-              stroke:          tono,
+              stroke:          claro ? 'var(--accent-contrast)' : tono,
               strokeWidth:     3,
               strokeLinecap:   'round',
               strokeLinejoin:  'round',
@@ -129,7 +139,7 @@ export function NeonCheckbox({
       {label && (
         <span
           className="text-sm font-semibold transition-colors duration-200"
-          style={{ color: isChecked ? tono : 'var(--t2)' }}>
+          style={{ color: isChecked ? (claro ? 'var(--t1)' : tono) : 'var(--t2)' }}>
           {label}
         </span>
       )}

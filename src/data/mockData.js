@@ -251,15 +251,15 @@ const studentTargetSchools = {
   s2: 'unam-psico',
 }
 
-export const getSimulacrosByStudent = sid => simulacros.filter(s => s.studentId === sid)
-export const getLastSimulacro       = sid => {
-  const list = simulacros.filter(s => s.studentId === sid).sort((a,b) => b.fecha.localeCompare(a.fecha))
-  return list[0] ?? null
-}
-export const getTargetSchool = sid => {
-  const schoolId = studentTargetSchools[sid]
-  return schools.find(s => s.id === schoolId) ?? null
-}
+/* Simulacros y escuela objetivo NO están modelados en la BD todavía. Estos
+   helpers los consultan alumnos REALES (portal, perfil, Excel de Pasar Lista)
+   por su id: si un id real coincidiera con uno de prueba (s1, s2…), se le
+   mostrarían puntajes inventados. Hasta que existan tablas, devuelven vacío y
+   cada vista muestra su estado "sin simulacros". Los datos de arriba se
+   conservan solo como referencia de forma. */
+export const getSimulacrosByStudent = () => []
+export const getLastSimulacro       = () => null
+export const getTargetSchool        = () => null
 
 // ─── ACTIVIDAD RECIENTE ───────────────────────────────────────────────────────
 export const recentActivity = [

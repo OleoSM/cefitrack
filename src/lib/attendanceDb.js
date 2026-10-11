@@ -6,7 +6,7 @@
 
 import { supabase } from './supabaseClient'
 
-export const todayISO = () => new Date().toISOString().split('T')[0]
+export { todayISO } from './fecha'
 
 /**
  * Segundos restantes de tolerancia, calculados sobre tiempo real transcurrido

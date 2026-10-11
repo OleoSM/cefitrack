@@ -23,7 +23,7 @@ export default function CredentialsPanel({ cred, onClose }) {
 
   return (
     <ModalPortal onClose={onClose} maxWidth="max-w-xl">
-    <div className="p-4 sm:p-5" style={{ borderColor:'var(--warn-line)' }}>
+    <div className="p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <KeyRound size={14} style={{ color:'var(--warn)' }}/>
@@ -32,7 +32,7 @@ export default function CredentialsPanel({ cred, onClose }) {
           </span>
         </div>
         <button onClick={onClose} aria-label="Cerrar credenciales" className="w-11 h-11 flex items-center justify-center rounded-lg" style={{ color: 'var(--t3)' }}>
-          <X size={14}/>
+          <X size={15}/>
         </button>
       </div>
 

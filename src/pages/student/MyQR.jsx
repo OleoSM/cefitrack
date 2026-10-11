@@ -1,16 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { BotonAyuda } from '../../components/ui/Ayuda'
+import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { logoInstitucion, tipoDesdeNombre } from '../../lib/instituciones'
 import { useStudentData } from '../../hooks/useStudentData'
-import { Download, Shield, Info, AlertTriangle, Pencil, Maximize2, RotateCw, X, ChevronDown, Check, Sparkles } from 'lucide-react'
+import { Download, Shield, Info, AlertTriangle, Pencil, Maximize2, RotateCw, X, ChevronDown, Check } from 'lucide-react'
 import FlipCard from '../../components/ui/FlipCard'
 import ModalPortal from '../../components/ui/ModalPortal'
 import { useStudentTheme } from '../../context/StudentThemeContext'
 import { CARD_COLORS, esColorClaro } from '../../context/StudentThemeContext'
-import { fetchAvatares, setStudentAvatar } from '../../lib/supabaseData'
 import { jsPDF } from 'jspdf'
 import { useSucursales } from '../../hooks/useSucursales'
+import { estadoPerfil } from './EstadoPagina'
+import { CabeceraModal, SeccionAvatar, SeccionColor, useAvatares } from './Personalizar'
 
 const QR_PREFIX = 'EDUTRACK:'
 const FONT = "'Plus Jakarta Sans', Manrope, system-ui, -apple-system, sans-serif"
@@ -20,62 +22,8 @@ const SCHOOL_CYCLE = `${cycleStart} – ${cycleStart + 1}`
 const studentFolio = id => `CEF-${String(id ?? '').replace(/-/g,'').slice(-8).toUpperCase().padStart(8,'0')}`
 
 /* ════════════════════════════════════════════════════════════════
-   AVATARS — educational icons (emoji rendered on canvas)
+   TEMA DE LA CREDENCIAL — derivado del color que eligió el alumno
 ════════════════════════════════════════════════════════════════ */
-/* ════════════════════════════════════════════════════════════════
-   COLOR THEMES — QR always black on white regardless of theme
-════════════════════════════════════════════════════════════════ */
-const THEMES = [
-  {
-    id:'default', name:'Predeterminado', best:true, swatch:'#0f172a',
-    cardBg:'#ffffff', headerBg:'#0f172a', headerText:'#ffffff', headerSub:'rgba(255,255,255,0.48)',
-    accent:'#2563eb', nameColor:'#0f172a', subColor:'#475569', yearColor:'#64748b',
-    footerBg:'#f1f5f9', footerText:'#475569', labelColor:'#2563eb', valueColor:'#0f172a',
-  },
-  {
-    id:'navy', name:'Azul Marino', best:false, swatch:'#1e3a6e',
-    cardBg:'#f8faff', headerBg:'#1e3a6e', headerText:'#ffffff', headerSub:'rgba(255,255,255,0.52)',
-    accent:'#3b82f6', nameColor:'#1e3a6e', subColor:'#3b82f6', yearColor:'#3b82f6',
-    footerBg:'#e8efff', footerText:'#3b5998', labelColor:'#3b82f6', valueColor:'#1e3a6e',
-  },
-  {
-    id:'green', name:'Verde', best:false, swatch:'#14532d',
-    cardBg:'#f0fdf4', headerBg:'#14532d', headerText:'#ffffff', headerSub:'rgba(255,255,255,0.52)',
-    accent:'#16a34a', nameColor:'#14532d', subColor:'#16a34a', yearColor:'#16a34a',
-    footerBg:'#dcfce7', footerText:'#166534', labelColor:'#16a34a', valueColor:'#14532d',
-  },
-  {
-    id:'purple', name:'Violeta', best:false, swatch:'#3b0764',
-    cardBg:'#faf5ff', headerBg:'#3b0764', headerText:'#ffffff', headerSub:'rgba(255,255,255,0.52)',
-    accent:'#9333ea', nameColor:'#3b0764', subColor:'#9333ea', yearColor:'#9333ea',
-    footerBg:'#f3e8ff', footerText:'#7e22ce', labelColor:'#9333ea', valueColor:'#3b0764',
-  },
-  {
-    id:'red', name:'Rojo', best:false, swatch:'#7f1d1d',
-    cardBg:'#fff5f5', headerBg:'#7f1d1d', headerText:'#ffffff', headerSub:'rgba(255,255,255,0.52)',
-    accent:'#dc2626', nameColor:'#7f1d1d', subColor:'#dc2626', yearColor:'#dc2626',
-    footerBg:'#fee2e2', footerText:'#991b1b', labelColor:'#dc2626', valueColor:'#7f1d1d',
-  },
-  {
-    id:'teal', name:'Teal', best:false, swatch:'#134e4a',
-    cardBg:'#f0fdfa', headerBg:'#134e4a', headerText:'#ffffff', headerSub:'rgba(255,255,255,0.52)',
-    accent:'#0d9488', nameColor:'#134e4a', subColor:'#0d9488', yearColor:'#0d9488',
-    footerBg:'#ccfbf1', footerText:'#0f766e', labelColor:'#0d9488', valueColor:'#134e4a',
-  },
-  {
-    id:'dark', name:'Oscuro', best:false, swatch:'#1e293b',
-    cardBg:'#1e293b', headerBg:'#0f172a', headerText:'#ffffff', headerSub:'rgba(255,255,255,0.42)',
-    accent:'#60a5fa', nameColor:'#f1f5f9', subColor:'#94a3b8', yearColor:'#94a3b8',
-    footerBg:'#0f172a', footerText:'#64748b', labelColor:'#60a5fa', valueColor:'#e2e8f0',
-  },
-  {
-    id:'amber', name:'Dorado', best:false, swatch:'#78350f',
-    cardBg:'#fffbeb', headerBg:'#78350f', headerText:'#ffffff', headerSub:'rgba(255,255,255,0.52)',
-    accent:'#d97706', nameColor:'#78350f', subColor:'#d97706', yearColor:'#d97706',
-    footerBg:'#fef3c7', footerText:'#92400e', labelColor:'#d97706', valueColor:'#78350f',
-  },
-]
-
 const credentialTheme = color => {
   const hexes = color.grad.match(/#[0-9a-f]{6}/gi) ?? []
   const primary = hexes[0] ?? '#12345A'
@@ -483,8 +431,8 @@ function BackCard({ student, grp, branchName, theme, avatar, targetSchool }) {
    MAIN COMPONENT
 ════════════════════════════════════════════════════════════════ */
 export default function MyQR() {
-  const { t: tt, cardColor, setCardColor } = useStudentTheme()
-  const { student, group: grp, setStudent } = useStudentData()
+  const { t: tt, cardColor, card } = useStudentTheme()
+  const { student, group: grp, setStudent, loading, error } = useStudentData()
   const { nombreDe } = useSucursales()
   const branchId = grp?.sucursal ?? student?.sucursal
   const branchName = branchId ? nombreDe(branchId) : ''
@@ -497,30 +445,18 @@ export default function MyQR() {
   const [busy, setBusy] = useState(false)
   const [flipped, setFlipped] = useState(false)      // reverso visible
   const [editOpen, setEditOpen] = useState(false)    // panel de personalización (lápiz)
-  const [showMoreAvatars, setShowMoreAvatars] = useState(false)
-  const [showMoreColors, setShowMoreColors] = useState(false)
   const [qrModal, setQrModal] = useState(false)      // QR ampliado en pantalla completa
   const [howOpen, setHowOpen] = useState(false)      // instrucciones colapsables
 
-  const [avatares, setAvatares] = useState([])
-  useEffect(() => { fetchAvatares().then(setAvatares).catch(() => {}) }, [])
+  const avatares = useAvatares()
 
-  if (!student) return (
-    <p className="text-sm" style={{ color:'rgba(255,255,255,.40)' }}>Perfil no disponible.</p>
-  )
+  const estado = estadoPerfil({ loading, student, error })
+  if (estado) return estado
 
   const avatar    = avatares.find(a => a.id === student.avatar) ?? null
-  const selectedTheme = CREDENTIAL_THEMES.some(t => t.id === cardColor) ? cardColor : CREDENTIAL_THEMES[0].id
-  const theme     = CREDENTIAL_THEMES.find(t => t.id === selectedTheme) ?? CREDENTIAL_THEMES[0]
+  // Un color libre (hex de la rueda) también vale para la credencial.
+  const theme     = CREDENTIAL_THEMES.find(t => t.id === cardColor) ?? credentialTheme(card)
   const qrValue   = `${QR_PREFIX}${student.id}`
-
-  const pickAvatar = async id => {
-    const previo = student.avatar ?? null
-    setStudent(s => s ? { ...s, avatar:id } : s)
-    try { await setStudentAvatar(student.id, id) }
-    catch { setStudent(s => s ? { ...s, avatar:previo } : s) }
-  }
-  const pickTheme = id => setCardColor(id)
 
   const getSvg = () => {
     const svg = qrRef.current?.querySelector('svg')
@@ -559,14 +495,22 @@ export default function MyQR() {
 
   /* ── UI ─────────────────────────────────────────────────────── */
   return (
-    <div className="max-w-4xl mx-auto space-y-5">
+    <div className="w-full space-y-5">
 
       {/* Header */}
-      <div>
-        <h1 className="page-title">Mi Código QR</h1>
-        <p className="text-sm mt-1" style={{ color: tt.t3 }}>
-          Muestra este código al docente para registrar tu asistencia.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="page-title">Mi Código QR</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
+            Muestra este código al docente para registrar tu asistencia.
+          </p>
+        </div>
+        <BotonAyuda titulo="Mi código QR">
+          <p>Este código es tu identificación para el pase de lista. Al llegar a clase, muéstralo en la pantalla y tu docente lo escanea.</p>
+          <p><b>Consejos:</b> sube el brillo de tu teléfono y usa "Ampliar" para que se lea más rápido.</p>
+          <p>También puedes descargar tu credencial para tenerla aunque no tengas internet.</p>
+          <p><b>No compartas tu código:</b> quien lo tenga podría registrar asistencia en tu nombre.</p>
+        </BotonAyuda>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
@@ -577,12 +521,12 @@ export default function MyQR() {
             <div className="w-full flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <img src="/logo.jpeg" alt="" className="w-7 h-7 rounded-full object-cover"
-                  style={{ border: '1px solid rgba(255,255,255,.20)' }}/>
+                  style={{ border: '1px solid var(--card-border)' }}/>
                 <span className="text-sm font-bold" style={{ color: tt.t1 }}>SIGA CEFIMAT</span>
               </div>
               <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
-                style={{ background:'rgba(16,185,129,.14)', border:'1px solid rgba(16,185,129,.25)', color:'#10b981' }}>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+                style={{ background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}>
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background:'var(--good)' }}/>
                 Activo
               </span>
             </div>
@@ -593,8 +537,8 @@ export default function MyQR() {
             </div>
 
             <button onClick={() => setQrModal(true)}
-              className="mt-3 flex items-center gap-2 text-xs font-bold px-3.5 py-2 rounded-xl transition-all active:scale-95"
-              style={{ background: tt.softBg, border: `1px solid ${tt.cardBorder}`, color: tt.t2 }}>
+              className="mt-3 min-h-11 flex items-center gap-2 text-xs font-bold px-4 rounded-xl transition-all active:scale-95"
+              style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}>
               <Maximize2 size={13}/> Ampliar
             </button>
 
@@ -606,7 +550,7 @@ export default function MyQR() {
 
           {/* Descargas */}
           <div className="card p-5 space-y-3">
-            <p className="text-sm font-bold" style={{ color: tt.t1 }}>Descargar credencial</p>
+            <h2 className="section-title">Descargar credencial</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button onClick={handleExportPDF} disabled={busy}
                 className="btn-primary justify-center text-sm py-3 disabled:opacity-50">
@@ -618,8 +562,8 @@ export default function MyQR() {
               </button>
             </div>
             <div className="rounded-xl p-3 flex items-start gap-2.5"
-              style={{ background:'rgba(251,191,36,.07)', border:'1px solid rgba(251,191,36,.22)' }}>
-              <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" style={{ color:'#d97706' }}/>
+              style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
+              <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" style={{ color:'var(--warn)' }}/>
               <p className="text-[11px] leading-relaxed" style={{ color: tt.t2 }}>{RESP}</p>
             </div>
           </div>
@@ -629,7 +573,7 @@ export default function MyQR() {
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm font-bold" style={{ color: tt.t1 }}>Tu credencial</p>
+              <h2 className="section-title">Tu credencial</h2>
               <p className="text-[11px] mt-0.5 hidden lg:block" style={{ color: tt.t4 }}>
                 Pasa el cursor para ver el reverso
               </p>
@@ -638,18 +582,18 @@ export default function MyQR() {
               {/* Girar (móvil y desktop) */}
               <button onClick={() => setFlipped(f => !f)}
                 title="Girar credencial"
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95"
-                style={{ background: tt.softBg, border: `1px solid ${tt.cardBorder}`, color: tt.t2 }}>
+                className="min-h-11 flex items-center gap-1.5 text-xs font-bold px-3 rounded-xl transition-all active:scale-95"
+                style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}>
                 <RotateCw size={13}/> Girar
               </button>
               {/* Lápiz: editar credencial */}
               <button onClick={() => setEditOpen(o => !o)}
-                title="Personalizar credencial"
-                className="flex items-center justify-center w-9 h-9 rounded-xl transition-all active:scale-95"
+                title="Personalizar credencial" aria-label="Personalizar credencial"
+                className="flex items-center justify-center w-11 h-11 rounded-xl transition-all active:scale-95"
                 style={{
-                  background: editOpen ? tt.accent : tt.softBg,
-                  border: `1px solid ${editOpen ? tt.accent : tt.cardBorder}`,
-                  color: editOpen ? '#fff' : tt.t2,
+                  background: editOpen ? 'var(--accent)' : 'var(--soft-bg)',
+                  border: `1px solid ${editOpen ? 'var(--accent)' : 'var(--card-border)'}`,
+                  color: editOpen ? 'var(--accent-contrast)' : 'var(--t2)',
                 }}>
                 <Pencil size={14}/>
               </button>
@@ -675,94 +619,17 @@ export default function MyQR() {
 
       {editOpen && (
         <ModalPortal onClose={() => setEditOpen(false)} maxWidth="max-w-2xl" scrollable>
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 sm:px-5 py-4"
-            style={{ background:'var(--panel-bg)', borderBottom:'1px solid var(--divider)' }}>
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ background:tt.accent, color:'#fff' }}><Sparkles size={18}/></span>
-              <div className="min-w-0">
-                <h2 className="text-sm font-bold" style={{ color:tt.t1 }}>Personaliza tu gafete</h2>
-                <p className="text-[11px] truncate" style={{ color:tt.t3 }}>Colecciona estilos y crea una identidad propia</p>
-              </div>
-            </div>
-            <button onClick={() => setEditOpen(false)} className="p-2 rounded-xl" style={{ color:tt.t3, background:tt.softBg }}>
-              <X size={16}/>
-            </button>
-          </div>
-
+          <CabeceraModal titulo="Personaliza tu gafete" onClose={() => setEditOpen(false)}/>
           <div className="p-4 sm:p-5 space-y-6">
             <section className="space-y-3">
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold" style={{ color:tt.t1 }}>Elige tu avatar</p>
-                  <p className="text-[11px]" style={{ color:tt.t3 }}>Colección disponible · {avatares.length} personajes</p>
-                </div>
-                <span className="badge text-[10px]" style={{ background:tt.softBg, color:tt.t2 }}>
-                  {student.avatar ? '1 equipado' : 'Sin equipar'}
-                </span>
-              </div>
-              <div className="grid grid-cols-5 gap-2 sm:gap-3">
-                {(showMoreAvatars ? avatares : avatares.slice(0,5)).map(av => {
-                  const active = student.avatar === av.id
-                  return (
-                    <button key={av.id} onClick={() => pickAvatar(av.id)} title={av.nombre}
-                      className="relative rounded-2xl p-1.5 sm:p-2 transition-all active:scale-95 aspect-square"
-                      style={{
-                        background:active ? `color-mix(in srgb, ${tt.accent} 15%, var(--card-bg))` : tt.softBg,
-                        border:active ? `2px solid ${tt.accent}` : `1px solid ${tt.cardBorder}`,
-                        boxShadow:active ? `0 8px 22px color-mix(in srgb, ${tt.accent} 25%, transparent)` : 'none',
-                      }}>
-                      <img src={av.src} alt={av.nombre} loading="lazy" className="w-full h-full rounded-xl object-cover"/>
-                      {active && <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
-                        style={{ background:tt.accent, color:'#fff', border:'2px solid var(--panel-bg)' }}><Check size={10}/></span>}
-                    </button>
-                  )
-                })}
-              </div>
-              {avatares.length > 5 && (
-                <button onClick={() => setShowMoreAvatars(v => !v)} className="btn-secondary w-full justify-center text-xs">
-                  {showMoreAvatars ? 'Mostrar solo destacados' : `Ver ${avatares.length - 5} avatares más`}
-                  <ChevronDown size={13} style={{ transform:showMoreAvatars ? 'rotate(180deg)' : 'none' }}/>
-                </button>
-              )}
+              <h3 className="section-title">Avatar</h3>
+              <SeccionAvatar student={student} setStudent={setStudent} avatares={avatares}/>
             </section>
-
             <section className="space-y-3 pt-5" style={{ borderTop:'1px solid var(--divider)' }}>
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold" style={{ color:tt.t1 }}>Desbloquea un color</p>
-                  <p className="text-[11px]" style={{ color:tt.t3 }}>Las mismas paletas disponibles en Configuración</p>
-                </div>
-                <span className="badge text-[10px]" style={{ background:theme.swatch, color:'#fff', textShadow:'0 1px 2px #000' }}>
-                  {theme.name}
-                </span>
-              </div>
-              <div className="grid grid-cols-5 gap-2 sm:gap-3">
-                {(showMoreColors ? CREDENTIAL_THEMES : CREDENTIAL_THEMES.slice(0,5)).map(th => {
-                  const active = selectedTheme === th.id
-                  return (
-                    <button key={th.id} onClick={() => pickTheme(th.id)} title={th.name}
-                      className="relative h-12 sm:h-14 rounded-2xl transition-all active:scale-95 overflow-hidden"
-                      style={{
-                        background:th.swatch,
-                        border:active ? '3px solid #fff' : '1px solid rgba(0,0,0,.16)',
-                        boxShadow:active ? `0 0 0 2px ${tt.accent}, 0 8px 20px rgba(0,0,0,.20)` : 'none',
-                      }}>
-                      {active && <Check size={15} className="absolute inset-0 m-auto text-white drop-shadow"/>}
-                      {th.best && <span className="absolute top-1 right-1 text-[7px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500 text-white">PRO</span>}
-                    </button>
-                  )
-                })}
-              </div>
-              {CREDENTIAL_THEMES.length > 5 && (
-                <button onClick={() => setShowMoreColors(v => !v)} className="btn-secondary w-full justify-center text-xs">
-                  {showMoreColors ? 'Mostrar solo destacadas' : `Ver ${CREDENTIAL_THEMES.length - 5} paletas más`}
-                  <ChevronDown size={13} style={{ transform:showMoreColors ? 'rotate(180deg)' : 'none' }}/>
-                </button>
-              )}
+              <h3 className="section-title">Color</h3>
+              <SeccionColor/>
             </section>
-
-            <button onClick={() => setEditOpen(false)} className="btn-primary w-full justify-center">
+            <button type="button" onClick={() => setEditOpen(false)} className="btn-primary w-full justify-center min-h-11">
               <Check size={15}/> Usar este diseño
             </button>
           </div>
@@ -772,7 +639,7 @@ export default function MyQR() {
       {/* ══ ¿Cómo funciona? (colapsable) ══ */}
       <div className="card overflow-hidden">
         <button onClick={() => setHowOpen(o => !o)}
-          className="w-full px-5 py-3.5 flex items-center justify-between text-left">
+          className="w-full min-h-11 px-4 sm:px-5 py-3.5 flex items-center justify-between text-left" aria-expanded={howOpen}>
           <span className="text-sm font-bold flex items-center gap-2" style={{ color: tt.t1 }}>
             <Info size={14} style={{ color: tt.t3 }}/> ¿Cómo funciona?
           </span>
@@ -815,7 +682,7 @@ export default function MyQR() {
           style={{ background: 'rgba(0,0,0,.92)', backdropFilter: 'blur(8px)' }}
           onClick={() => setQrModal(false)}>
           <button onClick={() => setQrModal(false)} aria-label="Cerrar"
-            className="absolute top-5 right-5 p-2.5 rounded-xl text-white/60 hover:text-white transition-colors"
+            className="absolute top-5 right-5 min-w-11 min-h-11 flex items-center justify-center rounded-xl text-white/60 hover:text-white transition-colors"
             style={{ background: 'rgba(255,255,255,.08)' }}>
             <X size={20}/>
           </button>

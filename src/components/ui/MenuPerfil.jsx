@@ -48,12 +48,21 @@ function Opcion({ icon: Icon, titulo, descripcion, activo, onClick }) {
   )
 }
 
-export default function MenuPerfil({ usuario, onIrAConfiguracion, onCerrarSesion, iniciales, tema }) {
+/**
+ * `ajustes` (opcional): { appearance, setAppearance, movimiento, setMovimiento,
+ * texto, setTexto }. La vista del alumno no vive bajo AdminThemeProvider y
+ * pasa los suyos; sin él se usan los del panel de administración.
+ * `acciones` (opcional): filas extra bajo "Mi configuración", p. ej. cambiar
+ * el color de la tarjeta del alumno: [{ icon, titulo, onClick }].
+ * `foto` (opcional): url del avatar; si no, iniciales.
+ */
+export default function MenuPerfil({ usuario, onIrAConfiguracion, onCerrarSesion, iniciales, tema, ajustes, acciones = [], foto }) {
   const [abierto, setAbierto] = useState(false)
   const [pos, setPos] = useState(null)
   const botonRef = useRef(null)
   const menuRef = useRef(null)
-  const { appearance, setAppearance, movimiento, setMovimiento, texto, setTexto } = useAdminTheme()
+  const delPanel = useAdminTheme()
+  const { appearance, setAppearance, movimiento, setMovimiento, texto, setTexto } = ajustes ?? delPanel
 
   const situar = useCallback(() => {
     const r = botonRef.current?.getBoundingClientRect()
@@ -93,9 +102,9 @@ export default function MenuPerfil({ usuario, onIrAConfiguracion, onCerrarSesion
         style={{ borderLeft:`1px solid ${tema.borde}`, background: abierto ? 'rgba(255,255,255,.07)' : 'transparent' }}
         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.07)'}
         onMouseLeave={e => e.currentTarget.style.background = abierto ? 'rgba(255,255,255,.07)' : 'transparent'}>
-        <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0"
+        <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 overflow-hidden"
           style={{ background: tema.avatarBg, border:`1px solid ${tema.avatarBorde}`, color: tema.texto }}>
-          {iniciales}
+          {foto ? <img src={foto} alt="" className="w-full h-full object-cover"/> : iniciales}
         </span>
         <span className="text-sm font-semibold hidden md:block" style={{ color: tema.textoSuave }}>
           {usuario?.name?.split(' ').slice(0, 2).join(' ')}
@@ -132,6 +141,19 @@ export default function MenuPerfil({ usuario, onIrAConfiguracion, onCerrarSesion
               <span className="text-xs font-bold flex-1" style={{ color:'var(--t1)' }}>Mi configuración</span>
               <ChevronRight size={14} style={{ color:'var(--t3)' }}/>
             </button>
+            {acciones.map(({ icon: Icon, titulo, onClick }) => (
+              <button key={titulo} type="button" onClick={() => { setAbierto(false); onClick() }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors"
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--soft-bg)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background:'var(--card-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
+                  <Icon size={15}/>
+                </span>
+                <span className="text-xs font-bold flex-1" style={{ color:'var(--t1)' }}>{titulo}</span>
+                <ChevronRight size={14} style={{ color:'var(--t3)' }}/>
+              </button>
+            ))}
           </div>
 
           {/* Identidad */}
@@ -181,11 +203,11 @@ export default function MenuPerfil({ usuario, onIrAConfiguracion, onCerrarSesion
           <div className="p-2" style={{ borderTop:'1px solid var(--divider)' }}>
             <button type="button" onClick={() => { setAbierto(false); onCerrarSesion() }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors"
-              style={{ color:'#fca5a5' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.10)'}
+              style={{ color:'var(--bad)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bad-soft)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background:'rgba(239,68,68,.10)', border:'1px solid rgba(248,113,113,.24)' }}>
+                style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
                 <LogOut size={15}/>
               </span>
               <span className="text-xs font-bold">Cerrar sesión</span>

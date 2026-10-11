@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, Filter, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, BookOpen, TrendingUp, Star, Ban, Columns2, Rows3, Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { Users, Clock, MapPin, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, Star, Columns2, Rows3, Check, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import {
   fetchGroups, fetchStudents, fetchAttendanceStats,
   computeGroupStats, createGroup, updateGroup, deleteGroup,
@@ -10,7 +10,9 @@ import ModalPortal from '../../components/ui/ModalPortal'
 import StudentFormModal from '../../components/admin/StudentFormModal'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
-import KpiCard from '../../components/ui/KpiCard'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
+import { SkeletonBlock } from '../../components/ui/DataTable'
+import { IconGrupos, IconAlumnos, IconPromedio } from '../../components/ui/SigaKpiIcons'
 import { useGroupColors, COLOR_PALETTES, GRADIENT_PALETTES, SOLID_PALETTES, MATE_PALETTES } from '../../hooks/useGroupColors'
 import { logoInstitucion, INSTITUCIONES } from '../../lib/instituciones'
 import ProgressiveList from '../../components/ui/ProgressiveList'
@@ -22,15 +24,6 @@ import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
 
-function FilterSelect({ value, onChange, options }) {
-  return (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      className="text-xs font-semibold rounded-xl py-2 px-3 outline-none"
-      style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t1)' }}>
-      {options.map(o => <option key={o.value} value={o.value} style={{ color:'#000', background:'#fff' }}>{o.label}</option>)}
-    </select>
-  )
-}
 
 /** Barra de métrica; muestra un guion cuando todavía no hay datos que promediar. */
 function MetricBar({ value, max, suffix = '', thresholds }) {
@@ -61,6 +54,12 @@ const ESCALA_ICONO = { ecoems:1.08, unam:1.04, ipn:.9, uam:1.16, universidad:1.5
 
 function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved }) {
   const { sucursales: catalogoSucursales } = useSucursales()
+  // En IPN/UNAM la tarjeta del grupo se pinta con la variante sólida `p.light`:
+  // la muestra debe enseñar ESA, no el neón del tema oscuro.
+  const { isLight } = useGroupColors()
+  const muestra = p => isLight
+    ? (p.light?.bg ?? p.light?.accent ?? p.accent)
+    : (p.type === 'gradient' ? `linear-gradient(135deg, ${p.colors[0]}, ${p.colors[1]}, ${p.colors[3]})` : p.accent)
   const editing = !!group
   const [form, setForm] = useState({
     name:     group?.name ?? '',
@@ -79,8 +78,19 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
   const [showMoreColors, setShowMoreColors] = useState(false)
   const set = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
+  /* Alta: la sucursal arranca en la primera del catálogo en cuanto carga.
+     Antes quedaba en '' mientras el <select> ya mostraba la primera opción,
+     así que el grupo se creaba sin sucursal sin que nadie lo notara. */
+  useEffect(() => {
+    if (!form.sucursal && catalogoSucursales.length > 0) {
+      setForm(f => f.sucursal ? f : { ...f, sucursal: catalogoSucursales[0].id })
+    }
+  }, [catalogoSucursales, form.sucursal])
+
   const handleSubmit = async e => {
     e.preventDefault()
+    if (!form.name.trim()) { setError('Escribe el nombre del grupo.'); return }
+    if (!form.sucursal) { setError('Selecciona la sucursal del grupo.'); return }
     if (form.curso === 'universidad' && form.instituciones.length === 0) {
       setError('Selecciona al menos una institución para Universidad.'); return
     }
@@ -108,7 +118,8 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
           <h2 className="text-sm font-bold" style={{ color:'var(--t1)' }}>
             {editing ? `Editar grupo — ${group.name}` : 'Nuevo Grupo'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors"
+          <button type="button" onClick={onClose} aria-label="Cerrar"
+            className="w-11 h-11 flex items-center justify-center rounded-lg transition-colors"
             style={{ color:'var(--t3)' }}
             onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
             onMouseLeave={e => e.currentTarget.style.color='var(--t3)'}>
@@ -148,7 +159,7 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
                 un código viejo tipo CN1— ya no se guarda, revienta al enviar.
                 Con la lista cerrada el error no se puede cometer. */}
             <select value={form.sucursal} onChange={e=>set('sucursal', e.target.value)}
-              className="input-field">
+              className="input-field" required>
               {catalogoSucursales.length === 0 && (
                 <option value="">Cargando sucursales…</option>
               )}
@@ -176,8 +187,8 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
                       onClick={() => { setSelectedPalette(p.id); set('color', p.accent) }}
                       className="relative w-10 h-10 sm:w-11 sm:h-11 flex-none rounded-xl overflow-hidden transition-transform active:scale-95"
                       style={{
-                        background:p.type === 'gradient' ? `linear-gradient(135deg, ${p.colors[0]}, ${p.colors[1]}, ${p.colors[3]})` : p.accent,
-                        border:selectedPalette === p.id?'3px solid #fff':'1px solid var(--card-border)',
+                        background:muestra(p),
+                        border:selectedPalette === p.id?'3px solid var(--panel-bg)':'1px solid var(--card-border)',
                         boxShadow:selectedPalette === p.id?'0 0 0 2px var(--accent)':'none',
                       }}>
                       {selectedPalette === p.id && <Check size={14} className="absolute inset-0 m-auto text-white drop-shadow" strokeWidth={3}/>}
@@ -221,12 +232,12 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
                     style={{
                       background: activo ? 'var(--accent)' : 'var(--soft-bg)',
                       border: activo ? '2px solid var(--accent)' : '1px solid var(--card-border)',
-                      boxShadow: activo ? '0 8px 24px color-mix(in srgb, var(--accent) 28%, transparent)' : 'none',
+                      boxShadow: activo ? 'var(--card-shadow)' : 'none',
                     }}>
                     <span className="w-[4.5rem] h-[4.5rem] flex items-center justify-center p-1 flex-shrink-0 overflow-hidden">
                       <img src={logo.src} alt={logo.alt}
                         className="w-full h-full object-contain"
-                        style={{transform:`scale(${inst.id === 'universidad' ? 1.72 : ESCALA_ICONO[inst.id] ?? 1})`,transformOrigin:'center',filter:inst.id==='universidad'?'brightness(0) invert(1)':undefined}}/>
+                        style={{transform:`scale(${inst.id === 'universidad' ? 1.72 : ESCALA_ICONO[inst.id] ?? 1})`,transformOrigin:'center',filter:inst.id==='universidad' && activo ?'brightness(0) invert(1)':undefined}}/>
                     </span>
                     <span className="text-[10px] font-extrabold leading-none truncate w-full text-center"
                       style={{ color: activo ? 'var(--accent-contrast)' : 'var(--t2)' }}>
@@ -242,8 +253,8 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
           {error && (
             <div className="flex items-start gap-2 rounded-lg px-3 py-2"
               style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
-              <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-400"/>
-              <span className="text-xs text-red-400">{error}</span>
+              <AlertCircle size={13} className="mt-0.5 shrink-0" style={{ color:'var(--bad)' }}/>
+              <span className="text-xs" style={{ color:'var(--bad)' }}>{error}</span>
             </div>
           )}
 
@@ -314,7 +325,13 @@ export default function Groups() {
     : '—'
 
   return (
-    <div className="space-y-5">
+    <div className="w-full space-y-5">
+      <div>
+        <h1 className="page-title">Grupos</h1>
+        <p className="text-sm mt-1" style={{ color:'var(--t3)' }}>
+          Grupos por sucursal y vertiente, con su promedio, asistencia y alumnos.
+        </p>
+      </div>
       {formFor && (
         <GroupFormModal
           group={formFor.group}
@@ -371,7 +388,7 @@ export default function Groups() {
           coincidencias: filtrarGrupos(porCurso, buscaGrupo).map(g => ({
             id:g.id, label:g.name, sub:[g.subject, g.sucursal ? nombreDe(g.sucursal) : null].filter(Boolean).join(' · '),
           })),
-          onElegir: () => {},
+          onElegir: id => id && navigate(`/admin/grupos/${id}`),
         }}
         resumen={`${filteredGroups.length} grupo(s)`}
         acciones={
@@ -403,10 +420,10 @@ export default function Groups() {
             return (
               <button key={o.value} type="button" onClick={() => setCurso(o.value)}
                 aria-pressed={activo}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 flex-shrink-0"
+                className="flex items-center gap-1.5 min-h-11 px-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex-shrink-0"
                 style={activo
                   ? { background:'var(--accent)', color:'var(--accent-contrast)' }
-                  : { background:'transparent', color:'var(--t3)' }}>
+                  : { background:'transparent', color:'var(--t2)' }}>
                 {o.icon}
                 <span>{o.label}</span>
                 <span className="text-[10px] font-black opacity-70">{n}</span>
@@ -417,34 +434,47 @@ export default function Groups() {
       </BarraFiltros>
 
       {loadError && (
-        <div className="card p-4 flex items-center gap-2">
-          <AlertCircle size={14} className="text-red-400"/>
-          <span className="text-xs text-red-400">{loadError}</span>
+        <div role="alert" className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+          style={{ background:'var(--bad-soft)', borderColor:'var(--bad-line)' }}>
+          <span className="text-sm flex items-center gap-2" style={{ color:'var(--bad)' }}>
+            <AlertCircle size={14}/>{loadError}
+          </span>
+          <button onClick={load} className="btn-secondary min-h-11 justify-center"><RefreshCw size={14}/> Reintentar</button>
         </div>
       )}
 
       {/* Summary */}
-      <div data-kpi-grid className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
-        <KpiCard icon={BookOpen} label="Total Grupos" tone="neutral" value={filteredGroups.length}
-          sub={sucursal === 'todas' ? 'Todas las sucursales' : `Sucursal ${nombreDe(sucursal)}`} />
-        <KpiCard icon={Users} label="Total Alumnos" tone="info" value={filteredStudents.length}
+      <KpiGrid cols={3}>
+        <KpiCard icon={IconGrupos} label="Total Grupos" tone="neutral" value={filteredGroups.length}
+          sub={sucursal === TODAS ? 'Todas las sucursales' : `Sucursal ${nombreDe(sucursal)}`} />
+        <KpiCard icon={IconAlumnos} label="Total Alumnos" tone="info" value={filteredStudents.length}
           sub={`En ${filteredGroups.length} grupo(s)`} />
-        <KpiCard icon={TrendingUp} label="Promedio Global" tone="good" value={globalAvg}
+        <KpiCard icon={IconPromedio} label="Promedio Global"
+          tone={globalAvg === '—' ? 'neutral' : Number(globalAvg) >= 7 ? 'good' : 'warn'} value={globalAvg}
           sub={globalAvg === '—' ? 'Sin calificaciones aún' : `${globalGrades.length} alumno(s) con calificación`}
           pill={globalAvg === '—' ? null
             : { icon: Star, text: Number(globalAvg) >= 8.5 ? '¡Muy bien!' : Number(globalAvg) >= 7 ? 'Aceptable' : 'Requiere atención' }} />
-      </div>
+      </KpiGrid>
 
       {/* Group cards */}
-      {!loading && filteredGroups.length === 0 && (
+      {loading && (
+        <div className="grid gap-4" role="status" aria-label="Cargando grupos">
+          {[0,1,2].map(i => <SkeletonBlock key={i} className="h-40"/>)}
+        </div>
+      )}
+
+      {/* Vacío: no es lo mismo no tener grupos que no tener coincidencias. */}
+      {!loading && !loadError && filteredGroups.length === 0 && (
         <div className="card p-8 text-center">
-          <p className="text-sm" style={{ color:'var(--t2)' }}>
-            No hay grupos todavía. Crea el primero con “Nuevo grupo”.
+          <p className="text-sm" style={{ color:'var(--t3)' }}>
+            {visibleGroups.length === 0
+              ? (isAdmin ? 'No hay grupos todavía. Crea el primero con “Nuevo grupo”.' : 'No tienes grupos asignados.')
+              : 'Ningún grupo coincide con la sucursal, vertiente o búsqueda seleccionadas.'}
           </p>
         </div>
       )}
 
-      <ProgressiveList items={filteredGroups} className={`grid gap-4 ${cardColumns === 2 ? 'lg:grid-cols-2' : 'grid-cols-1'}`}
+      {!loading && filteredGroups.length > 0 && <ProgressiveList items={filteredGroups} className={`grid gap-4 ${cardColumns === 2 ? 'lg:grid-cols-2' : 'grid-cols-1'}`}
         sizes={{ mobile: 3, tablet: 6, desktop: 10 }}
         emptyLabel="No hay grupos con ese criterio.">
         {g => {
@@ -503,8 +533,8 @@ export default function Groups() {
                           onClick={e => { e.stopPropagation(); act() }}
                           className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-90"
                           style={{ color:'var(--t2)',background:'var(--soft-bg)',border:'1px solid var(--card-border)' }}
-                          onMouseEnter={e => {e.currentTarget.style.color = hover;e.currentTarget.style.transform='translateY(-2px) scale(1.06)'}}
-                          onMouseLeave={e => {e.currentTarget.style.color = 'var(--t2)';e.currentTarget.style.transform='none'}}>
+                          onMouseEnter={e => { e.currentTarget.style.color = hover }}
+                          onMouseLeave={e => { e.currentTarget.style.color = 'var(--t2)' }}>
                           <Icon size={18}/>
                         </button>
                       ))}
@@ -524,7 +554,7 @@ export default function Groups() {
                     </p>
                   </div>
                   {critical > 0 && (
-                    <span className="badge bg-red-500/15 text-red-400 border border-red-500/25 flex-shrink-0 text-[11px]">
+                    <span className="badge bg-red-500/15 text-red-400 border border-red-500/30 flex-shrink-0 text-[11px]">
                       {critical} en riesgo
                     </span>
                   )}
@@ -538,7 +568,7 @@ export default function Groups() {
             </GroupShaderCard>
           )
         }}
-      </ProgressiveList>
+      </ProgressiveList>}
     </div>
   )
 }

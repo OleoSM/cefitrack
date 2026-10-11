@@ -57,15 +57,16 @@ export default function ResetPasswordModal({ student, onClose, onDone }) {
   return (
     <ModalPortal onClose={onClose} maxWidth="max-w-md">
       <div className="flex items-center justify-between px-5 py-3.5"
-        style={{ borderBottom: '1px solid var(--card-border)' }}>
+        style={{ borderBottom: '1px solid var(--divider)' }}>
         <div className="flex items-center gap-2">
           <KeyRound size={15} style={{ color:'var(--warn)' }}/>
           <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
             Credenciales de {student.name}
           </h2>
         </div>
-        <button onClick={onClose} className="p-1 rounded-lg" style={{ color: 'var(--t3)' }}>
-          <X size={14}/>
+        <button onClick={onClose} aria-label="Cerrar"
+          className="w-11 h-11 flex items-center justify-center rounded-lg" style={{ color: 'var(--t3)' }}>
+          <X size={15}/>
         </button>
       </div>
 
@@ -94,7 +95,7 @@ export default function ResetPasswordModal({ student, onClose, onDone }) {
                     <p className="text-sm font-mono font-bold break-all" style={{ color:'var(--warn)' }}>
                       {verClave ? cred.password : '•'.repeat(cred.password.length)}
                     </p>
-                    <button onClick={() => setVer(v => !v)} className="p-1 rounded"
+                    <button onClick={() => setVer(v => !v)} className="w-9 h-9 flex items-center justify-center rounded-lg"
                       title={verClave ? 'Ocultar' : 'Mostrar'} style={{ color:'var(--t3)' }}>
                       {verClave ? <EyeOff size={13}/> : <Eye size={13}/>}
                     </button>

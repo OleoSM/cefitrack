@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, UserPlus, TrendingUp, CalendarCheck, AlertTriangle, Search, Eye, BarChart3 } from 'lucide-react'
+import { Users, Clock, MapPin, UserPlus, Eye, BarChart3, RefreshCw } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
@@ -13,10 +13,14 @@ import {
 import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
-import { DataTable, DataTableRow, DataTableAvatar, DataTableBadge, DataTableBar } from '../../components/ui/DataTable'
+import { DataTable, DataTableRow, DataTableAvatar, DataTableBadge, DataTableBar, SkeletonBlock } from '../../components/ui/DataTable'
+import ProgressiveList from '../../components/ui/ProgressiveList'
+import BarraFiltros from '../../components/ui/BarraFiltros'
+import { useAuth } from '../../context/AuthContext'
 import StudentFormModal from '../../components/admin/StudentFormModal'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
-import KpiCard from '../../components/ui/KpiCard'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
+import { IconPromedio, IconAsistencia, IconRiesgo } from '../../components/ui/SigaKpiIcons'
 
 const COLUMNS = [
   { key:'rank',   label:'#',          className:'w-8' },
@@ -43,42 +47,12 @@ function buildTrend(evalsByStudent) {
   }))
 }
 
-function ScheduleCard({ schedule, room }) {
-  return (
-    <div className="min-h-[108px] sm:min-h-[152px] rounded-2xl p-3 sm:p-5 flex flex-col justify-between overflow-hidden"
-      style={{ background:'var(--info-solid)', boxShadow:'0 1px 3px rgba(15,23,42,.14), 0 6px 16px rgba(15,23,42,.12)' }}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background:'#fff', color:'var(--info-solid)', boxShadow:'0 2px 8px rgba(0,0,0,.18)' }}>
-            <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
-          </span>
-          <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wide" style={{ color:'rgba(255,255,255,.76)' }}>
-            Horario del grupo
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-2 sm:mt-4 min-w-0">
-        <p title={schedule || 'Por definir'} className="text-sm sm:text-base font-bold leading-snug break-words text-white overflow-hidden"
-          style={{ display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:2 }}>
-          {schedule || 'Por definir'}
-        </p>
-        <div className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] sm:text-xs font-semibold"
-          title={room || 'Aula por asignar'} aria-label={`Aula: ${room || 'Aula por asignar'}`}
-          style={{ background:'rgba(255,255,255,.14)', border:'1px solid rgba(255,255,255,.25)', color:'#fff' }}>
-          <MapPin size={12} className="flex-shrink-0" />
-          <span className="truncate">{room || 'Aula por asignar'}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function GroupDetail() {
   const { groupId }   = useParams()
   const navigate      = useNavigate()
   const { getAccent } = useGroupColors()
+  const { currentUser } = useAuth()
+  const isAdmin = currentUser?.role === 'admin'
 
   const [grp, setGrp]           = useState(null)
   const [students, setStudents] = useState([])
@@ -86,6 +60,7 @@ export default function GroupDetail() {
   const [attByGroup, setAttGrp] = useState({})
   const [metrics, setMetrics]   = useState(null)
   const [loading, setLoading]   = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [allGroups, setAllGroups] = useState([])
   const [lastCred, setLastCred] = useState(null)
@@ -93,6 +68,7 @@ export default function GroupDetail() {
   const [detailView, setDetailView] = useState('students')
 
   const load = useCallback(async () => {
+    setLoadError(null)
     try {
       const [g, allStudents, m, grs] = await Promise.all([
         fetchGroupById(groupId), fetchStudents(), fetchGroupMetrics(groupId), fetchGroups(),
@@ -104,7 +80,10 @@ export default function GroupDetail() {
       setAttGrp(stats.byGroup)
       setMetrics(m)
       setAllGroups(grs)
-    } catch { /* se muestra el estado vacío */ }
+    } catch (err) {
+      // Error de red o de permisos: no es lo mismo que "el grupo no existe".
+      setLoadError(err?.message || 'No se pudo cargar el grupo.')
+    }
     finally { setLoading(false) }
   }, [groupId])
 
@@ -115,8 +94,28 @@ export default function GroupDetail() {
     [metrics],
   )
 
-  if (loading) return <div style={{ color:'var(--t3)' }} className="p-6">Cargando grupo…</div>
-  if (!grp) return <div style={{ color:'var(--t3)' }} className="p-6">Grupo no encontrado.</div>
+  if (loading) return (
+    <div className="w-full space-y-5" role="status" aria-label="Cargando grupo">
+      <SkeletonBlock className="h-32"/>
+      <KpiGrid cols={4}>{[0,1,2,3].map(i => <SkeletonBlock key={i} className="h-28 sm:h-36"/>)}</KpiGrid>
+      <SkeletonBlock className="h-64"/>
+    </div>
+  )
+  if (loadError) return (
+    <div role="alert" className="card p-5 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+      style={{ background:'var(--bad-soft)', borderColor:'var(--bad-line)' }}>
+      <span className="text-sm" style={{ color:'var(--bad)' }}>{loadError}</span>
+      <button onClick={() => { setLoading(true); load() }} className="btn-secondary min-h-11 justify-center">
+        <RefreshCw size={14}/> Reintentar
+      </button>
+    </div>
+  )
+  if (!grp) return (
+    <div className="card p-8 text-center">
+      <p className="text-sm" style={{ color:'var(--t3)' }}>Este grupo no existe o fue eliminado.</p>
+      <button onClick={() => navigate('/admin/grupos')} className="btn-secondary mt-4 mx-auto justify-center">Volver a Grupos</button>
+    </div>
+  )
 
   const accent = getAccent(groupId)
   const stats  = computeGroupStats(grp, students, attByGroup)
@@ -127,7 +126,7 @@ export default function GroupDetail() {
   const gradeClass = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="w-full flex flex-col gap-5">
 
       {/* Header card con shader */}
       <GroupShaderCard
@@ -138,37 +137,26 @@ export default function GroupDetail() {
         <div>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h1 className="text-lg sm:text-xl font-bold" style={{ color:'var(--t1)' }}>
+              <h1 className="text-xl font-bold tracking-tight" style={{ color:'var(--t1)' }}>
                 {grp.name} — {grp.subject}
               </h1>
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs" style={{ color:'var(--t3)' }}>
                 <span className="flex items-center gap-1.5"><Users size={12}/>{stats.studentCount} alumnos</span>
               </div>
             </div>
-            <div className="flex gap-2 flex-shrink-0">
-              <div className="text-center px-3 py-2 rounded-xl"
-                style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-                <p className="text-lg font-bold" style={{ color:'var(--t1)' }}>{stats.avgGrade ?? '—'}</p>
-                <p className="text-[10px]" style={{ color:'var(--t3)' }}>Promedio</p>
-              </div>
-              <div className="text-center px-3 py-2 rounded-xl"
-                style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-                <p className="text-lg font-bold" style={{ color:'var(--t1)' }}>
-                  {stats.attendanceRate === null ? '—' : `${stats.attendanceRate}%`}
-                </p>
-                <p className="text-[10px]" style={{ color:'var(--t3)' }}>Asistencia</p>
-              </div>
-            </div>
           </div>
         </div>
       </GroupShaderCard>
 
-      <div data-kpi-grid className="grid grid-cols-2 xl:grid-cols-4 gap-3 order-2">
-        <KpiCard icon={TrendingUp} label="Promedio general" value={stats.avgGrade ?? '—'} tone="good" sub="Evaluaciones registradas"/>
-        <KpiCard icon={CalendarCheck} label="Asistencia" value={stats.attendanceRate === null ? '—' : `${stats.attendanceRate}%`} tone="info" sub="Acumulado del grupo"/>
-        <ScheduleCard schedule={grp.schedule} room={grp.room}/>
-        <KpiCard icon={AlertTriangle} label="Requieren atención" value={students.filter(s=>['critical','at-risk'].includes(s.status)).length} tone="warn" sub={`De ${students.length} alumnos`}/>
-      </div>
+      <KpiGrid cols={4} className="order-2">
+        <KpiCard icon={IconPromedio} label="Promedio general" value={stats.avgGrade ?? '—'}
+          tone={stats.avgGrade == null ? 'neutral' : stats.avgGrade >= 7 ? 'good' : 'warn'} sub="Evaluaciones registradas"/>
+        <KpiCard icon={IconAsistencia} label="Asistencia" value={stats.attendanceRate === null ? '—' : `${stats.attendanceRate}%`} tone="info" sub="Acumulado del grupo"/>
+        <KpiCard icon={Clock} tone="info" label="Horario del grupo"
+          value={<span className="text-sm sm:text-base">{grp.schedule || 'Por definir'}</span>}
+          pill={{ icon: MapPin, text: grp.room || 'Aula por asignar' }}/>
+        <KpiCard icon={IconRiesgo} label="Requieren atención" value={students.filter(s=>['critical','at-risk'].includes(s.status)).length} tone="warn" sub={`De ${students.length} alumnos`}/>
+      </KpiGrid>
 
       <div className="filter-toolbar order-3" role="tablist" aria-label="Detalle del grupo">
         <button role="tab" aria-selected={detailView === 'students'} onClick={()=>setDetailView('students')}
@@ -204,7 +192,7 @@ export default function GroupDetail() {
         )}
       </div>}
 
-      {showAddStudent && (
+      {isAdmin && showAddStudent && (
         <StudentFormModal
           groups={allGroups}
           defaultGroupId={groupId}
@@ -223,24 +211,27 @@ export default function GroupDetail() {
             <p className="text-[11px] mt-0.5" style={{color:'var(--t3)'}}>{visibleStudents.length} de {students.length} alumno(s)</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setShowAddStudent(true)} className="btn-secondary text-xs py-1.5">
-              <UserPlus size={13}/> Añadir alumno
-            </button>
-            <button onClick={() => navigate('/admin/asistencias')} className="btn-primary text-xs py-1.5">
+            {isAdmin && (
+              <button onClick={() => setShowAddStudent(true)} className="btn-secondary text-xs py-2">
+                <UserPlus size={14}/> Añadir alumno
+              </button>
+            )}
+            <button onClick={() => navigate('/admin/asistencias')} className="btn-primary text-xs py-2">
               Pasar lista
             </button>
           </div>
         </div>
 
-        <label className="relative block mb-3 max-w-md" data-filter-bar>
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color:'var(--t3)'}}/>
-          <input value={studentQuery} onChange={e=>setStudentQuery(e.target.value)} placeholder="Buscar alumno por nombre o correo"
-            className="input-field w-full min-h-11 pl-9 pr-3 text-sm" aria-label="Buscar alumno"/>
-        </label>
+        <div className="mb-3">
+          <BarraFiltros
+            busqueda={{ value: studentQuery, onChange: setStudentQuery, placeholder: 'Buscar alumno por nombre o correo' }}
+            resumen={`${visibleStudents.length} de ${students.length}`}/>
+        </div>
 
         <DataTable columns={COLUMNS} isEmpty={visibleStudents.length === 0}
           emptyText={students.length ? 'No hay alumnos que coincidan con la búsqueda.' : 'Este grupo todavía no tiene alumnos asignados.'}>
-          {visibleStudents.map((s, i) => {
+          <ProgressiveList items={visibleStudents} emptyLabel="No hay alumnos que coincidan con la búsqueda.">
+          {(s, i) => {
             const cfg = getStatusConfig(s.status)
             const rate = attByStudent[s.id]
             const ac  = attColor(rate ?? 0)
@@ -296,7 +287,8 @@ export default function GroupDetail() {
                 ]}
               />
             )
-          })}
+          }}
+          </ProgressiveList>
         </DataTable>
       </div>}
 

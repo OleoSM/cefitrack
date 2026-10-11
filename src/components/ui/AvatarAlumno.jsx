@@ -1,3 +1,5 @@
+import { tintaSobre } from '../../lib/color'
+
 /**
  * El avatar de un alumno, tal como él mismo lo eligió.
  *
@@ -37,7 +39,7 @@ export default function AvatarAlumno({
         ...lado,
         ...(size == null ? {} : { fontSize: Math.max(10, Math.round(size * 0.34)) }),
         ...(accent
-          ? { background: `${accent}30`, color: accent, border: `1px solid ${accent}60` }
+          ? { background: accent, color: tintaSobre(accent), border: '1px solid var(--card-border)' }
           : { background: 'var(--soft-bg)', color: 'var(--t1)', border: '1px solid var(--card-border)' }),
         ...style,
       }}>

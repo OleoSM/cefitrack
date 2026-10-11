@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Eye, EyeOff, Mail } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
+
+/* Destino según el rol (mismo criterio que las rutas de App.jsx):
+   administradores y sub-administradores entran al panel; el resto, al portal. */
+const ADMIN_ROLES = ['admin', 'sub_admin']
+const destinoDe = role => (ADMIN_ROLES.includes(role) ? '/admin' : '/student')
 
 /* ── Pupila simple (personajes sin ojo blanco: naranja y amarillo) ── */
 function Pupil({ size = 12, maxDistance = 5, pupilColor = 'black', forceLookX, forceLookY }) {
@@ -87,8 +92,13 @@ function EyeBall({
 }
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, currentUser } = useAuth()
   const navigate = useNavigate()
+
+  // Con sesión abierta no tiene sentido mostrar el formulario.
+  useEffect(() => {
+    if (currentUser?.role) navigate(destinoDe(currentUser.role), { replace: true })
+  }, [currentUser?.role, navigate])
 
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -191,15 +201,22 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setIsLoading(true)
-    const res = await login(email, password)
-    setIsLoading(false)
-    if (!res.ok) { setError(res.message); return }
-    navigate(res.role === 'admin' ? '/admin' : '/student')
+    /* `login` puede lanzar (p. ej. al leer los permisos del sub-admin): sin
+       try/finally el botón se quedaba en "Ingresando…" para siempre. */
+    try {
+      const res = await login(email, password)
+      if (!res?.ok) { setError(res?.message || 'No se pudo iniciar sesión.'); return }
+      navigate(destinoDe(res.role), { replace: true })
+    } catch (err) {
+      setError(err?.message || 'No se pudo iniciar sesión. Revisa tu conexión e inténtalo de nuevo.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
 
   return (
-    <div className="min-h-screen grid xl:grid-cols-2">
+    <div className="min-h-dvh grid xl:grid-cols-2">
       {/* ══ IZQUIERDA — panel de marca + personajes ══════════════ */}
       <div className="relative hidden xl:flex flex-col justify-between overflow-hidden p-12 text-white"
         style={{ background: 'linear-gradient(135deg, #0a1428 0%, #122343 55%, #1e3a6e 100%)' }}>
@@ -314,21 +331,20 @@ export default function Login() {
         </div>
 
         <div className="relative z-20 flex items-center gap-8 text-sm text-white/60">
-          <a href="#" className="hover:text-white transition-colors">Aviso de Privacidad</a>
-          <a href="#" className="hover:text-white transition-colors">Términos y Condiciones</a>
-          <a href="#" className="hover:text-white transition-colors">Contacto</a>
+          <a href="/docs/terminos-condiciones-ecoems-universidad.pdf" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Términos y Condiciones</a>
+          <span>¿Dudas? Contacta a tu administrador.</span>
         </div>
       </div>
 
       {/* ══ DERECHA — formulario de login ═══════════════════════ */}
-      <div className="flex items-center justify-center p-8 bg-white">
+      <div className="flex items-center justify-center p-5 sm:p-8 bg-white">
         <div className="w-full max-w-[420px]">
           {/* Logo */}
-          <div className="flex items-center justify-center mb-12">
+          <div className="flex items-center justify-center mb-8 sm:mb-12">
             <img src="/siga-wordmark.png" alt="SIGA CEFIMAT" className="h-11 w-auto" />
           </div>
 
-          <div className="text-center mb-10">
+          <div className="text-center mb-8 sm:mb-10">
             <h1 className="font-display text-3xl font-bold tracking-tight mb-2 text-zinc-900">Bienvenido de vuelta</h1>
             <p className="text-zinc-500 text-sm">Ingresa tus credenciales para continuar</p>
           </div>
@@ -341,12 +357,13 @@ export default function Login() {
                 type="email"
                 placeholder="correo@cefimat.mx"
                 value={email}
-                autoComplete="off"
+                autoComplete="username"
+                inputMode="email"
                 onChange={e => setEmail(e.target.value)}
                 onFocus={() => setIsTyping(true)}
                 onBlur={() => setIsTyping(false)}
                 required
-                className="flex h-12 w-full rounded-md border border-zinc-300/70 bg-white px-3.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors focus:border-navy-700 focus:ring-2 focus:ring-navy-700/15"
+                className="flex h-12 w-full rounded-xl border border-zinc-300/70 bg-white px-3.5 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors focus:border-navy-700 focus:ring-2 focus:ring-navy-700/15"
               />
             </div>
 
@@ -359,31 +376,30 @@ export default function Login() {
                   placeholder="••••••••"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  autoComplete="current-password"
                   required
-                  className="flex h-12 w-full rounded-md border border-zinc-300/70 bg-white px-3.5 pr-10 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors focus:border-navy-700 focus:ring-2 focus:ring-navy-700/15"
+                  className="flex h-12 w-full rounded-xl border border-zinc-300/70 bg-white px-3.5 pr-12 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors focus:border-navy-700 focus:ring-2 focus:ring-navy-700/15"
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 transition-colors">
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 min-w-11 min-h-11 flex items-center justify-center text-zinc-400 hover:text-zinc-700 transition-colors">
                   {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
                 </button>
               </div>
             </div>
 
             {error && (
-              <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+              <div role="alert" className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl">
                 {error}
               </div>
             )}
 
             <button type="submit" disabled={isLoading}
-              className="w-full h-12 text-base font-medium rounded-md bg-navy-900 text-white hover:bg-navy-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              className="w-full h-12 text-base font-semibold rounded-xl bg-navy-900 text-white hover:bg-navy-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {isLoading ? 'Ingresando…' : 'Iniciar sesión'}
             </button>
           </form>
 
-          <div className="mt-6">
-           
-          </div>
 
           <div className="mt-8 pt-6 border-t border-zinc-100">
             <p className="text-center text-sm text-zinc-500">

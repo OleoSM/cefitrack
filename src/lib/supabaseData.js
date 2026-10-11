@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { todayISO } from './fecha'
 
 /**
  * Inicio de sesión con Supabase Auth.
@@ -26,7 +27,7 @@ export async function loginConAuth(email, password) {
   }
 
   const { data: perfil, error: e2 } = await supabase
-    .from('profiles').select('*').eq('id', data.user.id).maybeSingle()
+    .from('profiles').select('id,name,email,role,student_id,activo').eq('id', data.user.id).maybeSingle()
 
   if (e2 || !perfil) {
     await supabase.auth.signOut()
@@ -51,7 +52,7 @@ export async function sesionActual() {
   const { data } = await supabase.auth.getSession()
   if (!data?.session) return null
   const { data: perfil } = await supabase
-    .from('profiles').select('*').eq('id', data.session.user.id).maybeSingle()
+    .from('profiles').select('id,name,email,role,student_id,activo').eq('id', data.session.user.id).maybeSingle()
   if (!perfil || perfil.activo === false) return null
   return {
     id: perfil.id, name: perfil.name, email: perfil.email,
@@ -213,47 +214,29 @@ export async function resetTerms(studentId) {
   return row ? { termsStatus: row.terms_status, signedAt: row.signed_at } : null
 }
 
-/** Registro de asistencia del alumno escaneando el QR de sesión del docente. */
-export async function registerAttendance(token, studentId) {
-  const { data, error } = await supabase.rpc('register_attendance', {
-    p_token: token,
-    p_student_id: studentId,
-  })
-  if (error) {
-    const msg = error.message ?? ''
-    if (msg.includes('invalid_or_expired_token'))
-      return { ok: false, code: 'expired', message: 'El código QR ya no es válido. Pídele al docente el código actualizado.' }
-    if (msg.includes('student_not_in_group'))
-      return { ok: false, code: 'wrong_group', message: 'Este QR pertenece a otro grupo. Verifica con tu docente.' }
-    return { ok: false, code: 'error', message: 'No se pudo registrar la asistencia. Intenta de nuevo.' }
-  }
-  const row = data?.[0]
-  return { ok: true, status: row?.status ?? 'presente', scannedAt: row?.scanned_at }
-}
-
 /**
- * Una sesión sin ningún registro es una lista que se abrió y nunca se guardó,
- * no una clase a la que faltó el grupo entero. Contarla produciría ausencias
- * inventadas, así que se descarta antes de cualquier cálculo.
+ * Una sesión sin ningún registro y sin terminar es una lista que se abrió y
+ * nunca se guardó, no una clase a la que faltó el grupo entero: se descarta.
+ * Una lista TERMINADA sin registros sí cuenta: ese día faltaron todos.
+ * (Las selects que la usan deben incluir `finished`.)
  */
-const sesionCapturada = s => (s.attendance_records ?? []).length > 0
+const sesionCapturada = s => s.finished === true || (s.attendance_records ?? []).length > 0
 
 /**
  * Historial de asistencia del alumno: una entrada por sesión capturada de su
  * grupo (ausente si el docente pasó lista y no lo marcó).
+ *
+ * Se resuelve en el servidor (RPC asistencia_alumno) porque, por RLS, el
+ * alumno solo ve SUS registros: desde el cliente las sesiones a las que faltó
+ * llegaban vacías, se descartaban y su asistencia salía siempre 100 %.
  */
 export async function fetchStudentAttendance(studentId, groupId) {
   if (!studentId || !groupId) return []
-  const { data, error } = await supabase
-    .from('attendance_sessions')
-    .select('session_date, attendance_records(student_id, status, arrival_label)')
-    .eq('group_id', groupId)
-    .order('session_date', { ascending: true })
+  const { data, error } = await supabase.rpc('asistencia_alumno', { p_student_id: studentId })
   if (error) throw error
-  return data.filter(sesionCapturada).map(s => {
-    const rec = s.attendance_records.find(r => r.student_id === studentId)
-    return { date: s.session_date, status: rec ? rec.status : 'ausente', time: rec?.arrival_label ?? null, studentId }
-  })
+  return (data ?? []).map(r => ({
+    date: r.session_date, status: r.status, time: r.arrival_label ?? null, studentId,
+  }))
 }
 
 /**
@@ -264,7 +247,7 @@ export async function fetchStudentAttendance(studentId, groupId) {
 export async function fetchAttendanceStats(students) {
   const { data, error } = await supabase
     .from('attendance_sessions')
-    .select('group_id, attendance_records(student_id, status)')
+    .select('group_id, finished, attendance_records(student_id, status)')
   if (error) throw error
 
   const sessionsByGroup = {}
@@ -299,40 +282,38 @@ export async function fetchAttendanceStats(students) {
 export async function fetchGroupMetrics(groupId) {
   if (!groupId) return { members: [], evalsByStudent: {}, attendanceByStudent: {} }
 
-  const [{ data: sts, error: e1 }, { data: sessions, error: e2 }] = await Promise.all([
-    supabase.from('students').select('*').eq('group_id', groupId),
-    supabase.from('attendance_sessions')
-      .select('session_date, attendance_records(student_id, status, arrival_label)')
-      .eq('group_id', groupId)
-      .order('session_date', { ascending: true }),
-  ])
-  if (e1) throw e1
-  if (e2) throw e2
+  /* RPC metricas_grupo: por RLS un alumno solo lee su propia fila, así que
+     desde el cliente su "lugar en el grupo" salía siempre #1 de 1. El servidor
+     devuelve el grupo completo; a un alumno, con los compañeros anonimizados
+     (`anon-N`, sin nombre). El personal recibe los ids reales. */
+  const { data, error } = await supabase.rpc('metricas_grupo', { p_group_id: groupId })
+  if (error) throw error
+  const filas = data ?? []
 
-  const ids = sts.map(s => s.id)
-  const { data: evs, error: e3 } = await supabase
-    .from('evaluations').select('*').in('student_id', ids.length ? ids : ['__none__'])
-  if (e3) throw e3
+  // Nombres: solo para ids reales que el usuario puede leer (personal; el
+  // alumno, el suyo). Los anónimos se quedan sin nombre.
+  const realIds = filas.map(f => f.member_id).filter(id => !id.startsWith('anon-'))
+  const { data: sts, error: e2 } = realIds.length
+    ? await supabase.from('students').select('id, name').in('id', realIds)
+    : { data: [] }
+  if (e2) throw e2
+  const nombre = Object.fromEntries((sts ?? []).map(s => [s.id, s.name]))
 
   const evalsByStudent = {}
-  for (const e of evs) (evalsByStudent[e.student_id] ??= []).push(mapEvaluation(e))
-
-  const sesiones = sessions.filter(sesionCapturada)
   const attendanceByStudent = {}
-  for (const id of ids) {
-    attendanceByStudent[id] = sesiones.map(s => {
-      const rec = s.attendance_records.find(r => r.student_id === id)
-      return { date: s.session_date, status: rec ? rec.status : 'ausente', time: rec?.arrival_label ?? null, studentId: id }
-    })
-  }
-
-  const members = sts.map(s => ({
-    id: s.id,
-    name: s.name,
-    groupId: s.group_id,
-    assignmentsDone: s.assignments_done,
-    assignmentsTotal: s.assignments_total,
-  }))
+  const members = filas.map(f => {
+    evalsByStudent[f.member_id] = (f.evaluaciones ?? []).map(mapEvaluation)
+    attendanceByStudent[f.member_id] = (f.asistencia ?? []).map(a => ({
+      date: a.session_date, status: a.status, time: a.arrival_label ?? null, studentId: f.member_id,
+    }))
+    return {
+      id: f.member_id,
+      name: nombre[f.member_id] ?? null,
+      groupId,
+      assignmentsDone: f.assignments_done,
+      assignmentsTotal: f.assignments_total,
+    }
+  })
 
   return { members, evalsByStudent, attendanceByStudent }
 }
@@ -343,11 +324,17 @@ export async function fetchGroupMetrics(groupId) {
  * registro cuenta como ausente.
  */
 export async function fetchAsistenciaHoy(students) {
-  const hoy = new Date().toISOString().slice(0, 10)
+  const hoy = todayISO()
+  // Acotado a los alumnos recibidos (los filtros del tablero): solo sus
+  // grupos y solo sus registros. Una sola consulta para todos los grupos.
+  const grupos = [...new Set(students.map(s => s.groupId).filter(Boolean))]
+  const delFiltro = new Set(students.map(s => s.id))
+  if (!grupos.length) return { counts: { presente: 0, tardanza: 0, ausente: 0 }, esperados: 0, haySesion: false }
   const { data, error } = await supabase
     .from('attendance_sessions')
-    .select('group_id, session_date, attendance_records(student_id, status)')
+    .select('group_id, session_date, finished, attendance_records(student_id, status)')
     .eq('session_date', hoy)
+    .in('group_id', grupos)
   if (error) throw error
 
   const counts = { presente: 0, tardanza: 0, ausente: 0 }
@@ -359,6 +346,7 @@ export async function fetchAsistenciaHoy(students) {
 
   for (const s of sesiones) {
     for (const r of s.attendance_records) {
+      if (!delFiltro.has(r.student_id)) continue
       if (counts[r.status] !== undefined) counts[r.status] += 1
       registrados.add(r.student_id)
     }
@@ -391,7 +379,37 @@ const mapEvaluation = e => ({
   calMax: Number(e.cal_max),
   fecha: e.fecha,
   periodo: e.periodo,
+  // Columna de la hoja de Calificaciones de la que sale (si se capturó ahí):
+  // permite abrir el detalle de la asignación ("Tarea 3", bloque, máximo).
+  columnaId: e.columna_id ?? null,
 })
+
+/** Nombres de varias asignaciones de la hoja en una sola consulta: { id: nombre }. */
+export async function fetchNombresColumnas(ids = []) {
+  const unicos = [...new Set(ids.filter(Boolean))]
+  if (!unicos.length) return {}
+  const { data, error } = await supabase.from('registro_columnas').select('id, nombre').in('id', unicos)
+  if (error) throw error
+  return Object.fromEntries((data ?? []).map(c => [c.id, c.nombre]))
+}
+
+/**
+ * Asignación de la hoja de Calificaciones a la que pertenece una evaluación.
+ * RLS: la leen el admin, el personal del grupo y los alumnos de ese grupo.
+ */
+export async function fetchColumnaRegistro(columnaId) {
+  if (!columnaId) return null
+  const { data, error } = await supabase
+    .from('registro_columnas')
+    .select('id, group_id, nombre, materia, tipo, bloque, cal_max')
+    .eq('id', columnaId)
+    .maybeSingle()
+  if (error) throw error
+  return data ? {
+    id: data.id, groupId: data.group_id, nombre: data.nombre, materia: data.materia,
+    tipo: data.tipo, bloque: data.bloque, calMax: data.cal_max != null ? Number(data.cal_max) : null,
+  } : null
+}
 
 export async function fetchEvaluations() {
   const { data, error } = await supabase.from('evaluations').select('*').order('fecha', { ascending: false })
@@ -419,7 +437,7 @@ export async function saveEvaluation({ id = null, studentId, materia, tipo, cali
     p_tipo: tipo,
     p_calificacion: calificacion,
     p_cal_max: calMax,
-    p_fecha: fecha ?? new Date().toISOString().slice(0, 10),
+    p_fecha: fecha ?? todayISO(),
     p_periodo: periodo,
   })
   if (error) {
@@ -775,7 +793,7 @@ export async function fetchAsistenciaRegistro(groupId) {
   if (!groupId) return { porAlumno: {}, fechas: [] }
   const { data, error } = await supabase
     .from('attendance_sessions')
-    .select('session_date, attendance_records(student_id, status)')
+    .select('session_date, finished, attendance_records(student_id, status)')
     .eq('group_id', groupId)
     .order('session_date')
   if (error) throw error

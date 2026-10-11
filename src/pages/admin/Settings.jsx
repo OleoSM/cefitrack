@@ -3,11 +3,11 @@ import {
   SlidersHorizontal, Timer, Mail, Save, CheckCircle2,
   Scale, ClipboardList, CalendarCheck, Send, Palette,
 } from 'lucide-react'
-import { loadSettings, saveSettings, DEFAULT_SETTINGS, calcularScore } from '../../lib/settings'
+import { loadSettings, saveSettings, syncSettings, DEFAULT_SETTINGS, calcularScore } from '../../lib/settings'
+import { useAuth } from '../../context/AuthContext'
 import { sendNotification, NOTIF_EVENTS } from '../../lib/notifications'
 import { fetchStudents } from '../../lib/supabaseData'
 import { useAdminTheme } from '../../context/AdminThemeContext'
-import { TOKENS } from '../../context/StudentThemeContext'
 import AppearancePicker from '../../components/ui/AppearancePicker'
 
 const PESO_FIELDS = [
@@ -16,10 +16,10 @@ const PESO_FIELDS = [
   { id: 'asistencia', label: 'Asistencia', icon: CalendarCheck, desc: 'Porcentaje de asistencia a clases' },
 ]
 
-function Toggle({ checked, onChange }) {
+function Toggle({ checked, onChange, disabled = false }) {
   return (
-    <button onClick={onChange} role="switch" aria-checked={checked}
-      className="relative inline-flex w-10 h-[22px] rounded-full transition-colors duration-200 flex-shrink-0"
+    <button onClick={onChange} role="switch" aria-checked={checked} disabled={disabled}
+      className="relative inline-flex w-10 h-[22px] rounded-full transition-colors duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
       style={{ background: checked ? 'var(--good)' : 'var(--t4)' }}>
       <span className="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white transition-transform duration-200"
         style={{ transform: checked ? 'translateX(18px)' : 'translateX(0)' }}/>
@@ -30,6 +30,20 @@ function Toggle({ checked, onChange }) {
 export default function Settings() {
   const [settings, setSettings] = useState(loadSettings)
   const [toast, setToast]       = useState(null)
+  const [saveError, setSaveError] = useState('')
+  const [saving, setSaving]     = useState(false)
+  const { currentUser } = useAuth()
+  /* Sólo el administrador puede escribir la configuración global (RLS). Para
+     el sub-admin la sección queda en solo lectura en vez de dejarle editar y
+     fallar al guardar. */
+  const isAdmin = currentUser?.role === 'admin'
+
+  // La copia local puede estar vieja: se refresca con la de la BD.
+  useEffect(() => {
+    let vivo = true
+    syncSettings().then(s => { if (vivo) setSettings(s) }).catch(() => {})
+    return () => { vivo = false }
+  }, [])
   const [sampleStudent, setSampleStudent] = useState(null)
   const { appearance, setAppearance, t: adminT } = useAdminTheme()
 
@@ -50,10 +64,18 @@ export default function Settings() {
     setSettings(s => ({ ...s, pesos: { ...s.pesos, [id]: n } }))
   }
 
-  const handleSave = () => {
-    if (!pesosOk) return
-    saveSettings(settings)
-    showToast('Configuración guardada')
+  const handleSave = async () => {
+    if (!pesosOk || !isAdmin || saving) return
+    setSaving(true); setSaveError('')
+    try {
+      const res = await saveSettings(settings)
+      if (!res.ok) { setSaveError(res.message || 'No se pudo guardar la configuración.'); return }
+      showToast('Configuración guardada')
+    } catch {
+      setSaveError('No se pudo guardar la configuración.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleTestNotif = () => {
@@ -66,7 +88,7 @@ export default function Settings() {
   const sampleScore = sample ? calcularScore(sample, settings.pesos) : null
 
   return (
-    <div className="space-y-5">
+    <div className="w-full space-y-5">
 
       <div>
         <h1 className="page-title">Configuración</h1>
@@ -107,13 +129,12 @@ export default function Settings() {
                 <p className="text-xs truncate" style={{ color: 'var(--t3)' }}>{desc}</p>
               </div>
               <input type="range" min="0" max="100" step="5" value={settings.pesos[id]}
-                onChange={e => setPeso(id, e.target.value)}
-                className="w-28 hidden sm:block accent-emerald-500"/>
+                onChange={e => setPeso(id, e.target.value)} disabled={!isAdmin}
+                className="w-28 hidden sm:block" style={{ accentColor:'var(--accent)' }}/>
               <div className="flex items-center gap-1">
                 <input type="number" min="0" max="100" value={settings.pesos[id]}
-                  onChange={e => setPeso(id, e.target.value)}
-                  className="w-14 text-center text-sm font-bold rounded-lg py-1.5 outline-none tabular-nums"
-                  style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t1)' }}/>
+                  onChange={e => setPeso(id, e.target.value)} disabled={!isAdmin}
+                  className="input-field !w-16 !px-2 text-center font-bold tabular-nums"/>
                 <span className="text-xs" style={{ color: 'var(--t3)' }}>%</span>
               </div>
             </div>
@@ -144,8 +165,8 @@ export default function Settings() {
           <div className="flex items-center gap-1">
             <input type="number" min="1" max="120" value={settings.toleranciaMin}
               onChange={e => setSettings(s => ({ ...s, toleranciaMin: Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 1)) }))}
-              className="w-16 text-center text-sm font-bold rounded-lg py-1.5 outline-none tabular-nums"
-              style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t1)' }}/>
+              disabled={!isAdmin}
+              className="input-field !w-16 !px-2 text-center font-bold tabular-nums"/>
             <span className="text-xs" style={{ color: 'var(--t3)' }}>min</span>
           </div>
         </div>
@@ -172,17 +193,14 @@ export default function Settings() {
                 <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>{ev.label}</p>
                 <p className="text-xs" style={{ color: 'var(--t3)' }}>{ev.desc}</p>
               </div>
-              <Toggle checked={!!settings.notif[ev.id]}
+              <Toggle checked={!!settings.notif[ev.id]} disabled={!isAdmin}
                 onChange={() => setSettings(s => ({ ...s, notif: { ...s.notif, [ev.id]: !s.notif[ev.id] } }))}/>
             </div>
           ))}
         </div>
 
         <button onClick={handleTestNotif}
-          className="flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95"
-          style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
-          onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
-          onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
+          className="btn-secondary text-xs py-2">
           <Send size={12}/> Enviar correo de prueba
         </button>
       </div>
@@ -194,7 +212,7 @@ export default function Settings() {
           style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
           <img src="/logo.jpeg" alt="Logo SIGA CEFIMAT"
             className="w-12 h-12 rounded-full object-cover flex-shrink-0"
-            style={{ border:'1px solid rgba(255,255,255,.15)' }}
+            style={{ border:'1px solid var(--card-border)' }}
             onError={e => { e.currentTarget.style.display = 'none' }}/>
           <div className="flex-1">
             <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>
@@ -206,9 +224,9 @@ export default function Settings() {
           </div>
           <input type="text" value={settings.platformName}
             onChange={e => setSettings(s => ({ ...s, platformName: e.target.value }))}
+            disabled={!isAdmin}
             placeholder={DEFAULT_SETTINGS.platformName}
-            className="w-44 text-sm font-semibold rounded-lg py-2 px-3 outline-none"
-            style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t1)' }}/>
+            className="input-field !w-44 font-semibold"/>
         </div>
       </div>
 
@@ -219,14 +237,23 @@ export default function Settings() {
 
       {/* ── Guardar ─────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
-        <button onClick={handleSave} disabled={!pesosOk}
+        {isAdmin ? (
+        <button onClick={handleSave} disabled={!pesosOk || saving}
           className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
-          <Save size={14}/> Guardar configuración
+          <Save size={14}/> {saving ? 'Guardando…' : 'Guardar configuración'}
         </button>
-        {!pesosOk && (
+        ) : (
+          <p className="text-xs" style={{ color:'var(--t3)' }}>
+            Solo un administrador puede cambiar la ponderación, la tolerancia y las notificaciones.
+          </p>
+        )}
+        {isAdmin && !pesosOk && (
           <p className="text-xs font-semibold" style={{ color:'var(--bad)' }}>
             La ponderación debe sumar exactamente 100%.
           </p>
+        )}
+        {saveError && (
+          <p role="alert" className="text-xs font-semibold" style={{ color:'var(--bad)' }}>{saveError}</p>
         )}
       </div>
 

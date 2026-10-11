@@ -162,7 +162,7 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
               className={`w-11 h-11 rounded-xl overflow-hidden transition-all duration-150 ${
                 activeId === p.id
                   ? 'ring-2 ring-white ring-offset-2 ring-offset-[color:var(--card-bg)] scale-105'
-                  : 'opacity-65 hover:opacity-100 hover:scale-105'
+                  : 'opacity-65 hover:opacity-100'
               }`}
               style={{ display:'grid', gridTemplateColumns:'1fr 1fr' }}>
               {p.colors.map((c, i) => <div key={i} style={{ background:c }} />)}
@@ -200,7 +200,7 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
               className={`w-9 h-9 rounded-full transition-all duration-150 ${
                 activeId === p.id
                   ? 'ring-2 ring-white ring-offset-2 ring-offset-[color:var(--card-bg)] scale-110'
-                  : 'opacity-70 hover:opacity-100 hover:scale-110'
+                  : 'opacity-70 hover:opacity-100'
               }`}
               style={{ background: p.accent }} />
             {activeId === p.id && (
@@ -231,7 +231,7 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
               className={`w-9 h-9 rounded-full transition-all duration-150 ${
                 activeId === p.id
                   ? 'ring-2 ring-white ring-offset-2 ring-offset-[color:var(--card-bg)] scale-110'
-                  : 'opacity-70 hover:opacity-100 hover:scale-110'
+                  : 'opacity-70 hover:opacity-100'
               }`}
               style={{ background: isLight ? p.light.accent : p.accent }} />
             {activeId === p.id && (

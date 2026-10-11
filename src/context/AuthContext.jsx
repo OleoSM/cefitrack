@@ -10,6 +10,8 @@ const AuthContext = createContext(null)
    para las sucursales. La lista se lee del catalogo, que es la unica fuente
    de verdad desde que `groups.sucursal` es clave foranea. */
 import { fetchSucursales } from '../lib/supabaseData'
+import { syncSettings } from '../lib/settings'
+import { supabase } from '../lib/supabaseClient'
 const SESSION_KEY = 'edutrack_session'
 
 /**
@@ -71,6 +73,7 @@ export function AuthProvider({ children }) {
       .then(async user => {
         if (!vivo) return
         if (!user) { persist(null); return }
+        syncSettings().catch(() => {})
         if (user.role === 'sub_admin') {
           const access = await fetchSubAdminAccess(user.id)
           if (vivo) persist({ ...user, access })
@@ -82,6 +85,17 @@ export function AuthProvider({ children }) {
     return () => { vivo = false }
   }, [])
 
+  /* Si Supabase cierra la sesión por su cuenta (token revocado, cuenta
+     retirada, cierre en otra pestaña), la interfaz no debe seguir "logueada"
+     con consultas que ya fallan. */
+  useEffect(() => {
+    if (USAR_LEGACY) return
+    const { data } = supabase.auth.onAuthStateChange(evento => {
+      if (evento === 'SIGNED_OUT') persist(null)
+    })
+    return () => data?.subscription?.unsubscribe()
+  }, [])
+
   const login = async (email, password) => {
     const res = USAR_LEGACY
       ? await loginWithDb(email, password)
@@ -89,6 +103,7 @@ export function AuthProvider({ children }) {
     if (!res.ok) return { ok: false, message: res.message }
 
     let user = res.user
+    syncSettings().catch(() => {})
     if (user.role === 'sub_admin') {
       const access = await fetchSubAdminAccess(user.id)
       user = { ...user, access }

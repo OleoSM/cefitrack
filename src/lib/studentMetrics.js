@@ -125,3 +125,51 @@ export function evolucionPorMateria(evs = []) {
   })
   return { data, materias }
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   COLOR DE LOS DATOS DEL ALUMNO — una sola fuente para todas las pantallas.
+   Antes cada pantalla tenía sus propios umbrales y hex: la misma calificación
+   salía azul en el panel y roja en Calificaciones, y la misma materia cambiaba
+   de color al pasar de una pantalla a otra.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/** Tono semántico de una calificación en escala 10 (≥8 bien, ≥6 regular). */
+export const tonoCalificacion = g =>
+  g === null || g === undefined || Number.isNaN(g) ? 'neutral'
+    : g >= 8 ? 'good' : g >= 6 ? 'info' : 'bad'
+
+/** Color (token CSS) de una calificación. */
+export const colorCalificacion = g => {
+  const tono = tonoCalificacion(g)
+  return tono === 'neutral' ? 'var(--t4)' : `var(--${tono})`
+}
+
+/** Tono semántico de un % de asistencia. El 90 % es el mínimo de la garantía. */
+export const tonoAsistencia = pct =>
+  pct === null || pct === undefined || Number.isNaN(pct) ? 'neutral'
+    : pct >= 90 ? 'good' : pct >= 75 ? 'warn' : 'bad'
+
+/** Color (token CSS) de un % de asistencia. */
+export const colorAsistencia = pct => {
+  const tono = tonoAsistencia(pct)
+  return tono === 'neutral' ? 'var(--t4)' : `var(--${tono})`
+}
+
+/* Paleta sólida institucional de materias (registro de #4d0b1d). `claro` es
+   para IPN/UNAM; `oscuro` es el mismo matiz más luminoso, porque sobre el
+   fondo casi negro los tonos profundos se funden con la página. Ambos llevan
+   texto blanco encima con contraste suficiente. */
+const PALETA_MATERIA = {
+  claro:  ['#12345A', '#17502D', '#633515', '#48245F', '#064B60', '#78182B', '#075348', '#5E1948'],
+  oscuro: ['#2C6BA8', '#2A7D49', '#9A5A26', '#7447A0', '#1F7F99', '#A8344A', '#1C8070', '#93306F'],
+}
+
+/** Color estable de una materia: depende sólo de su nombre (hash), no del
+    orden en que llegan los datos, así que es el mismo en todas las pantallas. */
+export function colorMateria(nombre = '', light = true) {
+  const paleta = light ? PALETA_MATERIA.claro : PALETA_MATERIA.oscuro
+  const clave = String(nombre ?? '').trim().toLowerCase()
+  let h = 0
+  for (let i = 0; i < clave.length; i++) h = (h * 31 + clave.charCodeAt(i)) >>> 0
+  return paleta[h % paleta.length]
+}

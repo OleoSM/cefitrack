@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
-  Wallet, Search, Plus, Trash2, Pencil, X, Building2, Users,
+  Wallet, Plus, Trash2, Pencil, X,
   CreditCard, WalletCards, Banknote, ArrowLeftRight, CheckCircle2, AlertTriangle,
   StickyNote, Ticket,
 } from 'lucide-react'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
+import { IconPagos, IconAdeudos } from '../../components/ui/SigaKpiIcons'
+import ConfirmDialog from '../../components/admin/ConfirmDialog'
+import { todayISO } from '../../lib/fecha'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import {
-  DataTable, DataTableRow, DataTableAvatar, DataTableBar,
+  DataTable, DataTableRow, DataTableAvatar, DataTableBar, SkeletonRows,
 } from '../../components/ui/DataTable'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import ProgressiveList from '../../components/ui/ProgressiveList'
@@ -62,7 +66,7 @@ const COLUMNS = [
   { key: 'avance',  label: 'Avance',   className: 'w-24 sm:w-40' },
   { key: 'formas',  label: 'Formas',   className: 'w-24 hidden xl:flex' },
   { key: 'estado',  label: 'Estado',   className: 'w-28 hidden md:flex' },
-  { key: 'accion',  label: '',         className: 'w-9 flex justify-end' },
+  { key: 'accion',  label: '',         className: 'w-10 flex justify-end' },
 ]
 
 /* El color del avance sigue el mismo criterio que el resto del panel: verde
@@ -185,10 +189,18 @@ export default function Pagos() {
     const planes = new Set(filtradas.map(f => f.planId).filter(Boolean))
     const total  = filtradas.reduce((s, f) => s + (f.total ?? 0), 0)
     const cobrado = filtradas.reduce((s, f) => s + (f.pagado ?? 0), 0)
+    /* Las inscripciones se cobran aparte y NO cuentan en "Cobrado": si se
+       sumaran aquí, el desglose por forma de pago no cuadraría con él. Se
+       informan por separado. */
     const porMetodo = Object.fromEntries(METODOS.map(m => [m, 0]))
-    pagos.forEach(p => { if (planes.has(p.planId)) porMetodo[p.metodo] += p.monto })
+    let inscripciones = 0
+    pagos.forEach(p => {
+      if (!planes.has(p.planId)) return
+      if (p.esInscripcion) inscripciones += p.monto ?? 0
+      else porMetodo[p.metodo] += p.monto ?? 0
+    })
     return {
-      total, cobrado,
+      total, cobrado, inscripciones,
       saldo: total - cobrado,
       pct: total > 0 ? Math.min(100, (cobrado / total) * 100) : null,
       porMetodo,
@@ -198,16 +210,13 @@ export default function Pagos() {
 
   const filaAbierta = filas.find(f => f.studentId === detalle) ?? null
 
-  const activos = [sucursal !== 'todas', grupo !== 'todos', estado !== 'todos',
-                   metodo !== 'todos', soloAdeudo, query !== ''].filter(Boolean).length
-
   if (!isAdmin) return <Navigate to="/admin" replace />
 
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-5">
 
       <div>
-        <h1 className="page-title flex items-center gap-2"><Wallet size={22}/> Pagos</h1>
+        <h1 className="page-title">Pagos</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
           Qué tan al corriente va cada alumno, mes a mes, y con qué forma de pago. El avance se
           calcula sobre los importes cobrados, así que una liquidación de contado llega al 100 %
@@ -244,21 +253,18 @@ export default function Pagos() {
         busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno o correo…' }}
         resumen={`${filtradas.length} alumno(s)`}>
         <NeonCheckbox checked={soloAdeudo} onChange={e => setSoloAdeudo(e.target.checked)}
-          label="Sólo con adeudo" color="#00ffaa"/>
+          label="Sólo con adeudo"/>
       </BarraFiltros>
 
       {/* ── Totales del conjunto filtrado ───────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi titulo="Total del periodo" valor={mxn(kpis.total)}
-          nota={kpis.sinPlan > 0 ? `${kpis.sinPlan} sin plan asignado` : 'Todos con plan'}/>
-        <Kpi titulo="Cobrado" valor={mxn(kpis.cobrado)} color="var(--good)"
-          nota={kpis.pct == null ? '—' : `${kpis.pct.toFixed(1)} % del total`}/>
-        <Kpi titulo="Por cobrar" valor={mxn(kpis.saldo)}
-          color={kpis.saldo > 0 ? 'var(--warn)' : 'var(--good)'}
-          nota={kpis.saldo <= 0 ? 'Sin adeudo' : `${filtradas.filter(f => (f.saldo ?? 0) > 0).length} alumnos`}/>
-        <div className="card p-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-2"
-            style={{ color: 'var(--t3)' }}>Por forma de pago</p>
+      <KpiGrid cols={4}>
+        <KpiCard icon={IconPagos} tone="neutral" label="Total del periodo" value={mxn(kpis.total)}
+          sub={kpis.sinPlan > 0 ? `${kpis.sinPlan} sin plan asignado` : 'Todos con plan'}/>
+        <KpiCard icon={IconPagos} tone="good" label="Cobrado" value={mxn(kpis.cobrado)}
+          sub={kpis.pct == null ? '—' : `${kpis.pct.toFixed(1)} % del total`}/>
+        <KpiCard icon={IconAdeudos} tone={kpis.saldo > 0 ? 'warn' : 'good'} label="Por cobrar" value={mxn(kpis.saldo)}
+          sub={kpis.saldo <= 0 ? 'Sin adeudo' : `${filtradas.filter(f => (f.saldo ?? 0) > 0).length} alumnos`}/>
+        <KpiCard variant="surface" icon={Wallet} tone="info" label="Cobrado por forma de pago">
           <div className="space-y-1.5">
             {METODOS.map(m => (
               <div key={m} className="flex items-center justify-between gap-2">
@@ -268,20 +274,21 @@ export default function Pagos() {
                 </span>
               </div>
             ))}
+            {kpis.inscripciones > 0 && (
+              <p className="text-[11px] pt-1" style={{ color:'var(--t3)', borderTop:'1px solid var(--divider)' }}>
+                Inscripciones aparte: <strong style={{ color:'var(--t2)' }}>{mxn(kpis.inscripciones)}</strong>
+              </p>
+            )}
           </div>
-        </div>
-      </div>
-
-      <p className="text-[11px] flex items-center gap-1.5 px-1" style={{ color: 'var(--t3)' }}>
-        <Wallet size={11}/> {filtradas.length} de {filas.length} alumnos
-      </p>
+        </KpiCard>
+      </KpiGrid>
 
       {/* ── Tabla ───────────────────────────────────────────────────────── */}
       <DataTable columns={COLUMNS}
         isEmpty={!loading && filtradas.length === 0}
         emptyIcon={<Wallet size={36}/>}
         emptyText="Ningún alumno coincide con el filtro.">
-        {loading ? null : (
+        {loading ? <SkeletonRows/> : (
           <ProgressiveList items={filtradas} emptyLabel="Ningún alumno coincide con el filtro.">
             {f => {
               const est = estadoDe(f)
@@ -331,8 +338,11 @@ export default function Pagos() {
                       {ESTADO_LABEL[est]}
                     </span>
                   )},
-                  { className: 'w-9 flex justify-end', content: (
-                    <Pencil size={13} style={{ color: 'var(--t3)' }}/>
+                  { className: 'w-10 flex justify-end', content: (
+                    <span aria-hidden="true" className="w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
+                      <Pencil size={14}/>
+                    </span>
                   )},
                 ]}/>
               )
@@ -353,31 +363,6 @@ export default function Pagos() {
   )
 }
 
-/* ── Botón-chip de filtro ─────────────────────────────────────────────────── */
-function Chip({ activo, onClick, children }) {
-  return (
-    <button type="button" onClick={onClick}
-      className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all active:scale-95 whitespace-nowrap"
-      style={activo
-        // Activo: color pleno con texto blanco. Nada de alfa en un identificador.
-        ? { background: 'var(--info-solid)', color: '#fff', border: '1px solid var(--info-solid)' }
-        : { background: 'var(--soft-bg)', color: 'var(--t2)', border: '1px solid var(--card-border)' }}>
-      {children}
-    </button>
-  )
-}
-
-function Kpi({ titulo, valor, nota, color }) {
-  return (
-    <div className="card p-4">
-      <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
-        style={{ color: 'var(--t3)' }}>{titulo}</p>
-      <p className="text-xl font-bold tabular-nums" style={{ color: color ?? 'var(--t1)' }}>{valor}</p>
-      {nota && <p className="text-[11px] mt-0.5" style={{ color: 'var(--t3)' }}>{nota}</p>}
-    </div>
-  )
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════
    DETALLE DE UN ALUMNO
    Reúne lo que se pidió en la misma pantalla: el plan, los pagos mes a mes, el
@@ -386,24 +371,31 @@ function Kpi({ titulo, valor, nota, color }) {
 function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
   const [editandoPlan, setEditandoPlan] = useState(!fila.planId)
   const [error, setError] = useState(null)
+  const [borrarFor, setBorrarFor] = useState(null)
 
   const calendario = calendarioPlan(fila, pagos)
   const sueltos    = pagosSinMes(fila, pagos)
 
   const eliminar = async (id) => {
     const res = await borrarPago(id)
-    if (!res.ok) { setError(res.message); return }
+    if (!res.ok) return res
     setError(null)
     onCambio()
   }
 
   return (
     <ModalPortal onClose={onClose} maxWidth="max-w-3xl" scrollable>
-      <div className="p-5 space-y-5">
-
-        <div className="flex items-start justify-between gap-3">
+      {borrarFor && (
+        <ConfirmDialog
+          title="Eliminar movimiento"
+          message={`Se eliminará el pago de ${mxn(borrarFor.monto)} del ${borrarFor.fecha}.`}
+          detail="El avance y el saldo del alumno se recalculan. Esta acción no se puede deshacer."
+          onConfirm={() => eliminar(borrarFor.id)}
+          onClose={() => setBorrarFor(null)}/>
+      )}
+      <div className="flex items-start justify-between gap-3 px-5 py-3.5" style={{ borderBottom:'1px solid var(--divider)' }}>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold truncate" style={{ color: 'var(--t1)' }}>
+            <h2 className="text-sm font-bold truncate" style={{ color: 'var(--t1)' }}>
               {fila.studentName}
             </h2>
             <p className="text-xs truncate" style={{ color: 'var(--t3)' }}>
@@ -411,10 +403,12 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
               {fila.pagoEstado ? ` · nota de Registrar: “${fila.pagoEstado}”` : ''}
             </p>
           </div>
-          <button onClick={onClose} className="flex-shrink-0" style={{ color: 'var(--t3)' }}>
-            <X size={18}/>
+          <button onClick={onClose} aria-label="Cerrar"
+            className="w-11 h-11 -my-1 flex items-center justify-center rounded-lg flex-shrink-0" style={{ color: 'var(--t3)' }}>
+            <X size={15}/>
           </button>
-        </div>
+      </div>
+      <div className="p-5 space-y-5">
 
         {error && (
           <div className="rounded-lg px-3 py-2 text-xs"
@@ -480,7 +474,7 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                     <div key={m.mes} className="rounded-xl p-3 space-y-1.5"
                       style={{
                         background: 'var(--card-bg)',
-                        border: `1px solid ${m.cubierto ? 'var(--good-line)' : 'var(--divider)'}`,
+                        border: `1px solid ${m.cubierto ? 'var(--good-line)' : 'var(--card-border)'}`, boxShadow: 'var(--card-shadow)',
                       }}>
                       <div className="flex items-center justify-between gap-1">
                         <span className="text-xs font-bold" style={{ color: 'var(--t1)' }}>
@@ -550,8 +544,9 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                           {` · Registro: ${p.registradoPor ?? p.createdByName}`}
                         </p>
                       </div>
-                      <button onClick={() => eliminar(p.id)} title="Eliminar movimiento"
-                        className="flex-shrink-0 transition-colors" style={{ color: 'var(--t3)' }}
+                      <button onClick={() => setBorrarFor(p)} title="Eliminar movimiento" aria-label="Eliminar movimiento"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                        style={{ color: 'var(--t3)', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
                         onMouseEnter={e => { e.currentTarget.style.color = 'var(--bad)' }}
                         onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)' }}>
                         <Trash2 size={14}/>
@@ -618,7 +613,7 @@ function FormPlan({ fila, onCancel, onGuardado }) {
     total: fila.total ?? '',
     modalidad: fila.modalidad ?? 'mensualidades',
     mensualidades: fila.mensualidades ?? 6,
-    inicio: fila.inicio ?? claveMes(new Date().toISOString().slice(0, 10)),
+    inicio: fila.inicio ?? claveMes(todayISO()),
     notas: fila.notas ?? '',
     inscripcion: fila.inscripcion ?? '',
   })
@@ -706,7 +701,7 @@ function FormPlan({ fila, onCancel, onGuardado }) {
    registraba como un movimiento más, inflaba el porcentaje pagado y el saldo
    dejaba de coincidir con lo que faltaba por cobrar del curso. */
 function FormInscripcion({ fila, pagos, onRegistrado, onError }) {
-  const hoy = new Date().toISOString().slice(0, 10)
+  const hoy = todayISO()
   const cobrada = pagos.filter(p => p.esInscripcion)
   const totalCobrado = cobrada.reduce((a, p) => a + (p.monto ?? 0), 0)
   const esperada = fila.inscripcion ?? null
@@ -822,7 +817,7 @@ function FormInscripcion({ fila, pagos, onRegistrado, onError }) {
 
 /* ── Registro de un movimiento ───────────────────────────────────────────── */
 function FormPago({ fila, calendario, onRegistrado, onError }) {
-  const hoy = new Date().toISOString().slice(0, 10)
+  const hoy = todayISO()
   const primeroPendiente = calendario.find(m => !m.cubierto)?.mes ?? ''
 
   /* El nombre de quien cobra se recuerda entre movimientos: en un mostrador
@@ -837,8 +832,9 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
 
   const enviar = async (e) => {
     e.preventDefault()
-    const monto = Number(f.monto)
-    if (!(monto > 0)) { onError('El importe debe ser mayor que cero.'); return }
+    // De contado el importe ES el saldo pendiente: no se acepta otro.
+    const monto = f.contado ? Number(fila.saldo) : Number(f.monto)
+    if (!(monto > 0)) { onError(f.contado ? 'Este plan no tiene saldo pendiente que liquidar.' : 'El importe debe ser mayor que cero.'); return }
     if (!f.registro.trim()) { onError('Escribe tu nombre en «Registro»: debe constar quién recibió el pago.'); return }
     setGuardando(true)
     const res = await registrarPago({
@@ -885,9 +881,12 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <Campo label="Importe">
-          <input type="number" min="0.01" step="0.01" value={f.monto} required
+          <input type="number" min="0.01" step="0.01" required
+            value={f.contado ? String(fila.saldo ?? '') : f.monto}
+            readOnly={f.contado} aria-readonly={f.contado}
+            title={f.contado ? 'De contado se cobra exactamente el saldo pendiente' : undefined}
             onChange={e => setF(v => ({ ...v, monto: e.target.value }))}
-            className="input-field text-sm" placeholder="2000"/>
+            className={`input-field text-sm ${f.contado ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="2000"/>
         </Campo>
         <Campo label="Concepto de pago">
           <input value={f.concepto} onChange={e=>setF(v=>({...v,concepto:e.target.value}))}
@@ -931,15 +930,9 @@ function FormPago({ fila, calendario, onRegistrado, onError }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <NeonCheckbox checked={f.contado} color="#00ffaa"
-          label="Pago de contado (liquida el total)"
-          onChange={e => setF(v => ({
-            ...v,
-            contado: e.target.checked,
-            // Se precarga el saldo pendiente: es el importe que de verdad
-            // liquida el plan, y tecleárselo a mano invita a equivocarse.
-            monto: e.target.checked && fila.saldo > 0 ? String(fila.saldo) : v.monto,
-          }))}/>
+        <NeonCheckbox checked={f.contado}
+          label="Pago de contado (liquida el saldo)"
+          onChange={e => setF(v => ({ ...v, contado: e.target.checked }))}/>
         <button type="submit" disabled={guardando} className="btn-primary text-sm py-2 ml-auto">
           <Plus size={14}/> {guardando ? 'Guardando…' : 'Registrar'}
         </button>

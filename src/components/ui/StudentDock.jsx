@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Users } from 'lucide-react'
+import { tintaSobre } from '../../lib/color'
 
 /**
  * Los alumnos de un grupo, como fichas apiladas.
@@ -29,13 +30,14 @@ export default function StudentDock({ students = [], onOpenStudent, accent }) {
       <div className={`flex items-center ${expanded ? 'flex-wrap gap-1.5' : '-space-x-2'} min-w-0 py-2`}>
         {visible.map(student => (
           <button key={student.id} type="button"
+            data-sin-zoom
             onClick={() => onOpenStudent?.(student.id)}
             aria-label={`Abrir perfil de ${student.name}`}
             className="group/avatar relative w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 z-0 hover:z-20 focus-visible:z-20 transition-[transform,margin] duration-200 ease-out hover:scale-[1.45] hover:-translate-y-2 hover:mx-2 focus-visible:scale-[1.45] focus-visible:-translate-y-2 focus-visible:mx-2 focus-visible:outline-none"
             style={{
-              background: accent ? `${accent}30` : 'var(--soft-bg)',
+              background: accent || 'var(--soft-bg)',
               border: '2px solid var(--card-bg)',
-              color: accent || 'var(--t1)',
+              color: accent ? tintaSobre(accent) : 'var(--t1)',
               boxShadow: '0 4px 12px rgba(0,0,0,.2)',
             }}>
             {student.avatarSrc

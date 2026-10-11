@@ -508,7 +508,6 @@ export default function MyAttendance() {
             </section>
             )
           }}
-          )}
           </ProgressiveList>
         </div>
       </div>

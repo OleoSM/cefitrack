@@ -6,16 +6,16 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 import {
-  Users, TrendingUp, CalendarCheck, ClipboardList,
-  AlertTriangle, CheckCircle, ArrowRight, Filter, Star, RefreshCw
+  ClipboardList, AlertTriangle, CheckCircle, ArrowRight, Filter, Star, RefreshCw
 } from 'lucide-react'
 import {
-  fetchGroups, fetchStudents, fetchEvaluations,
-  fetchAttendanceStats, fetchAsistenciaHoy,
+  fetchGroups, fetchStudents, fetchEvaluations, fetchAttendanceStats, fetchAsistenciaHoy,
 } from '../../lib/supabaseData'
+import { SkeletonBlock } from '../../components/ui/DataTable'
+import { IconAlumnos, IconAsistencia, IconPromedio, IconRiesgo } from '../../components/ui/SigaKpiIcons'
 import { calificacionBase10 } from '../../lib/studentMetrics'
 import { useAuth } from '../../context/AuthContext'
-import KpiCard from '../../components/ui/KpiCard'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { useGroupColors } from '../../hooks/useGroupColors'
@@ -24,8 +24,8 @@ import { useSucursales } from '../../hooks/useSucursales'
 function FilterSelect({ value, onChange, options, style }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
-      className="text-xs font-semibold rounded-xl py-2 px-3 outline-none min-h-11"
-      style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t1)', ...style }}>
+      className="input-field min-h-11 text-xs font-semibold"
+      style={style}>
       {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   )
@@ -146,7 +146,6 @@ export default function Dashboard() {
   const [students, setStudents]       = useState([])
   const [evaluations, setEvaluations] = useState([])
   const [attByStudent, setAttByStudent] = useState({})
-  const [hoy, setHoy]                 = useState(null)
   const [loading, setLoading]         = useState(true)
   const [loadError, setLoadError]     = useState('')
   const [reloadKey, setReloadKey]     = useState(0)
@@ -157,12 +156,10 @@ export default function Dashboard() {
       setLoading(true); setLoadError('')
       try {
         const [gs, sts, evs] = await Promise.all([fetchGroups(), fetchStudents(), fetchEvaluations()])
-        const [stats, asisHoy] = await Promise.all([
-          fetchAttendanceStats(sts), fetchAsistenciaHoy(sts),
-        ])
+        const stats = await fetchAttendanceStats(sts)
         if (!alive) return
         setGroups(gs); setStudents(sts); setEvaluations(evs)
-        setAttByStudent(stats.byStudent); setHoy(asisHoy)
+        setAttByStudent(stats.byStudent)
       } catch (error) {
         if (alive) setLoadError(error?.message || 'No fue posible cargar el resumen.')
       } finally {
@@ -258,6 +255,23 @@ export default function Dashboard() {
   }, [subjectPerformance, subjectName])
   const visibleSubjectPerformance = subjectPerformance.filter(m => m.materia === subjectName)
 
+  /* Asistencia de hoy SOBRE LOS FILTROS: fetchAsistenciaHoy se acota a los
+     alumnos filtrados (sus grupos y sus registros) en una sola consulta.
+     Antes el KPI y la gráfica sumaban todas las listas del día. */
+  const [hoy, setHoy] = useState(null)   // null = consultando
+  const claveAlumnos = filteredStudents.map(s => s.id).sort().join(',')
+  useEffect(() => {
+    if (loading) return
+    let alive = true
+    setHoy(null)
+    fetchAsistenciaHoy(filteredStudents)
+      .then(r => { if (alive) setHoy(r) })
+      .catch(() => { if (alive) setHoy({ counts: { presente: 0, tardanza: 0, ausente: 0 }, esperados: 0, haySesion: false, error: true }) })
+    return () => { alive = false }
+    // filteredStudents se representa por claveAlumnos para no relanzar en cada render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveAlumnos, loading, reloadKey])
+
   // Asistencia de hoy: sin sesión registrada no se inventan porcentajes.
   const attendancePie = useMemo(() => {
     if (!hoy?.haySesion) return []
@@ -275,7 +289,13 @@ export default function Dashboard() {
   const esperadosHoy = hoy?.esperados ?? 0
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-5">
+      <div>
+        <h1 className="page-title">Dashboard</h1>
+        <p className="text-sm mt-1" style={{ color:'var(--t3)' }}>
+          Resumen académico de la sucursal, el curso o el grupo seleccionado.
+        </p>
+      </div>
       {loadError && (
         <div role="alert" className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between" style={{borderColor:'var(--bad-line)',background:'var(--bad-soft)'}}>
           <div><p className="text-sm font-bold" style={{color:'var(--bad)'}}>No se pudo cargar el dashboard</p><p className="text-xs" style={{color:'var(--t2)'}}>{loadError}</p></div>
@@ -334,41 +354,47 @@ export default function Dashboard() {
         resumen={`${queriedGroups.length} grupo(s)`}
       />
 
-      {loading && <p className="card p-4 text-sm" role="status" style={{color:'var(--t2)'}}>Cargando indicadores…</p>}
+      {loading && (
+        <div role="status" aria-label="Cargando indicadores" className="space-y-4">
+          <KpiGrid cols={4}>{[0,1,2,3].map(i => <SkeletonBlock key={i} className="h-28 sm:h-36"/>)}</KpiGrid>
+          <SkeletonBlock className="h-64"/>
+        </div>
+      )}
 
       {!loading && !loadError && <>
 
       {/* Stats — el pill traduce el dato a un juicio rápido en vez de repetirlo */}
-      <div data-kpi-grid className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4">
-        <KpiCard icon={Users} label="Total Alumnos" tone="neutral"
+      <KpiGrid cols={4}>
+        <KpiCard icon={IconAlumnos} label="Total Alumnos" tone="neutral"
           value={filteredStudents.length}
           sub={`${selectedGroups.length} grupo(s) activo(s)`}
           onClick={() => navigate('/admin/alumnos')} />
 
-        <KpiCard icon={CalendarCheck} label="Asistencia Hoy" tone="good"
+        <KpiCard icon={IconAsistencia} label="Asistencia Hoy" tone="good"
           value={hoy?.haySesion ? `${presentHoy}/${esperadosHoy}` : '—'}
-          sub={hoy?.haySesion ? 'Sesiones de hoy' : 'Sin lista pasada hoy'}
+          sub={!hoy ? 'Consultando listas…' : hoy.haySesion ? 'Presentes de los esperados hoy' : 'Sin lista pasada hoy'}
           pill={hoy?.haySesion
             ? { icon: CheckCircle, text: `${Math.round((presentHoy / Math.max(esperadosHoy, 1)) * 100)}% presente` }
             : null}
           onClick={() => navigate('/admin/asistencias')} />
 
-        <KpiCard icon={TrendingUp} label="Promedio por sucursal" tone="info"
-          value={sucursal === 'todas' ? '—' : promedioGeneral}
-          sub={sucursal === 'todas' ? 'Selecciona una sucursal' : notas.length ? `${notas.length} alumno(s) con calificación` : 'Sin calificaciones aún'}
-          pill={notas.length
+        <KpiCard icon={IconPromedio} label="Promedio por sucursal"
+          tone={sucursal === TODAS || promedioNum === null ? 'info' : promedioNum >= 7 ? 'good' : 'warn'}
+          value={sucursal === TODAS ? '—' : promedioGeneral}
+          sub={sucursal === TODAS ? 'Selecciona una sucursal' : notas.length ? `${notas.length} alumno(s) con calificación` : 'Sin calificaciones aún'}
+          pill={sucursal !== TODAS && notas.length
             ? { icon: Star, text: promedioNum >= 8.5 ? '¡Muy bien!' : promedioNum >= 7 ? 'Aceptable' : 'Requiere atención' }
             : null}
           onClick={() => navigate('/admin/rankings')} />
 
-        <KpiCard icon={ClipboardList} label="Alumnos en Riesgo" tone="bad"
+        <KpiCard icon={IconRiesgo} label="Alumnos en Riesgo" tone="bad"
           value={enRiesgo.length}
           sub={enRiesgo.length
             ? `Asistencia < ${UMBRAL_ASISTENCIA}% o promedio < ${UMBRAL_PROMEDIO}`
             : 'Ninguno por ahora'}
           pill={enRiesgo.length ? { icon: AlertTriangle, text: 'Dar seguimiento' } : null}
           onClick={() => navigate('/admin/alumnos')} />
-      </div>
+      </KpiGrid>
 
       <section className="space-y-3" aria-labelledby="analisis-title">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -385,7 +411,7 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
             <div className="min-w-0">
               <h2 className="section-title">Evolución del Promedio</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Promedio mensual del grupo seleccionado</p>
+              <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>Promedio mensual del grupo seleccionado</p>
             </div>
             <label className="flex flex-col gap-1 sm:items-end min-w-0">
               <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color:'var(--t3)' }}>Grupo de la gráfica</span>
@@ -410,14 +436,6 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={230}>
               <AreaChart data={monthlyTrend} margin={{ top:5, right:10, bottom:0, left:-15 }}>
-                <defs>
-                  {trendGroups.map(g => (
-                    <linearGradient key={g.id} id={`grad-${g.id}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={getAccent(g.id)} stopOpacity={0.18}/>
-                      <stop offset="95%" stopColor={getAccent(g.id)} stopOpacity={0}/>
-                    </linearGradient>
-                  ))}
-                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
                 <XAxis dataKey="mes" tick={{ fontSize:11, fill: 'var(--axis)' }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0,10]} tick={{ fontSize:11, fill: 'var(--axis)' }} axisLine={false} tickLine={false} />
@@ -425,7 +443,7 @@ export default function Dashboard() {
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color: 'var(--t2)' }} />
                 {trendGroups.map(g => (
                   <Area key={g.id} type="monotone" dataKey={g.id} name={g.name}
-                    stroke={getAccent(g.id)} fill={`url(#grad-${g.id})`}
+                    stroke={getAccent(g.id)} fill="none"
                     strokeWidth={2.5} connectNulls
                     dot={{ r:3, fill:getAccent(g.id) }}
                     activeDot={{ r:4, fill:getAccent(g.id), stroke:'none' }} />
@@ -439,7 +457,7 @@ export default function Dashboard() {
         {analysisView === 'asistencia' && <div className="card p-4 sm:p-5">
           <div className="mb-4">
             <h2 className="section-title">Asistencia Hoy</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
               {hoy?.haySesion ? 'Sesiones registradas hoy' : 'Sin lista pasada hoy'}
             </p>
           </div>
@@ -478,7 +496,7 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="section-title">Rendimiento por Materia</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Promedio del ciclo escolar</p>
+              <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>Promedio del ciclo escolar</p>
             </div>
             <FilterSelect value={subjectName} onChange={setSubjectName} options={subjectPerformance.length ? subjectPerformance.map(m=>({value:m.materia,label:m.materia})) : [{value:'',label:'Sin materias'}]} style={{width:'min(100%,230px)'}}/>
           </div>
@@ -496,7 +514,7 @@ export default function Dashboard() {
                 interval={0} textAnchor="middle" axisLine={false} tickLine={false}
                 tickFormatter={v => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
               <YAxis domain={[0,10]} tick={{ fontSize:11, fill: 'var(--axis)' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ fill: 'var(--axis)' }} />
+              <Tooltip content={<CustomTooltip />} wrapperStyle={{ outline:'none' }} cursor={{ fill: 'var(--soft-bg)' }} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8, color: 'var(--t2)' }} />
               <Bar dataKey="promedio"   name="Promedio"   fill="var(--info)" radius={[4,4,0,0]} />
               <Bar dataKey="aprobados"  name="Aprobados"  fill="var(--good)" radius={[4,4,0,0]} />
@@ -568,7 +586,7 @@ export default function Dashboard() {
                 onMouseLeave={e=>e.currentTarget.style.borderColor='var(--divider)'}>
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                   style={i === 0
-                    ? { background: 'var(--warn)', color: '#fff' }
+                    ? { background: 'var(--warn-solid)', color: '#fff' }
                     : { background: 'var(--soft-bg)', color: 'var(--t2)' }}>{i+1}</div>
                 <span className="hidden sm:block"><AvatarAlumno student={s} size={32}/></span>
                 <div className="flex-1 min-w-0">

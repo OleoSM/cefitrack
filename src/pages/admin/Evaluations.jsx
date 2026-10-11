@@ -4,7 +4,10 @@ import {
   fetchEvaluations, fetchStudents, fetchGroups,
   saveEvaluation, deleteEvaluation,
 } from '../../lib/supabaseData'
-import { DataTable, DataTableRow, DataTableAvatar } from '../../components/ui/DataTable'
+import { DataTable, DataTableRow, DataTableAvatar, SkeletonRows } from '../../components/ui/DataTable'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
+import ConfirmDialog from '../../components/admin/ConfirmDialog'
+import { todayISO } from '../../lib/fecha'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import ModalPortal from '../../components/ui/ModalPortal'
 import { useSucursales } from '../../hooks/useSucursales'
@@ -30,7 +33,7 @@ function Modal({ students, onClose, onSaved }) {
   const [form, setForm] = useState({
     studentId:'', materia:'', tipo:tipos[0],
     calificacion:'', calMax:'10', periodo:'',
-    fecha:new Date().toISOString().split('T')[0]
+    fecha:todayISO()
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
@@ -38,6 +41,11 @@ function Modal({ students, onClose, onSaved }) {
 
   const handleSubmit = async e => {
     e.preventDefault()
+    const cal = parseFloat(form.calificacion)
+    const max = parseFloat(form.calMax) || 10
+    if (!Number.isFinite(cal) || cal < 0 || cal > max) {
+      setError(`La calificación debe estar entre 0 y ${max}.`); return
+    }
     setSaving(true)
     setError(null)
     const res = await saveEvaluation({
@@ -60,7 +68,8 @@ function Modal({ students, onClose, onSaved }) {
         <div className="flex items-center justify-between px-6 py-4"
           style={{ borderBottom:'1px solid var(--divider)' }}>
           <h2 className="text-sm font-bold" style={{ color:'var(--t1)' }}>Agregar Evaluación</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors"
+          <button type="button" onClick={onClose} aria-label="Cerrar"
+            className="w-11 h-11 flex items-center justify-center rounded-lg transition-colors"
             style={{ color:'var(--t3)' }}
             onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
             onMouseLeave={e => e.currentTarget.style.color='var(--t3)'}>
@@ -131,8 +140,8 @@ function Modal({ students, onClose, onSaved }) {
           {error && (
             <div className="flex items-start gap-2 rounded-lg px-3 py-2"
               style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
-              <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-400"/>
-              <span className="text-xs text-red-400">{error}</span>
+              <AlertCircle size={13} className="mt-0.5 shrink-0" style={{ color:'var(--bad)' }}/>
+              <span className="text-xs" style={{ color:'var(--bad)' }}>{error}</span>
             </div>
           )}
 
@@ -155,7 +164,7 @@ const COLUMNS = [
   { key:'cal',     label:'Calificación',  className:'w-20 sm:w-28' },
   { key:'periodo', label:'Periodo',       className:'w-28 hidden lg:flex' },
   { key:'fecha',   label:'Fecha',         className:'w-24 hidden lg:flex' },
-  { key:'acciones',label:'',              className:'w-10' },
+  { key:'acciones',label:'',              className:'w-10 flex justify-end' },
 ]
 
 export default function Evaluations() {
@@ -171,6 +180,7 @@ export default function Evaluations() {
   const [groups, setGroups]           = useState([])
   const [loading, setLoading]         = useState(true)
   const [loadError, setLoadError]     = useState(null)
+  const [deleteFor, setDeleteFor]     = useState(null)
   const { sucursales, nombreDe } = useSucursales()
 
   const load = useCallback(async () => {
@@ -197,9 +207,12 @@ export default function Evaluations() {
     if (groupFilter !== 'all' && !groupsInSucursal.some(g => g.id === groupFilter)) setGroup('all')
   }, [sucursalFilter, groupFilter, groupsInSucursal])
 
+  /* Se borra tras confirmar y sólo se quita de la lista si la BD aceptó: el
+     borrado optimista sin confirmación hacía desaparecer filas por un clic
+     accidental. */
   const handleDelete = async id => {
+    await deleteEvaluation(id)
     setEvaluations(prev => prev.filter(e => e.id !== id))
-    try { await deleteEvaluation(id) } catch { load() }
   }
 
   const filtered = evaluations.filter(e => {
@@ -214,26 +227,39 @@ export default function Evaluations() {
   })
 
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-5">
+      <div>
+        <h1 className="page-title">Exámenes</h1>
+        <p className="text-sm mt-1" style={{ color:'var(--t3)' }}>
+          Simulacros y examen general capturados por alumno.
+        </p>
+      </div>
+
       {showModal && (
         <Modal students={students} onClose={() => setShowModal(false)} onSaved={load}/>
       )}
+      {deleteFor && (
+        <ConfirmDialog
+          title="Eliminar evaluación"
+          message={`Se eliminará la calificación de ${deleteFor.materia} (${deleteFor.tipo}).`}
+          detail="Esta acción no se puede deshacer."
+          onConfirm={() => handleDelete(deleteFor.id)}
+          onClose={() => setDeleteFor(null)}
+        />
+      )}
 
-      <section aria-label="Estructura de exámenes" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {EXAMENES.map(({tipo,total,icon:Icon,desc}) => {
+      <KpiGrid cols={3}>
+        {EXAMENES.map(({ tipo, total, icon, desc }) => {
           const capturados = evaluations.filter(e => e.tipo === tipo).length
-          return <button key={tipo} type="button" onClick={() => setType(typeFilter === tipo ? 'all' : tipo)}
-            className="card p-4 text-left min-h-[120px] transition-transform active:scale-[.99]"
-            style={{border:typeFilter===tipo?'1px solid var(--accent)':'1px solid var(--card-border)'}}>
-            <div className="flex items-start justify-between gap-3">
-              <Icon size={20} style={{color:'var(--accent)'}}/>
-              <span className="text-2xl font-black" style={{color:'var(--t1)'}}>{total}</span>
-            </div>
-            <p className="text-sm font-bold mt-2" style={{color:'var(--t1)'}}>{tipo}</p>
-            <p className="text-[11px] mt-1" style={{color:'var(--t3)'}}>{desc} · {capturados} registros</p>
-          </button>
+          const activo = typeFilter === tipo
+          return (
+            <KpiCard key={tipo} variant="surface" icon={icon} tone={activo ? 'info' : 'neutral'}
+              label={tipo} value={total} sub={`${desc} · ${capturados} registros`}
+              onClick={() => setType(activo ? 'all' : tipo)}
+              className={activo ? 'ring-2 ring-[var(--accent)]' : ''}/>
+          )
         })}
-      </section>
+      </KpiGrid>
 
       {/* Toolbar */}
       <BarraFiltros
@@ -247,24 +273,30 @@ export default function Evaluations() {
             options:[{ value:'all', label:'Todos los tipos' }, ...tipos.map(t => ({ value:t, label:t }))] },
         ]}
         busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno o materia…' }}
-        resumen={`${filtered.length} evaluación(es)`}/>
-
-      <p className="text-[11px] px-1" style={{ color:'var(--t3)' }}>
-        {loading ? 'Cargando…' : `${filtered.length} evaluaciones`}
-      </p>
+        resumen={loading ? 'Cargando…' : `${filtered.length} evaluación(es)`}
+        acciones={
+          <button onClick={() => setShowModal(true)} disabled={loading || students.length === 0}
+            className="btn-primary flex-shrink-0">
+            <Plus size={14}/> <span className="hidden sm:inline">Agregar evaluación</span>
+          </button>
+        }/>
 
       {loadError && (
-        <div className="card p-4 flex items-center gap-2">
-          <AlertCircle size={14} className="text-red-400"/>
-          <span className="text-xs text-red-400">{loadError}</span>
+        <div role="alert" className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+          style={{ background:'var(--bad-soft)', borderColor:'var(--bad-line)' }}>
+          <span className="text-sm flex items-center gap-2" style={{ color:'var(--bad)' }}>
+            <AlertCircle size={14}/>{loadError}
+          </span>
+          <button onClick={() => { setLoading(true); load() }} className="btn-secondary min-h-11 justify-center">Reintentar</button>
         </div>
       )}
 
       {/* Tabla */}
-      <DataTable columns={COLUMNS} isEmpty={!loading && filtered.length === 0}
+      <DataTable columns={COLUMNS} isEmpty={!loading && !loadError && filtered.length === 0}
         emptyText={evaluations.length === 0
           ? 'Aún no hay calificaciones capturadas. Usa “Agregar evaluación” para registrar la primera.'
           : 'No hay evaluaciones para los filtros seleccionados.'}>
+        {loading ? <SkeletonRows/> : (
         <ProgressiveList items={filtered} emptyLabel="Ninguna evaluación coincide con el filtro.">
         {e => {
           const s  = students.find(st => st.id === e.studentId)
@@ -310,14 +342,14 @@ export default function Evaluations() {
                 content: <span className="text-xs font-mono" style={{ color:'var(--t3)' }}>{e.fecha}</span>,
               },
               {
-                className: 'w-10',
+                className: 'w-10 flex justify-end',
                 content: (
-                  <button onClick={() => handleDelete(e.id)} title="Eliminar evaluación"
-                    className="p-1.5 rounded-lg transition-colors"
-                    style={{ color:'var(--t4)' }}
-                    onMouseEnter={ev => ev.currentTarget.style.color='rgb(248,113,113)'}
-                    onMouseLeave={ev => ev.currentTarget.style.color='var(--t4)'}>
-                    <Trash2 size={13}/>
+                  <button onClick={() => setDeleteFor(e)} title="Eliminar evaluación" aria-label="Eliminar evaluación"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-colors"
+                    style={{ color:'var(--t2)', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
+                    onMouseEnter={ev => ev.currentTarget.style.color='var(--bad)'}
+                    onMouseLeave={ev => ev.currentTarget.style.color='var(--t2)'}>
+                    <Trash2 size={14}/>
                   </button>
                 ),
               },
@@ -325,6 +357,7 @@ export default function Evaluations() {
           )
         }}
         </ProgressiveList>
+        )}
       </DataTable>
     </div>
   )

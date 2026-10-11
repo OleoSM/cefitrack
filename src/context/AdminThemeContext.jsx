@@ -10,6 +10,24 @@ const leer = (clave, porDefecto) => {
   try { return localStorage.getItem(clave) || porDefecto } catch { return porDefecto }
 }
 
+/* ── Accesibilidad ─────────────────────────────────────────────────────────
+   Hook propio para que lo use también la vista del alumno (que no vive bajo
+   AdminThemeProvider): mismas claves de localStorage, así la preferencia es
+   de la persona y del navegador, no de un panel. */
+export function useAccesibilidadEstado() {
+  const [movimiento, setMovimientoState] = useState(() => leer(MOV_KEY, 'normal'))
+  const [texto, setTextoState] = useState(() => leer(TXT_KEY, 'normal'))
+  const setMovimiento = v => { setMovimientoState(v); try { localStorage.setItem(MOV_KEY, v) } catch { /* privado */ } }
+  const setTexto      = v => { setTextoState(v);      try { localStorage.setItem(TXT_KEY, v) } catch { /* privado */ } }
+  useEffect(() => {
+    const raiz = document.documentElement
+    raiz.dataset.movimiento = movimiento
+    raiz.dataset.texto = texto
+    return () => { delete raiz.dataset.movimiento; delete raiz.dataset.texto }
+  }, [movimiento, texto])
+  return { movimiento, setMovimiento, texto, setTexto }
+}
+
 export function AdminThemeProvider({ children }) {
   const [appearance, setAppearanceState] = useState(() => leer(APP_KEY, 'default'))
   const setAppearance = id => { setAppearanceState(id); localStorage.setItem(APP_KEY, id) }
@@ -21,21 +39,10 @@ export function AdminThemeProvider({ children }) {
      sensible al movimiento, y caro en un equipo modesto—. Y el tamaño del
      texto, porque las hojas de calificaciones y asistencia son densas y se
      leen a diario. */
-  const [movimiento, setMovimientoState] = useState(() => leer(MOV_KEY, 'normal'))
-  const [texto, setTextoState] = useState(() => leer(TXT_KEY, 'normal'))
-
-  const setMovimiento = v => { setMovimientoState(v); localStorage.setItem(MOV_KEY, v) }
-  const setTexto      = v => { setTextoState(v);      localStorage.setItem(TXT_KEY, v) }
-
   /* Los atributos van en <html> y no en el contenedor del panel: el tamaño de
      texto se escala con `rem`, que se mide contra la raíz, y los portales
      (modales, menús) cuelgan de <body>, fuera de cualquier contenedor. */
-  useEffect(() => {
-    const raiz = document.documentElement
-    raiz.dataset.movimiento = movimiento
-    raiz.dataset.texto = texto
-    return () => { delete raiz.dataset.movimiento; delete raiz.dataset.texto }
-  }, [movimiento, texto])
+  const { movimiento, setMovimiento, texto, setTexto } = useAccesibilidadEstado()
 
   const t = TOKENS[appearance] ?? TOKENS.default
 

@@ -94,7 +94,7 @@ export default function StudentFormModal({
   return (
     <ModalPortal onClose={saving ? undefined : onClose} maxWidth="max-w-lg" scrollable>
         <div className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
-          style={{ borderBottom: '1px solid var(--card-border)', background:'var(--card-bg)' }}>
+          style={{ borderBottom: '1px solid var(--divider)', background:'var(--panel-bg)' }}>
           <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
             {editing ? `Editar alumno — ${student.name}` : 'Nuevo Alumno'}
           </h2>
@@ -222,8 +222,8 @@ export default function StudentFormModal({
           {error && (
             <div className="flex items-start gap-2 rounded-lg px-3 py-2"
               style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
-              <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-400"/>
-              <span className="text-xs text-red-400">{error}</span>
+              <AlertCircle size={13} className="mt-0.5 shrink-0" style={{ color:'var(--bad)' }}/>
+              <span className="text-xs" style={{ color:'var(--bad)' }}>{error}</span>
             </div>
           )}
 

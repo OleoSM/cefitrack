@@ -1,7 +1,8 @@
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { nombreCanal } from '../../lib/realtime'
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../../context/AuthContext'
-import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ChevronDown, ScrollText, Settings, Bell } from 'lucide-react'
+import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ChevronDown, ScrollText, Settings, Bell, Brush, UserRound, AlertTriangle, Minus, Check, Clock } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import clsx from 'clsx'
@@ -10,6 +11,10 @@ import { StudentThemeProvider, useStudentTheme } from '../../context/StudentThem
 import { useSucursales } from '../../hooks/useSucursales'
 import { fetchNotificaciones, marcarLeida } from '../../lib/comunicacionesData'
 import { supabase } from '../../lib/supabaseClient'
+import { fetchDocumentos } from '../../lib/expedienteData'
+import { estadoExpediente, leerLectura } from '../../lib/estadoTerminos'
+import MenuPerfil from '../ui/MenuPerfil'
+import { useAccesibilidadEstado } from '../../context/AdminThemeContext'
 
 const STUDENT_SECTIONS = [
   { title:null, items:[
@@ -28,9 +33,59 @@ const STUDENT_SECTIONS = [
 
 const nav = STUDENT_SECTIONS.flatMap(section => section.items)
 
+/* Título de la barra superior, igual que en el panel admin: en teléfono el
+   menú lateral está plegado y era la única pista de en qué pantalla se está. */
+const PAGE_TITLES = {
+  '/student/calificaciones': 'Calificaciones',
+  '/student/asistencias':    'Asistencias',
+  '/student/mi-qr':          'Mi QR',
+  '/student/terminos':       'T&C / Firma',
+  '/student/configuracion':  'Configuración',
+  '/student':                'Mi Panel',
+}
+
+/* Los avisos sobre las barras (oscuras en las TRES identidades) usan
+   t.sideBad / t.sideWarn / t.sideGood, no los semánticos del tema: en IPN/UNAM
+   esos son tonos profundos para fondo blanco y sobre la barra no se ven. */
+
 const GRID_OVERLAY = {
   backgroundImage: 'linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)',
   backgroundSize: '32px 32px',
+}
+
+/* Icono de estado del expediente junto a "T&C" (sobre la barra oscura):
+   ⚠ alerta = le falta entregar algo · – error = algo fue rechazado ·
+   ✓ aceptado = todo en orden · reloj = enviado, en espera de validación. */
+const ESTADO_TC = {
+  alerta:   { texto: 'Te falta completar tu expediente' },
+  error:    { texto: 'Documentos rechazados: vuelve a subirlos' },
+  revision: { texto: 'Expediente enviado: en espera de validación' },
+  aceptado: { texto: 'Expediente validado: todo en orden' },
+}
+function IconoEstadoTC({ estado, t, chico = false }) {
+  const tam = chico ? 'w-4 h-4' : 'w-5 h-5'
+  const ico = chico ? 10 : 12
+  const etiqueta = ESTADO_TC[estado]?.texto
+  if (estado === 'alerta') return (
+    <span title={etiqueta} aria-label={etiqueta} className={`${tam} flex items-center justify-center flex-shrink-0`} style={{ color: t.sideWarn }}>
+      <AlertTriangle size={chico ? 15 : 18} strokeWidth={2.4} fill="currentColor" stroke="#1a1205"/>
+    </span>
+  )
+  if (estado === 'error') return (
+    <span title={etiqueta} aria-label={etiqueta} className={`${tam} rounded-full flex items-center justify-center flex-shrink-0 text-white`} style={{ background: t.sideBad }}>
+      <Minus size={ico} strokeWidth={3.5}/>
+    </span>
+  )
+  if (estado === 'aceptado') return (
+    <span title={etiqueta} aria-label={etiqueta} className={`${tam} rounded-full flex items-center justify-center flex-shrink-0`} style={{ background: t.sideGood, color: '#06281b' }}>
+      <Check size={ico} strokeWidth={3.5}/>
+    </span>
+  )
+  return (
+    <span title={etiqueta} aria-label={etiqueta} className={`${tam} rounded-full flex items-center justify-center flex-shrink-0`} style={{ background: 'rgba(255,255,255,.18)', color: t.sideT1 }}>
+      <Clock size={ico} strokeWidth={2.6}/>
+    </span>
+  )
 }
 
 function LayoutInner() {
@@ -47,11 +102,33 @@ function LayoutInner() {
   }))
   const { currentUser, logout } = useAuth()
   const navigate = useNavigate()
-  const { appearance, t } = useStudentTheme()
+  const { appearance, setAppearance, t } = useStudentTheme()
+  const accesibilidad = useAccesibilidadEstado()
   const { student, group: grp } = useStudentData()
+  // Documentos del expediente: se releen al cambiar de pantalla (p. ej. al
+  // salir de Términos tras subir algo) y en vivo cuando administración los
+  // valida o rechaza.
+  const [docsExpediente, setDocsExpediente] = useState([])
+  useEffect(() => {
+    if (!student?.id) return undefined
+    let vivo = true
+    const cargar = () => fetchDocumentos(student.id).then(d => { if (vivo) setDocsExpediente(d) }).catch(() => {})
+    cargar()
+    const canal = supabase.channel(nombreCanal(`expediente-${student.id}`))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'student_documents', filter: `student_id=eq.${student.id}` }, cargar)
+      .subscribe()
+    return () => { vivo = false; supabase.removeChannel(canal) }
+  }, [student?.id, pathname])
   const { nombreDe } = useSucursales()
   const initials = student?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'AL'
   const avatarBorder = appearance === 'default' ? '#ffffff' : '#000000'
+  const pageTitle = Object.entries(PAGE_TITLES)
+    .sort((a, b) => b[0].length - a[0].length)
+    .find(([k]) => pathname.startsWith(k))?.[1] ?? 'SIGA CEFIMAT'
+  const noLeidas = notifications.filter(n => !n.read_at).length
+  // Estado del expediente (T&C + documentos): mismo cálculo que la página de
+  // Términos, para que el icono del menú y la página digan lo mismo.
+  const exp = estadoExpediente(student, docsExpediente, leerLectura(student?.id))
   const toggleSection = title => setOpenSections(current => ({ ...current, [title]: !current[title] }))
 
   const positionNotifications = useCallback(() => {
@@ -66,7 +143,7 @@ function LayoutInner() {
   useEffect(() => {
     const load=()=>fetchNotificaciones().then(setNotifications).catch(()=>{})
     load()
-    const channel=supabase.channel(`student-notifications-${currentUser?.id}`).on('postgres_changes',{event:'*',schema:'public',table:'notifications'},load).subscribe()
+    const channel=supabase.channel(nombreCanal(`student-notifications-${currentUser?.id}`)).on('postgres_changes',{event:'*',schema:'public',table:'notifications'},load).subscribe()
     return()=>{supabase.removeChannel(channel)}
   },[currentUser?.id])
 
@@ -108,6 +185,7 @@ function LayoutInner() {
     '--grid': t.grid, '--axis': t.axis,
     '--tooltip-bg': t.tooltipBg, '--tooltip-border': t.tooltipBorder, '--tooltip-text': t.tooltipText,
     '--accent': t.accent,
+    '--accent-contrast': appearance === 'default' ? '#3B2A08' : '#ffffff',
     '--panel-bg': t.panelBg, '--header-bg': t.headerBg,
     '--good': t.good, '--info': t.info, '--warn': t.warn, '--bad': t.bad,
     '--good-soft': t.goodSoft, '--info-soft': t.infoSoft,
@@ -117,6 +195,7 @@ function LayoutInner() {
     // Relleno mate: color pleno y opaco, siempre con texto blanco encima.
     '--good-solid': t.goodSolid, '--info-solid': t.infoSolid,
     '--warn-solid': t.warnSolid, '--bad-solid': t.badSolid,
+    '--neutral-solid': t.neutralSolid,
     '--card-shadow': t.light
       ? '0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.08)'
       : 'none',
@@ -142,7 +221,7 @@ function LayoutInner() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden transition-[background] duration-500"
+    <div className="flex h-dvh overflow-hidden transition-[background] duration-500"
       data-stheme={appearance}
       data-theme={appearance}
       {...(t.light ? { 'data-stheme-light': '', 'data-theme-light': '' } : {})}
@@ -165,17 +244,22 @@ function LayoutInner() {
 
         {/* Logo + close */}
         <div className="relative px-5 py-5 flex items-center gap-3">
-          <img src="/logo.jpeg" alt="SIGA CEFIMAT"
-            className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-            style={{ border:'1px solid rgba(255,255,255,.25)', boxShadow: t.light ? '0 2px 10px rgba(0,0,0,.25)' : '0 0 12px rgba(161,28,51,.25)' }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-bold text-base leading-none tracking-tight">
-              SIGA <span style={{ color: appearance === 'unam' ? '#CC9933' : appearance === 'ipn' ? '#f3c9d1' : '#c95f72' }}>CEFIMAT</span>
-            </p>
-            <p className="text-[10px] mt-0.5 font-medium" style={{ color: t.sideT3 }}>Vista Alumno</p>
-          </div>
+          {/* El logo lleva al dashboard del alumno. */}
+          <Link to="/student" onClick={closeSidebar} title="Ir a mi panel" aria-label="Ir a mi panel"
+            className="flex-1 min-w-0 flex items-center gap-3 rounded-xl -m-1 p-1 transition-colors hover:bg-white/5">
+            <img src="/logo.jpeg" alt=""
+              className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+              style={{ border:'1px solid rgba(255,255,255,.25)', boxShadow: t.light ? '0 2px 10px rgba(0,0,0,.25)' : '0 0 12px rgba(161,28,51,.25)' }} />
+            <span className="flex-1 min-w-0">
+              <span className="block font-bold text-base leading-none tracking-tight" style={{ color: t.sideT1 }}>
+                SIGA <span style={{ color: t.brandSoft }}>CEFIMAT</span>
+              </span>
+              <span className="block text-[10px] mt-0.5 font-medium" style={{ color: t.sideT3 }}>Vista Alumno</span>
+            </span>
+          </Link>
           <button onClick={closeSidebar} aria-label="Cerrar menú"
-            className="lg:hidden p-1 rounded-lg transition-colors text-white/40 hover:text-white/80">
+            className="lg:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+            style={{ color: t.sideT2 }}>
             <X size={17} />
           </button>
         </div>
@@ -184,12 +268,12 @@ function LayoutInner() {
         {student && (
           <div className="relative mx-3 mb-1 p-3 rounded-xl"
             style={{ background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.12)' }}>
-            <p className="text-[9px] font-bold uppercase tracking-widest mb-1 text-white/40">Alumno</p>
-            <p className="text-white text-sm font-semibold leading-tight">{student.name}</p>
-            <p className="text-xs mt-0.5 text-white/60">
+            <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: t.sideT3 }}>Alumno</p>
+            <p className="text-sm font-semibold leading-tight" style={{ color: t.sideT1 }}>{student.name}</p>
+            <p className="text-xs mt-0.5" style={{ color: t.sideT2 }}>
               {[grp?.sucursal ? nombreDe(grp.sucursal) : null, grp?.name].filter(Boolean).join(' · ')}
             </p>
-            {grp?.subject && <p className="text-[10px] mt-0.5 text-white/45 truncate">{grp.subject}</p>}
+            {grp?.subject && <p className="text-[10px] mt-0.5 truncate" style={{ color: t.sideT3 }}>{grp.subject}</p>}
           </div>
         )}
 
@@ -215,11 +299,11 @@ function LayoutInner() {
               <div id={title ? `student-nav-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}
                 hidden={!!title && !openSections[title]} className="space-y-0.5">
           {items.map(({ to, label, icon: Icon, exact, badge }) => {
-            const showPending = badge === 'terms' && student?.termsStatus !== 'firmado'
+            const showPending = badge === 'terms' && !!student
             return (
               <NavLink key={to} to={to} end={exact} onClick={closeSidebar}
                 className="nav-item group relative"
-                style={({ isActive }) => ({ color: isActive ? 'white' : t.sideT2 })}>
+                style={({ isActive }) => ({ color: isActive ? t.sideT1 : t.sideT2 })}>
                 {({ isActive }) => (
                   <>
                     {isActive && (
@@ -233,7 +317,7 @@ function LayoutInner() {
                     <Icon size={17} className="flex-shrink-0 relative z-10" />
                     <span className="flex-1 text-sm font-medium relative z-10">{label}</span>
                     {showPending && (
-                      <span className="relative z-10 w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 animate-pulse"/>
+                      <span className="relative z-10"><IconoEstadoTC estado={exp.estado} t={t}/></span>
                     )}
                     {!showPending && (
                       <ChevronRight size={13}
@@ -263,18 +347,18 @@ function LayoutInner() {
                   className="w-10 h-10 rounded-full object-cover"
                   style={{ border: `2px solid ${avatarBorder}`, boxShadow:`0 0 0 3px ${appearance === 'default' ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.12)'}` }}/>
               ) : (
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-extrabold"
-                  style={{ background: t.light ? 'rgba(255,255,255,.30)' : '#f59e0b', border: `2px solid ${avatarBorder}`, boxShadow:`0 0 0 3px ${appearance === 'default' ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.12)'}` }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-extrabold"
+                  style={{ background: 'rgba(255,255,255,.13)', color: t.sideT1, border: `2px solid ${avatarBorder}`, boxShadow:`0 0 0 3px ${appearance === 'default' ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.12)'}` }}>
                   {initials}
                 </div>
               )}
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full"
-                style={{ border: `2px solid ${t.light ? t.sideBg : '#0d1630'}` }} />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
+                style={{ background: t.sideGood, border: `2px solid ${t.light ? t.sideBg : '#0d1630'}` }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-bold truncate leading-tight" title={student?.name ?? currentUser?.name}>{student?.name ?? currentUser?.name}</p>
-              <p className="text-[10px] mt-1 font-bold uppercase tracking-[0.08em] text-white/80">Alumno</p>
-              <p className="text-[10px] mt-0.5 font-medium text-white/55">Acceso de consulta</p>
+              <p className="text-sm font-bold truncate leading-tight" style={{ color: t.sideT1 }} title={student?.name ?? currentUser?.name}>{student?.name ?? currentUser?.name}</p>
+              <p className="text-[10px] mt-1 font-bold uppercase tracking-[0.08em]" style={{ color: t.sideT2 }}>Alumno</p>
+              <p className="text-[10px] mt-0.5 font-medium" style={{ color: t.sideT3 }}>Acceso de consulta</p>
             </div>
             <button onClick={handleLogout} title="Cerrar sesión" aria-label="Cerrar sesión"
               className="min-w-11 min-h-11 flex items-center justify-center rounded-xl transition-colors text-red-200 bg-red-500/10 border border-red-300/25 hover:text-red-100 hover:bg-red-500/20">
@@ -292,18 +376,20 @@ function LayoutInner() {
           style={{
             background: t.topBg,
             backdropFilter: t.light ? 'none' : 'blur(12px)',
-            borderBottom: `1px solid ${t.light ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.07)'}`,
+            WebkitBackdropFilter: t.light ? 'none' : 'blur(12px)',
+            borderBottom: `1px solid ${t.sideBorder}`,
           }}>
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"
-              className="lg:hidden p-2 rounded-xl transition-colors active:scale-95 text-white/60 hover:bg-white/10">
+              className="lg:hidden min-w-11 min-h-11 flex items-center justify-center rounded-xl transition-colors active:scale-95 hover:bg-white/10"
+              style={{ color: t.sideT2 }}>
               <Menu size={19} />
             </button>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold truncate text-white/70"
-              style={{ background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.14)' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-              <span className="truncate hidden sm:inline">Vista de alumno — solo lectura</span>
-              <span className="truncate sm:hidden">Solo lectura</span>
+            <h1 className="text-sm font-bold truncate" style={{ color: t.sideT1 }}>{pageTitle}</h1>
+            <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold truncate"
+              style={{ color: t.sideT2, background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.14)' }}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: t.sideGood }} />
+              <span className="truncate">Vista de alumno — solo lectura</span>
             </span>
           </div>
 
@@ -311,9 +397,15 @@ function LayoutInner() {
             <div className="relative">
               <button ref={notifButtonRef} aria-label="Notificaciones" aria-expanded={notifOpen}
                 onClick={toggleNotifications}
-                className="relative min-w-11 min-h-11 flex items-center justify-center rounded-xl text-white/70 hover:bg-white/10">
+                className="relative min-w-11 min-h-11 flex items-center justify-center rounded-xl hover:bg-white/10"
+                style={{ color: t.sideT2 }}>
                 <Bell size={17}/>
-                {notifications.some(n=>!n.read_at)&&<span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-400" aria-hidden="true"/>}
+                {noLeidas > 0 && (
+                  <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center text-[9px] font-black text-white"
+                    style={{ background: t.sideBad }} aria-hidden="true">
+                    {noLeidas > 9 ? '9+' : noLeidas}
+                  </span>
+                )}
               </button>
               {notifOpen && notifPosition && createPortal(
                 <>
@@ -323,7 +415,7 @@ function LayoutInner() {
                     className="fixed z-[10001] w-80 max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl animate-scale-in"
                     style={{
                       top:notifPosition.top, right:notifPosition.right,
-                      background:t.light ? '#ffffff' : '#08080f',
+                      background:'var(--panel-bg)',
                       border:'1px solid var(--card-border)',
                       boxShadow:'0 24px 72px rgba(0,0,0,.52)',
                     }}>
@@ -337,16 +429,24 @@ function LayoutInner() {
                     <div className="overflow-y-auto overscroll-contain touch-pan-y"
                       style={{maxHeight:'min(24rem, calc(100dvh - 8rem))', WebkitOverflowScrolling:'touch'}}>
                       {notifications.length===0&&<p className="p-4 text-xs" style={{color:'var(--t3)'}}>Sin notificaciones.</p>}
-                      {notifications.map(n=><button key={n.id} type="button" className="block w-full min-h-11 text-left p-3"
-                        style={{borderTop:'1px solid var(--divider)',background:n.read_at?'transparent':'var(--info-soft)'}}
+                      {notifications.map(n=><button key={n.id} type="button" className="flex items-start gap-2 w-full min-h-11 text-left px-4 py-3"
+                        style={{borderTop:'1px solid var(--divider)',background:n.read_at?'transparent':'var(--soft-bg)'}}
                         onClick={async()=>{
                           const previous = notifications
                           setNotifications(v=>v.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))
                           try { await marcarLeida(n.id) }
                           catch { setNotifications(previous) }
                         }}>
-                        <b className="block text-xs" style={{color:'var(--t1)'}}>{n.title}</b>
-                        <span className="text-xs" style={{color:'var(--t2)'}}>{n.body}</span>
+                        <span className="min-w-0 flex-1">
+                          <b className="block text-xs leading-snug" style={{color:'var(--t1)'}}>{n.title}</b>
+                          <span className="block text-xs leading-snug" style={{color:'var(--t2)'}}>{n.body}</span>
+                          {n.created_at && (
+                            <span className="block text-[10px] mt-0.5" style={{color:'var(--t3)'}}>
+                              {new Date(n.created_at).toLocaleString('es-MX')}
+                            </span>
+                          )}
+                        </span>
+                        {!n.read_at && <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{background:'var(--accent)'}} aria-label="No leída"/>}
                       </button>)}
                     </div>
                   </section>
@@ -354,24 +454,31 @@ function LayoutInner() {
                 document.body,
               )}
             </div>
-            {/* El avatar es la puerta al perfil: es donde todo el mundo va a
-                buscarlo, y hasta ahora era un adorno que no hacía nada. */}
-            <button type="button" onClick={() => navigate('/student/configuracion')}
-              title="Mi perfil y configuración" aria-label="Mi perfil y configuración"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold overflow-hidden transition-transform hover:scale-105 active:scale-95"
-              style={{ background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.28)' }}>
-              {student?.avatarSrc
-                ? <img src={student.avatarSrc} alt="" className="w-full h-full object-cover"/>
-                : initials}
-            </button>
-            <button onClick={handleLogout} className="p-1.5 rounded-xl transition-colors text-white/45 hover:text-red-300">
-              <LogOut size={16} />
-            </button>
+            {/* Mismo menú de cuenta que el docente: identidad, accesibilidad,
+                personalización y cerrar sesión, todo en el icono de arriba. */}
+            <MenuPerfil
+              usuario={{ ...currentUser, name: student?.name ?? currentUser?.name }}
+              iniciales={initials}
+              foto={student?.avatarSrc}
+              ajustes={{ appearance, setAppearance, ...accesibilidad }}
+              acciones={[
+                { icon: Brush,     titulo: 'Cambiar color de mi tarjeta', onClick: () => navigate('/student/configuracion', { state: { abrir: 'color' } }) },
+                { icon: UserRound, titulo: 'Cambiar mi avatar',           onClick: () => navigate('/student/configuracion', { state: { abrir: 'avatar' } }) },
+              ]}
+              onIrAConfiguracion={() => navigate('/student/configuracion')}
+              onCerrarSesion={handleLogout}
+              tema={{
+                borde: 'rgba(255,255,255,.15)',
+                avatarBg: 'rgba(255,255,255,.16)',
+                avatarBorde: 'rgba(255,255,255,.28)',
+                texto: t.sideT1,
+                textoSuave: t.sideT2,
+              }}/>
           </div>
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 pb-24 lg:pb-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-6">
           <Suspense fallback={<LoadingPage />}>
             <div key={pathname} className="animate-page-in">
               <Outlet />
@@ -380,16 +487,27 @@ function LayoutInner() {
         </main>
 
         {/* Bottom nav mobile (sin Configuración: vive en el menú lateral) */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex transition-[background] duration-500"
-          style={{ background: t.bottomBg, backdropFilter: t.light ? 'none' : 'blur(16px)', borderTop: `1px solid ${t.light ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.07)'}` }}>
-          {nav.filter(n => n.to !== '/student/configuracion').map(({ to, label, icon: Icon, exact }) => (
+        <nav data-bottom-nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex transition-[background] duration-500"
+          style={{
+            background: t.bottomBg,
+            backdropFilter: t.light ? 'none' : 'blur(16px)',
+            WebkitBackdropFilter: t.light ? 'none' : 'blur(16px)',
+            borderTop: `1px solid ${t.sideBorder}`,
+            paddingBottom: 'env(safe-area-inset-bottom)',
+          }}>
+          {nav.filter(n => n.to !== '/student/configuracion').map(({ to, label, icon: Icon, exact, badge }) => (
             <NavLink key={to} to={to} end={exact}
               className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors text-[10px] font-medium relative">
               {({ isActive }) => (
                 <>
-                  <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8}
-                    className={isActive ? 'text-white' : 'text-white/40'} />
-                  <span className={isActive ? 'text-white/90' : 'text-white/40'}>{label}</span>
+                  <span className="relative">
+                    <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8}
+                      style={{ color: isActive ? t.sideT1 : t.sideT3 }} />
+                    {badge === 'terms' && student && (
+                      <span className="absolute -top-1.5 -right-2.5"><IconoEstadoTC estado={exp.estado} t={t} chico/></span>
+                    )}
+                  </span>
+                  <span style={{ color: isActive ? t.sideT1 : t.sideT3 }}>{label}</span>
                   {isActive && <span className="absolute bottom-0 w-6 h-0.5 rounded-t-full" style={{ background: t.navActive }} />}
                 </>
               )}

@@ -89,7 +89,7 @@ export default function BarraFiltros({
           <span>Filtros</span>
           {total > 0 && (
             <span className="min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-black"
-              style={{ background:'#fff', color:'var(--accent)' }}>{total}</span>
+              style={{ background:'var(--accent-contrast)', color:'var(--accent)' }}>{total}</span>
           )}
         </button>
 

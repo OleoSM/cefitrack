@@ -99,6 +99,7 @@
   --tooltip-border: rgba(255,255,255,.12);
   --tooltip-text: rgba(255,255,255,.80);
   --accent: #fbbf24;
+  --accent-contrast: #3B2A08;  /* texto sobre --accent (los layouts lo sobrescriben por identidad) */
   --card-shadow: none;
   --panel-bg: rgba(8,8,15,.96);
   --header-bg: rgba(5,5,10,.70);
@@ -113,6 +114,7 @@
      blanco sobre ellos no llega al contraste mínimo. */
   --good-solid: #18795F; --info-solid: #2F6BB0;
   --warn-solid: #9C6210;  --bad-solid: #B23A33;
+  --neutral-solid: #3D4A66;
 }
 
 @layer base {
@@ -242,10 +244,17 @@
     color: rgba(255,255,255,.95);
   }
 
-  .btn-accent {
-    @apply bg-amber-500 text-black px-4 py-2.5 rounded-xl font-bold text-sm
-           hover:bg-amber-400 transition-all duration-200 flex items-center gap-2 active:scale-95;
+  /* Acción destructiva (eliminar, revocar). Solo tokens: vale igual en las
+     tres identidades, sin override en [data-theme-light]. */
+  .btn-danger {
+    @apply px-4 py-2.5 rounded-xl font-bold text-sm transition-all duration-200
+           flex items-center gap-2 active:scale-95
+           disabled:opacity-40 disabled:cursor-not-allowed;
+    background: var(--bad-soft);
+    border: 1px solid var(--bad-line);
+    color: var(--bad);
   }
+  .btn-danger:hover:not(:disabled) { background: var(--bad-line); }
 
   /* ── Pill button with text-slide hover (EuVerse signature) ── */
   .btn-pill {
@@ -315,19 +324,9 @@
            transition-all duration-200 cursor-pointer select-none;
   }
 
-  /* ── Dark glass inputs (login page) ── */
-  .input-dark {
-    @apply w-full rounded-xl px-3.5 py-2.5 text-sm text-white outline-none transition-all duration-200;
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.10);
-  }
-  .input-dark::placeholder { color: rgba(255,255,255,.22); }
-  .input-dark:hover:not(:focus) { border-color: rgba(255,255,255,.16); }
-  .input-dark:focus {
-    background: rgba(255,255,255,.09);
-    border-color: rgba(255,255,255,.24);
-    box-shadow: 0 0 0 3px rgba(255,255,255,.05);
-  }
+  /* `.input-dark` comparte la definición de `.input-field` (arriba). Aquí había
+     una segunda versión con text-white y rgba fijos que la pisaba y dejaba el
+     texto invisible en IPN/UNAM; se retiró. */
 
   /* ── Login glass card ── */
   .login-card {
@@ -429,11 +428,11 @@
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+/* Con token: los grises fijos (#f1f5f9/#e2e8f0) eran un parche claro en el
+   tema oscuro. Mismo relleno que SkeletonBlock de DataTable. */
 .skeleton {
-  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  @apply rounded;
+  background: var(--soft-bg);
+  @apply rounded animate-pulse;
 }
 
 /* Float (decorative circles) */
@@ -503,10 +502,6 @@
    pero justo para el dedo. */
 @media (max-width: 639px) {
   [data-datatable] [data-fila] { min-height: 52px; }
-
-  /* Rejilla de indicadores a dos columnas. Si el total es impar, la última
-     ocupa el ancho completo en vez de dejar un hueco a su lado. */
-  [data-kpi-grid] > *:last-child:nth-child(odd) { grid-column: span 2; }
 }
 
 /* Mismo rayado para las tablas nativas (portal del alumno, hoja de registro). */
@@ -771,26 +766,9 @@ table tbody tr:hover { background: var(--soft-bg); }
   /* Con un número impar de tarjetas, la última NO se ensancha al doble: se
      queda en su media columna y deja el hueco a su lado. */
   [data-kpi-grid] > *:last-child:nth-child(odd) { grid-column: auto !important; }
-
-  /* El contenido se mide contra el viewport para que la tarjeta no dependa de
-     un tamaño fijo pensado para escritorio. */
-  [data-kpi-card] { padding: .7rem !important; height: auto !important; min-height: 96px; }
-  [data-kpi-value] {
-    font-size: clamp(1.4rem, 7vw, 2rem) !important;
-    margin-top: .4rem !important;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  [data-kpi-label] {
-    font-size: clamp(.66rem, 3vw, .8rem) !important;
-    line-height: 1.2;
-  }
-  [data-kpi-icon] {
-    width: clamp(24px, 7vw, 32px) !important;
-    height: clamp(24px, 7vw, 32px) !important;
-  }
-  [data-kpi-icon] > svg { width: 60%; height: 60%; }
+  /* El tamaño interno de la tarjeta lo resuelve KpiCard con clamp() y sus
+     breakpoints; aquí ya no se fuerza nada con !important (truncaba el valor
+     con elipsis). */
 
   /* Filtros: se reparten de dos en dos, no uno por fila ni todos apretados
      en una sola. Forzar una única fila funcionaba para una barra de tres
@@ -848,7 +826,7 @@ table tbody tr:hover { background: var(--soft-bg); }
   .responsive-table .badge { padding: .2rem .4rem; font-size: .58rem; }
   .page-title { font-size: clamp(1.25rem, 6vw, 1.5rem); }
   .stat-card { padding: .85rem; }
-  .btn-primary, .btn-secondary { min-height: 44px; }
+  .btn-primary, .btn-secondary, .btn-danger { min-height: 44px; }
 }
 
 @media (max-width: 420px) {
@@ -856,13 +834,6 @@ table tbody tr:hover { background: var(--soft-bg); }
   [data-kpi-grid] .card, [data-kpi-grid] .stat-card { padding: .75rem; }
   .responsive-table .table-header,
   .responsive-table .table-cell { padding-inline: .3rem; }
-}
-
-@media (max-width: 420px) {
-  /* Siguen siendo dos por fila: la regla de ≤700 px ya escala el contenido con
-     el viewport, así que no hay nada que apilar. */
-  [data-kpi-card] { padding: .55rem !important; min-height: 88px; }
-  [data-kpi-grid] .h-\[100px\] { height: auto; min-height: 88px; }
 }
 
 /* ── Accesibilidad ──────────────────────────────────────────────────────────
@@ -898,6 +869,68 @@ html[data-movimiento='reducido'] .animate-scale-in { animation: none !important;
 }
 
 .nav-item { min-height: 44px; }
+
+/* ── Señal de "esto se puede pulsar" ────────────────────────────────────────
+   Al pasar el ratón, todo botón crece un poco: el usuario sabe sin dudar qué
+   es interactivo. Se usa la propiedad `scale`, no `transform`, porque se SUMA
+   al transform existente: muchos botones se posicionan con translate (el ojo
+   de la contraseña, cierres de modal) y un transform aquí los movería.
+   Fuera: los botones a todo el ancho (filas de menú, tarjetas), donde crecer
+   desborda el contenedor, y quien lleve data-sin-zoom. Solo con ratón real
+   (hover: hover): en táctil un hover pegado se ve como un fallo. */
+/* Dos animaciones según el tamaño, para que NADA desborde:
+   · Compactos (iconos, chips, pastillas): crecen un 6 %. En 44 px son ~1 px
+     por lado, que cabe en cualquier hueco.
+   · Anchos (primario, secundario, peligro, flex-1, ancho completo): se
+     elevan 2 px. Crecer un 5 % de 300 px serían 15 px invadiendo al vecino o
+     recortados por el contenedor. */
+@media (hover: hover) {
+  :is(button, [role='button'], a.btn-primary, a.btn-secondary, a.btn-danger):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform, scale, translate;
+    transition-duration: .16s;
+    transition-timing-function: cubic-bezier(.2,.8,.2,1);
+  }
+  :is(button, [role='button']):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]):not(.w-full):not(.flex-1):not(.btn-primary):not(.btn-secondary):not(.btn-danger):hover { scale: 1.06; }
+  :is(button, [role='button']):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]):not(.w-full):not(.flex-1):not(.btn-primary):not(.btn-secondary):not(.btn-danger):active { scale: .96; }
+  :is(.btn-primary, .btn-secondary, .btn-danger, button.flex-1, button.w-full):not(:disabled):not([data-sin-zoom]):not([data-kpi-card]):not([role='menuitem']):hover { translate: 0 -2px; }
+  :is(.btn-primary, .btn-secondary, .btn-danger, button.flex-1, button.w-full):not(:disabled):not([data-sin-zoom]):not([data-kpi-card]):not([role='menuitem']):active { translate: 0 0; }
+}
+/* Las tiras con scroll horizontal recortan todo lo que salga de su caja: un
+   respiro vertical deja crecer a los chips sin cortarles el borde. */
+.scroll-carril, .overflow-x-auto:has(> button), .overflow-x-auto:has(> [role='tab']) { padding-block: 3px; }
+
+html[data-movimiento='reducido'] :is(button, [role='button'], a) { scale: none !important; translate: none !important; }
+
+/* ── Responsividad: reglas de dispositivo ───────────────────────────────── */
+
+/* iOS amplía la página sola al enfocar un campo de menos de 16 px y la deja
+   desplazada. En pantallas táctiles todos los campos van a 16 px. */
+@media (pointer: coarse) {
+  .input-field, .input-dark, select, textarea,
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']) {
+    font-size: 16px;
+  }
+}
+
+/* Teléfono en horizontal (≈ 740×360): barra superior + barra inferior se
+   comían un tercio de la pantalla. La inferior se oculta (la navegación sigue
+   en el menú ☰ de arriba) y el contenido recupera ese espacio. */
+@media (orientation: landscape) and (max-height: 500px) {
+  [data-bottom-nav] { display: none !important; }
+  main { padding-bottom: 1rem !important; }
+}
+
+/* Celda de la hoja a la que se acaba de llegar desde el detalle de una
+   calificación: el borde de acento late tres veces para guiar la vista. */
+@keyframes celdaFoco {
+  0%, 100% { outline-color: var(--accent); }
+  50%      { outline-color: transparent; }
+}
+.celda-foco { animation: celdaFoco .9s ease-in-out 3; }
+html[data-movimiento='reducido'] .celda-foco { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-movimiento='normal']) :is(button, [role='button'], a) { scale: none !important; translate: none !important; }
+}
 
 /* Separación de filas dentro de tablas en identidad clara: el divider por sí
    solo no bastaba para distinguir una fila de la siguiente sobre blanco. */

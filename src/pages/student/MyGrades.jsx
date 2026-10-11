@@ -1,62 +1,41 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line,
 } from 'recharts'
-import {
-  Layers, Sigma, Atom, FlaskConical, Dna, Landmark, Globe2,
-  BookOpen, Languages, Cpu, BookMarked, ArrowLeft, ChevronRight,
-  GraduationCap, ClipboardList, AlertTriangle, Compass,
-} from 'lucide-react'
+import { Layers, ArrowLeft, ChevronRight, ClipboardList, AlertTriangle, Compass, MousePointerClick } from 'lucide-react'
 import MateriaBarChart from '../../components/ui/MateriaBarChart'
 import { useStudentData } from '../../hooks/useStudentData'
-import ProgressiveList from '../../components/ui/ProgressiveList'
-import { calificacionBase10 } from '../../lib/studentMetrics'
+import { calificacionBase10, colorCalificacion, tonoCalificacion, colorMateria } from '../../lib/studentMetrics'
+import { fetchNombresColumnas } from '../../lib/supabaseData'
 import { useStudentTheme } from '../../context/StudentThemeContext'
-import Dropdown from '../../components/ui/Dropdown'
-import KpiCard from '../../components/ui/KpiCard'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
+import { IconPromedio } from '../../components/ui/SigaKpiIcons'
+import { iconoMateria, claveMateria } from '../../components/ui/SigaMateriaIcons'
+import DetalleEvaluacion from '../../components/ui/DetalleEvaluacion'
+import ListaEvaluaciones from '../../components/ui/ListaEvaluaciones'
+import { Pista, BotonAyuda, CabeceraSeccion } from '../../components/ui/Ayuda'
+import { tintaSobre } from '../../lib/color'
 import { areaDe } from '../../lib/areas'
+import { estadoPerfil } from './EstadoPagina'
 
-/* Color personalizado por materia (línea de acento de cada card) */
-const MATERIA_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa', '#f472b6', '#22d3ee', '#fb7185', '#facc15']
-
-/* Icono representativo según el nombre de la materia */
-function materiaIcon(m) {
-  const n = (m || '').toLowerCase()
-  if (/(álgebra|algebra|matem|cálculo|calculo|geometr|trigono|aritm)/.test(n)) return Sigma
-  if (/(fís|fisic)/.test(n)) return Atom
-  if (/(quím|quimic)/.test(n)) return FlaskConical
-  if (/biolog/.test(n)) return Dna
-  if (/(histor|cívic|civic|étic|etic)/.test(n)) return Landmark
-  if (/geograf/.test(n)) return Globe2
-  if (/(español|espanol|lectur|redacc|literat)/.test(n)) return BookOpen
-  if (/(inglés|ingles|idiom)/.test(n)) return Languages
-  if (/(comput|inform|tecnolog)/.test(n)) return Cpu
-  return BookMarked
-}
-
-function materiaTile(m) {
-  const n=(m||'').toLowerCase()
-  if (/(fisic|fís)/.test(n)) return 1
-  if (/(quim|quím)/.test(n)) return 2
-  if (/biolog/.test(n)) return 3
-  if (/(españ|espan|lectur|literat)/.test(n)) return 4
-  if (/histor/.test(n)) return 5
-  if (/geograf/.test(n)) return 6
-  if (/(inglés|ingles|idiom)/.test(n)) return 7
-  return 0
-}
+const evaluacionesTxt = n => `${n} evaluaci${n === 1 ? 'ón' : 'ones'}`
+const media = evs => evs.length ? +(evs.reduce((s, e) => s + e.calificacion, 0) / evs.length).toFixed(1) : null
 
 export default function MyGrades() {
   const { t } = useStudentTheme()
-  const { student: s, evaluations } = useStudentData({ withEvaluations: true })
+  const { student: s, evaluations, loading, error } = useStudentData({ withEvaluations: true })
 
-  const [scope, setScope] = useState('general')      // 'general' | nombre de materia
+  // Desde "Lo más reciente" del panel se llega con la materia ya elegida.
+  const { state: navState } = useLocation()
+  const [scope, setScope] = useState(navState?.materia ?? 'general')      // 'general' | nombre de materia
+  useEffect(() => { if (navState?.materia) setScope(navState.materia) }, [navState])
   const area = areaDe(s?.universidadArea)
 
   // Se normalizan a escala 10 para que convivan evaluaciones con distinto máximo.
   const evals = useMemo(
-    () => evaluations.map(e => ({ ...e, calificacion: +calificacionBase10(e).toFixed(1) })),
+    () => evaluations.map(e => ({ ...e, original: e.calificacion, calificacion: +calificacionBase10(e).toFixed(1) })),
     [evaluations],
   )
 
@@ -66,31 +45,45 @@ export default function MyGrades() {
     return acc
   }, {}), [evals])
 
-  if (!s) return <div style={{ color: t.t3 }}>Perfil no disponible.</div>
+  const materias = useMemo(() => Object.keys(byMateria), [byMateria])
 
-  const materias = Object.keys(byMateria)
-  // indexOf devuelve -1 para una materia desconocida, y MATERIA_COLORS[-1] es
-  // undefined: de ahí venía el color inválido que tumbaba la gráfica.
-  const colorOf = mat => {
-    const i = materias.indexOf(mat)
-    return MATERIA_COLORS[(i < 0 ? 0 : i) % MATERIA_COLORS.length]
-  }
+  // Detalle de una calificación y nombres de las asignaciones de la hoja.
+  const [detalle, setDetalle] = useState(null)
+  const [nombresColumnas, setNombresColumnas] = useState({})
+  useEffect(() => {
+    let vivo = true
+    fetchNombresColumnas(evaluations.map(e => e.columnaId)).then(m => { if (vivo) setNombresColumnas(m) }).catch(() => {})
+    return () => { vivo = false }
+  }, [evaluations])
+
+  /* Icono de cada materia. Si dos materias caen en la misma familia (Álgebra
+     y Geometría → matemáticas), la segunda usa la variante B: así no se ven
+     dos tarjetas idénticas una junto a otra. */
+  const iconoDe = useMemo(() => {
+    const vistas = {}
+    const mapa = {}
+    for (const m of materias) {
+      const k = claveMateria(m)
+      mapa[m] = iconoMateria(m, vistas[k] ?? 0)
+      vistas[k] = (vistas[k] ?? 0) + 1
+    }
+    return m => mapa[m] ?? iconoMateria(m)
+  }, [materias])
+
+  const estado = estadoPerfil({ loading, student: s, error })
+  if (estado) return estado
+
+  // El color sale del nombre de la materia, no de su posición: así es el
+  // mismo aquí, en Mi Panel y en la gráfica.
+  const colorOf = mat => colorMateria(mat, t.light)
 
   /* ── Alcance: general o una materia ── */
   const scopeEvals = scope === 'general' ? evals : (byMateria[scope] ?? [])
-  const scopeProm = scopeEvals.length
-    ? +(scopeEvals.reduce((sum, e) => sum + e.calificacion, 0) / scopeEvals.length).toFixed(1)
-    : 0
+  // Sin evaluaciones no hay promedio: un 0 se leía como "reprobado".
+  const scopeProm = media(scopeEvals)
   const scopeBajo6 = scopeEvals.filter(e => e.calificacion < 6).length
 
-  const materiaStats = materias.map(mat => {
-    const evs = byMateria[mat]
-    return {
-      materia: mat,
-      promedio: +(evs.reduce((sum, e) => sum + e.calificacion, 0) / evs.length).toFixed(1),
-      count: evs.length,
-    }
-  })
+  const materiaStats = materias.map(mat => ({ materia: mat, promedio: media(byMateria[mat]), count: byMateria[mat].length }))
 
   /* Serie temporal de la materia seleccionada */
   const materiaSerie = scope !== 'general'
@@ -100,237 +93,228 @@ export default function MyGrades() {
       }))
     : []
 
-  const gradeColor = g => g >= 8 ? '#34d399' : g >= 6 ? '#60a5fa' : '#f87171'
-
-  const scopeOptions = [
-    { value: 'general', label: 'Todas las materias', icon: <Layers size={12}/> },
-    ...materias.map(m => {
-      const Icon = materiaIcon(m)
-      return { value: m, label: m, icon: <Icon size={12} style={{ color: colorOf(m) }}/> }
-    }),
-  ]
 
   return (
-    <div className="space-y-5">
-      {/* Header + selector General / materia */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+    <div className="w-full space-y-5">
+      {/* Encabezado */}
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="page-title">Mis Calificaciones</h1>
-          <p className="text-sm mt-1" style={{ color: t.t3 }}>
-            {scope === 'general' ? 'Historial completo de evaluaciones — solo lectura.' : `Desglose de ${scope}.`}
+          <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
+            {scope === 'general' ? 'Tus calificaciones de todas las materias. Toca una materia para ver el detalle.' : `Detalle de ${scope}.`}
           </p>
-          {/* El área es el dato que decide qué examen presenta el alumno, así
-              que vive donde mira sus notas y no sólo en la hoja del profesor.
-              Sólo aplica a universidad: ECOEMS no se divide por áreas. */}
+          {/* El área decide qué examen presenta el alumno. Solo aplica a
+              universidad: ECOEMS no se divide por áreas. */}
           {area && (
-            <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold"
-              title={area.label}
-              style={{ background: t.soft ?? 'rgba(255,255,255,.07)', color: t.t2, border: `1px solid ${t.border ?? 'rgba(255,255,255,.12)'}` }}>
-              <Compass size={12}/> {area.label}
-            </span>
+            <Pista texto="Tu área de examen de universidad. Define qué materias pesan más en tu preparación.">
+              <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold"
+                style={{ background: 'var(--soft-bg)', color: 'var(--t2)', border: '1px solid var(--card-border)' }}>
+                <Compass size={12}/> {area.label}
+              </span>
+            </Pista>
           )}
         </div>
-        {/* En teléfono el selector no cabe junto al título y bajaba a su propia
-            línea pegado a la izquierda; su panel, anclado a la derecha del
-            botón, se salía entonces por el borde izquierdo de la pantalla.
-            Ocupando la fila completa el panel queda anclado a la página. */}
-        <Dropdown value={scope} onChange={setScope} options={scopeOptions} align="right"
-          className="w-full sm:w-auto"/>
+        <BotonAyuda titulo="Mis calificaciones">
+          <p>Aquí ves cada calificación que tu docente registró, agrupada por materia.</p>
+          <p><b>Escala:</b> todas se convierten a escala de 10, aunque el examen haya sido sobre otro máximo (por ejemplo 45 de 50 = 9.0).</p>
+          <p><b>Colores:</b> <b style={{ color: 'var(--good)' }}>verde</b> 8 o más · <b style={{ color: 'var(--info)' }}>azul</b> de 6 a 7.9 · <b style={{ color: 'var(--bad)' }}>rojo</b> menos de 6.</p>
+          <p><b>Promedio de esta página:</b> es la media simple de tus calificaciones. El <b>promedio oficial</b> (el de Mi Panel) combina exámenes, tareas y asistencia con los pesos que define CEFIMAT.</p>
+          <p>Usa los botones de materia para cambiar entre "Todas" y una materia concreta.</p>
+        </BotonAyuda>
       </div>
 
-      {/* KPI cards (en función del alcance elegido) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {[
-          {
-            icon: GraduationCap,
-            accent: gradeColor(scopeProm),
-            value: <>{scopeProm}<span className="text-base font-semibold ml-0.5" style={{ color: t.t4 }}>/ 10</span></>,
-            label: scope === 'general' ? 'Promedio General' : `Promedio · ${scope}`,
-            bar: scopeProm / 10,
-          },
-          {
-            icon: ClipboardList,
-            accent: '#60a5fa',
-            value: <>{scopeEvals.length}<span className="text-base font-semibold ml-0.5" style={{ color: t.t4 }}>/ {evals.length}</span></>,
-            label: 'Evaluaciones registradas',
-            bar: evals.length > 0 ? scopeEvals.length / evals.length : 0,
-          },
-          {
-            icon: AlertTriangle,
-            accent: scopeBajo6 > 0 ? '#fbbf24' : '#34d399',
-            value: scopeBajo6,
-            label: scopeBajo6 > 0 ? 'Por debajo de 6' : 'Ninguna reprobada',
-            bar: scopeEvals.length > 0 ? scopeBajo6 / scopeEvals.length : 0,
-          },
-        ].map(({ icon, value, label }, i) => (
-          <KpiCard key={i} icon={icon} value={value} label={label}
-            tone={i === 0 ? 'good' : i === 1 ? 'info' : scopeBajo6 > 0 ? 'warn' : 'good'} light={t.light}/>
-        ))}
-      </div>
-
-      {/* ── Materias ───────────────────────────────────────────────
-          General: grid compacto tipo KPI (una tarjetita por materia).
-          Materia seleccionada: una sola card con su desglose completo. */}
-      {scope === 'general' ? (
-        /* 150 px de mínimo, no 160: con 160 un teléfono de 375 px se quedaba en
-           una sola columna y la lista de materias se volvía interminable. */
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-          {materias.map(mat => {
-            const evs = byMateria[mat]
-            const prom = +(evs.reduce((sum, e) => sum + e.calificacion, 0) / evs.length).toFixed(1)
-            const accent = colorOf(mat)
-            const Icon = materiaIcon(mat)
-            return (
-              <button key={mat} onClick={() => setScope(mat)}
-                className="stat-card text-left transition-all active:scale-[.97] group relative overflow-hidden !p-0"
-                style={{ borderTop: `3px solid ${accent}` }}>
-                {/* Cada celda del atlas mide 3:4. El contenedor conserva esa
-                    proporciÃ³n y el fondo 4x2 muestra la celda completa, sin
-                    estirarla ni recortar instrumentos, libros o retratos. */}
-                <span className="block w-full pointer-events-none"
-                  style={{
-                    aspectRatio:'3 / 4',
-                    backgroundImage:"url('/materias-atlas-v1.png')",
-                    backgroundSize:'400% 200%',
-                    backgroundPosition:`${(materiaTile(mat)%4)*33.333}% ${materiaTile(mat)>3?100:0}%`,
-                    backgroundRepeat:'no-repeat',
-                  }}/>
-                <div className="relative p-3 sm:p-4" style={{borderTop:'1px solid var(--divider)'}}>
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: accent }}>
-                    <Icon size={15} style={{ color:'#ffffff' }}/>
-                  </div>
-                  <ChevronRight size={14} className="opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: t.t3 }}/>
-                </div>
-                <p className="text-2xl font-bold tabular-nums mt-2" style={{ color: gradeColor(prom) }}>{prom}</p>
-                <p className="text-xs font-semibold mt-0.5 truncate" style={{ color: t.t1 }}>{mat}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: t.t4 }}>{evs.length} evaluacion{evs.length !== 1 ? 'es' : ''}</p>
-                </div>
-              </button>
-            )
-          })}
+      {/* ── Selector de materia: visible y explícito ──
+          Antes era un desplegable discreto en la esquina y nadie sabía que
+          existía. Ahora es una fila de botones rotulada. */}
+      {materias.length > 0 && (
+        <div className="card p-3 sm:p-4">
+          <p className="flex items-center gap-1.5 text-xs font-semibold mb-2.5" style={{ color: 'var(--t2)' }}>
+            <MousePointerClick size={14} style={{ color: 'var(--accent)' }}/> ¿Qué materia quieres ver? Toca una para cambiar.
+          </p>
+          <div role="tablist" aria-label="Materia" className="flex gap-2 overflow-x-auto scroll-carril sm:flex-wrap pb-0.5">
+            {[{ id: 'general', label: 'Todas', Icono: Layers }, ...materias.map(m => ({ id: m, label: m, Icono: iconoDe(m) }))].map(({ id, label, Icono }) => {
+              const activo = scope === id
+              const color = id === 'general' ? null : colorOf(id)
+              return (
+                <button key={id} type="button" role="tab" aria-selected={activo} onClick={() => setScope(id)}
+                  className="flex-shrink-0 min-h-11 inline-flex items-center gap-2 pl-1.5 pr-3.5 rounded-full text-sm font-semibold transition-colors"
+                  style={activo
+                    ? { background: 'var(--accent)', color: 'var(--accent-contrast)', border: '1px solid var(--accent)' }
+                    : { background: 'var(--card-bg)', color: 'var(--t1)', border: '1px solid var(--card-border)' }}>
+                  <span className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={color ? { background: color, color: tintaSobre(color) } : { background: 'var(--soft-bg)', color: 'var(--t2)' }}>
+                    <Icono size={16}/>
+                  </span>
+                  <span className="whitespace-nowrap">{label}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
+      )}
+
+      {/* Indicadores (en función del alcance elegido) */}
+      <KpiGrid cols={3}>
+        <KpiCard icon={IconPromedio}
+          label={scope === 'general' ? 'Promedio de calificaciones' : `Promedio · ${scope}`}
+          info="Media simple de tus calificaciones en escala de 10. El promedio oficial, que también cuenta tareas y asistencia, está en Mi Panel."
+          value={scopeProm ?? '—'} unit={scopeProm === null ? undefined : '/ 10'}
+          sub={scopeProm === null ? 'Aún sin evaluaciones' : 'Media simple de lo registrado'}
+          tone={tonoCalificacion(scopeProm)}/>
+        <KpiCard icon={ClipboardList} label="Evaluaciones registradas"
+          info="Cuántas calificaciones tiene registradas tu docente en lo que estás viendo, contra el total de todas tus materias."
+          value={scopeEvals.length} unit={`/ ${evals.length}`}
+          sub={scope === 'general' ? 'En todas las materias' : `De ${evals.length} en total`}
+          tone="neutral"/>
+        <KpiCard icon={AlertTriangle}
+          label={scopeBajo6 > 0 ? 'Por debajo de 6' : 'Ninguna reprobada'}
+          info="Calificaciones menores a 6 (reprobatorias). Son las que conviene repasar primero."
+          value={scopeEvals.length ? scopeBajo6 : '—'}
+          sub={scopeEvals.length ? `De ${scopeEvals.length} evaluaciones` : 'Aún sin evaluaciones'}
+          tone={!scopeEvals.length ? 'neutral' : scopeBajo6 > 0 ? 'bad' : 'good'}/>
+      </KpiGrid>
+
+      {/* ── Materias ── */}
+      {scope === 'general' && materias.length === 0 ? (
+        <div className="card p-8 text-center text-sm" style={{ color: 'var(--t3)' }}>
+          Tu docente todavía no ha registrado calificaciones.
+        </div>
+      ) : scope === 'general' ? (
+        <section className="space-y-3">
+          <CabeceraSeccion titulo="Tus materias"
+            subtitulo="Toca una materia para ver cada calificación."
+            ayuda={<>
+              <p>Cada tarjeta es una materia con el promedio de sus calificaciones.</p>
+              <p>El número grande es la media simple en escala de 10, con el mismo código de color: verde 8 o más, azul de 6 a 7.9, rojo menos de 6.</p>
+              <p>Toca la tarjeta para ver la lista completa y cómo has ido avanzando.</p>
+            </>}/>
+          {/* Tarjeta compacta en una fila: icono, nombre y promedio. Sustituye
+              a la ilustración 3:4, que ocupaba media pantalla por materia sin
+              decir nada que el icono no dijera. */}
+          <div className="grid gap-2.5 sm:gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 15rem), 1fr))' }}>
+            {materias.map(mat => {
+              const evs = byMateria[mat]
+              const prom = media(evs)
+              const color = colorOf(mat)
+              const Icono = iconoDe(mat)
+              return (
+                <button key={mat} type="button" onClick={() => setScope(mat)}
+                  className="card w-full text-left flex items-center gap-3 p-3 sm:p-3.5 group transition-colors hover:border-[var(--accent)]"
+                  style={{ borderLeft: `4px solid ${color}` }}>
+                  <span className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: color, color: tintaSobre(color) }}>
+                    <Icono size={22}/>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold truncate" style={{ color: 'var(--t1)' }}>{mat}</span>
+                    <span className="flex items-center gap-1 text-[11px] mt-0.5" style={{ color: 'var(--t3)' }}>
+                      {evaluacionesTxt(evs.length)}
+                      <span className="inline-flex items-center gap-0.5 font-semibold" style={{ color: 'var(--accent)' }}>
+                        · Ver detalle <ChevronRight size={12} className="transition-transform group-hover:translate-x-0.5"/>
+                      </span>
+                    </span>
+                  </span>
+                  <Pista texto={`Promedio de tus ${evaluacionesTxt(evs.length)} de ${mat}, en escala de 10.`}>
+                    <span className="text-2xl font-bold tabular-nums" style={{ color: colorCalificacion(prom) }}>{prom}</span>
+                  </Pista>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Lista completa, con la misma presentación que el detalle de una
+              materia y que el perfil en administración. */}
+          <div className="card p-3 sm:p-4 space-y-3">
+            <CabeceraSeccion titulo="Todas tus evaluaciones"
+              subtitulo="Ordenadas por materia y categoría. Toca una para ver el detalle."
+              ayuda={<>
+                <p>Aquí están todas tus calificaciones juntas, agrupadas por materia y, dentro de cada una, por categoría (exámenes primero, luego simulacros, proyectos, tareas y actividades).</p>
+                <p>Usa los filtros para ver solo una categoría o una materia, cambia el orden o busca una asignación por su nombre.</p>
+                <p>La etiqueta de color de cada fila dice qué tipo de evaluación es. Toca la fila para ver el detalle.</p>
+              </>}/>
+            <ListaEvaluaciones light={t.light} nombresColumnas={nombresColumnas}
+              evaluaciones={evals.map(e => ({ ...e, calificacion: e.original }))}
+              onAbrir={setDetalle}/>
+          </div>
+        </section>
       ) : (
         (() => {
           const mat = scope
           const evs = byMateria[mat] ?? []
-          const prom = evs.length ? +(evs.reduce((sum, e) => sum + e.calificacion, 0) / evs.length).toFixed(1) : 0
-          const accent = colorOf(mat)
-          const Icon = materiaIcon(mat)
+          const prom = media(evs)
+          const color = colorOf(mat)
+          const Icono = iconoDe(mat)
           return (
-            <div className="card overflow-hidden" style={{ borderLeft: `3px solid ${accent}` }}>
-              {/* Cabecera en dos alturas: el botón de volver, el nombre de la
-                  materia y el contador viven en la primera fila, y el promedio
-                  se queda pegado a la derecha sin poder encogerse. Antes el
-                  contador se escondía por debajo de `sm` para hacer sitio; con
-                  el nombre truncando ya cabe, y es justo el dato que explica el
-                  promedio que tiene al lado. */}
-              <div className="px-3 sm:px-5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3"
-                style={{ background: t.softBg }}>
-                <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-                  <button onClick={() => setScope('general')} aria-label="Volver a todas las materias"
-                    className="p-1.5 rounded-lg transition-colors flex-shrink-0" style={{ color: t.t3 }}
-                    onMouseEnter={e => e.currentTarget.style.background = t.ddBg}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <ArrowLeft size={15}/>
-                  </button>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: accent }}>
-                    <Icon size={15} style={{ color:'#ffffff' }}/>
+            <section className="space-y-2.5">
+              <div className="card overflow-hidden" style={{ borderLeft: `4px solid ${color}` }}>
+                <div className="px-3 sm:px-5 py-3 flex items-center justify-between gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <button type="button" onClick={() => setScope('general')} aria-label="Volver a todas las materias"
+                      title="Volver a todas las materias"
+                      className="min-w-11 min-h-11 -ml-1.5 flex items-center justify-center rounded-xl flex-shrink-0"
+                      style={{ color: 'var(--t2)', background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>
+                      <ArrowLeft size={16}/>
+                    </button>
+                    <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: color, color: tintaSobre(color) }}>
+                      <Icono size={20}/>
+                    </span>
+                    <div className="min-w-0">
+                      <h2 className="font-bold text-sm sm:text-base truncate" style={{ color: 'var(--t1)' }}>{mat}</h2>
+                      <p className="text-[11px]" style={{ color: 'var(--t3)' }}>{evaluacionesTxt(evs.length)} de {evals.length}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-sm sm:text-base truncate" style={{ color: t.t1 }}>{mat}</h3>
-                    <p className="text-[10px] sm:hidden" style={{ color: t.t3 }}>
-                      {evs.length} de {evals.length} evaluaciones
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 hidden sm:inline"
-                    style={{ background: accent, color:'#ffffff' }}>
-                    {evs.length} / {evals.length}
-                  </span>
+                  <Pista texto={`Promedio de ${mat} en escala de 10.`}>
+                    <span className="text-xl sm:text-2xl font-bold tabular-nums flex-shrink-0" style={{ color: colorCalificacion(prom) }}>{prom ?? '—'}</span>
+                  </Pista>
                 </div>
-                <span className="text-base sm:text-lg font-bold tabular-nums flex-shrink-0" style={{ color: gradeColor(prom) }}>{prom}</span>
               </div>
 
-              {/* Sin ancho mínimo en teléfono: con `min-w-[360px]` fijo, una
-                  pantalla de 375 px ya obligaba a desplazar la tabla a los
-                  lados para leer la fecha. Ahora las tres columnas que quedan
-                  caben enteras, y el mínimo cómodo entra a partir de `sm`.
-                  `overscroll-behavior-x: contain` evita que el barrido lateral
-                  dispare el gesto de "atrás" del navegador. */}
-              <div className="responsive-table-wrap"
-                style={{ borderTop: `1px solid ${t.divider}`, overscrollBehaviorX: 'contain' }}>
-                <table className="responsive-table w-full min-w-0 sm:min-w-[420px] lg:min-w-[520px]">
-                  <thead style={{ borderBottom: `1px solid ${t.divider}`, background: t.softBg }}>
-                    <tr>
-                      <th className="table-header px-3 sm:px-4">Tipo</th>
-                      <th className="table-header table-header--num px-3 sm:px-4">
-                        <span className="sm:hidden">Calif.</span>
-                        <span className="hidden sm:inline">Calificación</span>
-                      </th>
-                      <th className="table-header hidden sm:table-cell">Periodo</th>
-                      <th className="table-header table-header--num px-3 sm:px-4">Fecha</th>
-                    </tr>
-                  </thead>
-                  <ProgressiveList as="tbody" colSpan={4} items={evs}
-                    sizes={{ mobile: 5, tablet: 10, desktop: 15 }}
-                    emptyLabel="Sin evaluaciones en esta materia.">
-                    {e => (
-                      <tr key={e.id} className="transition-colors" style={{ borderBottom: `1px solid ${t.divider}` }}>
-                        <td className="table-cell px-3 sm:px-4">
-                          <span className="badge text-[11px] px-2 whitespace-nowrap"
-                            style={{ background: t.softBg, color: t.t2, border: `1px solid ${t.cardBorder}` }}>{e.tipo}</span>
-                        </td>
-                        <td className="table-cell table-cell--num px-3 sm:px-4">
-                          {/* `justify-end` para que la cifra quede bajo su
-                              encabezado: la celda es numérica y alineada a la
-                              derecha, pero el flex la empujaba a la izquierda. */}
-                          <div className="flex items-center justify-end gap-1.5">
-                            <span className="font-bold text-base sm:text-lg tabular-nums" style={{ color: gradeColor(e.calificacion) }}>{e.calificacion}</span>
-                            {e.editedByAdmin && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold hidden sm:inline"
-                                style={{ background: 'rgba(251,191,36,.15)', color: '#d97706' }}>
-                                actualizado
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="table-cell hidden sm:table-cell" style={{ color: t.t2 }}>{e.periodo}</td>
-                        <td className="table-cell table-cell--num px-3 sm:px-4 text-xs whitespace-nowrap"
-                          style={{ color: t.t3 }}>{e.fecha}</td>
-                      </tr>
-                    )}
-                  </ProgressiveList>
-                </table>
+              {/* Misma lista que el perfil del alumno en administración: cada
+                  fila abre el detalle de la asignación. */}
+              <div className="card p-3 sm:p-4">
+                {/* La lista guarda la calificación en su escala original. */}
+                <ListaEvaluaciones materiaFija light={t.light} nombresColumnas={nombresColumnas}
+                  evaluaciones={evs.map(e => ({ ...e, calificacion: e.original }))}
+                  onAbrir={setDetalle}/>
               </div>
-            </div>
+            </section>
           )
         })()
       )}
 
-      {/* ── Gráfica (después de la tabla de materias) ──────────── */}
-      <div className="card p-4 sm:p-5">
-        <h2 className="section-title mb-4">
-          {scope === 'general' ? 'Promedio por Materia' : `Evolución — ${scope}`}
-        </h2>
-        {scope === 'general' ? (
-          <MateriaBarChart stats={materiaStats} colorOf={colorOf} t={t} avg={scopeProm}/>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={materiaSerie} margin={{ top: 5, right: 8, bottom: 0, left: -22 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={t.grid}/>
-              <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: t.axis }} axisLine={false} tickLine={false}/>
-              <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false}/>
-              <Tooltip wrapperStyle={{ outline: 'none' }} cursor={{ stroke: t.grid, strokeWidth: 1 }}
-                contentStyle={{ fontSize: 11, borderRadius: 10, background: t.tooltipBg, border: `1px solid ${t.tooltipBorder}`, color: t.tooltipText }}
-                formatter={(v, _, p) => [`${v} — ${p.payload.tipo}`, 'Calificación']}/>
-              <Line type="monotone" dataKey="calificacion" stroke={colorOf(scope)} strokeWidth={2.5}
-                dot={{ r: 3.5, fill: colorOf(scope), strokeWidth: 0 }} activeDot={{ r: 5.5 }}/>
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+      {/* ── Gráfica ── */}
+      {materias.length > 0 && (
+        <div className="card p-4 sm:p-5 space-y-4">
+          <CabeceraSeccion
+            titulo={scope === 'general' ? 'Promedio por materia' : `Evolución de ${scope}`}
+            subtitulo={scope === 'general' ? 'Compara tus materias de un vistazo.' : 'Cómo han ido tus calificaciones en el tiempo.'}
+            ayuda={scope === 'general'
+              ? <><p>Cada barra es el promedio de una materia en escala de 10. La línea marca tu promedio general.</p><p>Las barras más cortas son las materias que más conviene reforzar.</p></>
+              : <><p>Cada punto es una calificación, de la más antigua a la más reciente. Si la línea sube, vas mejorando.</p><p>Pasa el ratón o toca un punto para ver la evaluación.</p></>}/>
+          {scope === 'general' ? (
+            <MateriaBarChart stats={materiaStats} colorOf={colorOf} t={t} avg={scopeProm}/>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={materiaSerie} margin={{ top: 5, right: 8, bottom: 0, left: -22 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={t.grid}/>
+                <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: t.axis }} axisLine={false} tickLine={false}/>
+                <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false}/>
+                <Tooltip wrapperStyle={{ outline: 'none' }} cursor={{ stroke: t.grid, strokeWidth: 1 }}
+                  contentStyle={{ fontSize: 11, borderRadius: 10, background: t.tooltipBg, border: `1px solid ${t.tooltipBorder}`, color: t.tooltipText }}
+                  formatter={(v, _, p) => [`${v} — ${p.payload.tipo}`, 'Calificación']}/>
+                <Line type="monotone" dataKey="calificacion" stroke={colorOf(scope)} strokeWidth={2.5}
+                  dot={{ r: 3.5, fill: colorOf(scope), strokeWidth: 0 }} activeDot={{ r: 5.5 }}/>
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      )}
+
+      {detalle && (
+        <DetalleEvaluacion evaluacion={detalle} light={t.light}
+          onClose={() => setDetalle(null)}/>
+      )}
     </div>
   )
 }

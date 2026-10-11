@@ -41,7 +41,7 @@ export default function ProgressiveList({
 
   const boton = restantes > 0 && (
     <button onClick={() => setVisibles(v => v + paso)}
-      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors"
+      className="w-full min-h-11 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors"
       style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}
       onMouseEnter={e => e.currentTarget.style.background='var(--divider)'}
       onMouseLeave={e => e.currentTarget.style.background='var(--soft-bg)'}>
@@ -83,13 +83,13 @@ export function FilterBar({ activos = 0, children, acciones = null }) {
       {plegable && (
         <div className="flex items-center gap-2">
           <button onClick={() => setAbierto(a => !a)}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+            className="flex-1 min-h-11 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors"
             style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
             {abierto ? <X size={15}/> : <SlidersHorizontal size={15}/>}
             {abierto ? 'Cerrar filtros' : 'Filtros'}
             {activos > 0 && (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold"
-                style={{ background:'var(--accent)', color:'#fff' }}>{activos}</span>
+                style={{ background:'var(--accent)', color:'var(--accent-contrast)' }}>{activos}</span>
             )}
           </button>
           {acciones}

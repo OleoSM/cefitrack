@@ -1,6 +1,7 @@
 // Gráfica de barras de promedio por materia (Chart.js).
-// Barras con degradado vertical, esquinas redondeadas, etiqueta directa del
-// valor sobre cada barra y línea punteada del promedio general.
+// Barras de color pleno (el de cada materia, de `colorMateria`), esquinas
+// redondeadas, etiqueta directa del valor sobre cada barra y línea punteada
+// del promedio general. Ejes, rejilla y tooltip salen de los tokens del tema.
 import { useMemo } from 'react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip,
@@ -9,14 +10,6 @@ import ChartDataLabels from 'chartjs-plugin-datalabels'
 import { Bar } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
-
-/* Chart.js pide el color de barras que aún no existen mientras anima, así que
-   `hex` llega undefined y la página entera se caía al hacer .slice sobre él. */
-function hexToRgba(hex, a) {
-  if (typeof hex !== 'string' || !/^#[0-9a-f]{6}$/i.test(hex)) return `rgba(148, 163, 184, ${a})`
-  const n = parseInt(hex.slice(1), 16)
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
-}
 
 /* Línea punteada horizontal con el promedio general del alumno */
 const avgLinePlugin = {
@@ -35,7 +28,7 @@ const avgLinePlugin = {
     ctx.lineTo(chartArea.right, yPos)
     ctx.stroke()
     ctx.setLineDash([])
-    ctx.font = '600 10px sans-serif'
+    ctx.font = '600 10px Manrope, system-ui, sans-serif'
     ctx.fillStyle = opts.color
     ctx.textAlign = 'right'
     ctx.textBaseline = 'bottom'
@@ -74,12 +67,12 @@ export default function MateriaBarChart({ stats, colorOf, t, avg }) {
       y: {
         min: 0, max: 10,
         border: { display: false },
-        ticks: { stepSize: 2, color: t.axis, font: { size: 11 } },
+        ticks: { stepSize: 2, color: t.axis, font: { size: 11, family: 'Manrope, system-ui, sans-serif' } },
         grid: { color: t.grid, tickLength: 0, lineWidth: 1 },
       },
       x: {
         border: { display: false },
-        ticks: { color: t.axis, font: { size: 11, weight: 600 } },
+        ticks: { color: t.axis, font: { size: 11, weight: 600, family: 'Manrope, system-ui, sans-serif' } },
         grid: { display: false },
       },
     },

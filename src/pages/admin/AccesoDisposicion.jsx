@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
-  ShieldCheck, UserPlus, ChevronDown, ChevronRight, Building2, KeyRound, X, Search,
-  UserMinus, UserCheck, AlertTriangle,
+  UserPlus, ChevronDown, ChevronRight, Building2, KeyRound, X,
+  UserMinus, UserCheck, AlertTriangle, RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
@@ -15,6 +15,8 @@ import { generarPassword } from '../../lib/credentials'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import ModalPortal from '../../components/ui/ModalPortal'
+import { SkeletonBlock } from '../../components/ui/DataTable'
+import { DANGER_BTN_STYLE } from '../../components/admin/ConfirmDialog'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
@@ -39,6 +41,7 @@ export default function AccesoDisposicion() {
   const [createdCreds, setCreatedCreds] = useState(null)
   const [formError, setFormError] = useState(null)
   const [errorAcceso, setErrorAcceso] = useState(null)
+  const [loadError, setLoadError]     = useState(null)
 
   /* Baja y reincorporación. Ninguna de las dos se ejecuta sin pasar por el
      modal: retirar a alguien le corta la sesión en el acto y le quita todos sus
@@ -87,16 +90,22 @@ export default function AccesoDisposicion() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [personal, grps] = await Promise.all([fetchCuentas(), fetchGroups()])
-    setStaff(personal)
-    setGroups(grps)
-    // Los administradores no tienen filas de acceso: su alcance es total por
-    // rol. Las cuentas retiradas tampoco: la baja se las quitó todas.
-    const entries = await Promise.all(
-      personal.filter(a => a.role === 'sub_admin' && a.activo !== false)
-        .map(a => fetchSubAdminAccess(a.id).then(rows => [a.id, rows])))
-    setAccessByUser(Object.fromEntries(entries))
-    setLoading(false)
+    setLoadError(null)
+    try {
+      const [personal, grps] = await Promise.all([fetchCuentas(), fetchGroups()])
+      setStaff(personal)
+      setGroups(grps)
+      // Los administradores no tienen filas de acceso: su alcance es total por
+      // rol. Las cuentas retiradas tampoco: la baja se las quitó todas.
+      const entries = await Promise.all(
+        personal.filter(a => a.role === 'sub_admin' && a.activo !== false)
+          .map(a => fetchSubAdminAccess(a.id).then(rows => [a.id, rows])))
+      setAccessByUser(Object.fromEntries(entries))
+    } catch (err) {
+      setLoadError(err?.message || 'No se pudieron cargar las cuentas.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { if (isAdmin) loadAll() }, [isAdmin, loadAll])
@@ -206,10 +215,10 @@ export default function AccesoDisposicion() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="w-full space-y-5">
 
       <div>
-        <h1 className="page-title flex items-center gap-2"><ShieldCheck size={22}/> Acceso y Disposición</h1>
+        <h1 className="page-title">Acceso y Disposición</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
           Todas las cuentas con acceso a la plataforma. Los administradores ven todo, a los sub-admins se les asigna sucursal o grupos, y cada alumno ve solo lo suyo.
         </p>
@@ -221,15 +230,12 @@ export default function AccesoDisposicion() {
         <form onSubmit={handleCreate} className="flex flex-col sm:flex-row gap-2.5">
           <input type="text" placeholder="Nombre completo" value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            className="flex-1 text-sm rounded-lg py-2.5 px-3 outline-none"
-            style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t1)' }}/>
+            className="input-field flex-1 min-h-11"/>
           <input type="email" placeholder="correo@cefimat.mx" value={form.email}
             onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            className="flex-1 text-sm rounded-lg py-2.5 px-3 outline-none"
-            style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t1)' }}/>
+            className="input-field flex-1 min-h-11"/>
           <button type="submit" disabled={creating}
-            className="flex items-center justify-center gap-2 text-sm font-bold px-4 py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
-            style={{ background:'white', color:'black' }}>
+            className="btn-primary min-h-11 justify-center">
             <UserPlus size={14}/> {creating ? 'Creando…' : 'Crear'}
           </button>
         </form>
@@ -244,7 +250,7 @@ export default function AccesoDisposicion() {
               <p><strong>{createdCreds.name}</strong> — {createdCreds.email}</p>
               <p>Contraseña: <span className="font-mono font-bold">{createdCreds.password}</span></p>
             </div>
-            <button onClick={() => setCreatedCreds(null)} className="flex-shrink-0" style={{ color: 'var(--t3)' }}>
+            <button onClick={() => setCreatedCreds(null)} aria-label="Cerrar" className="w-8 h-8 -my-1 flex items-center justify-center rounded-lg flex-shrink-0" style={{ color: 'var(--t3)' }}>
               <X size={14}/>
             </button>
           </div>
@@ -272,11 +278,17 @@ export default function AccesoDisposicion() {
               style={{ color: aviso.tono === 'good' ? 'var(--good)' : 'var(--bad)' }}>
               {aviso.texto}
             </span>
-            <button onClick={() => setAviso(null)} style={{ color:'var(--t3)' }}><X size={13}/></button>
+            <button onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="w-8 h-8 -my-1 flex items-center justify-center rounded-lg" style={{ color:'var(--t3)' }}><X size={14}/></button>
           </div>
         )}
 
-        {loading && <p className="text-sm" style={{ color: 'var(--t3)' }}>Cargando…</p>}
+        {loadError && (
+          <div role="alert" className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between rounded-xl p-3"
+            style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
+            <span className="text-sm" style={{ color:'var(--bad)' }}>{loadError}</span>
+            <button onClick={loadAll} className="btn-secondary min-h-11 justify-center"><RefreshCw size={14}/> Reintentar</button>
+          </div>
+        )}
 
         <BarraFiltros
           filtros={[
@@ -297,12 +309,11 @@ export default function AccesoDisposicion() {
           busqueda={{ value: busqueda, onChange: setBusqueda, placeholder:'Buscar por nombre o correo…' }}
           resumen={`${filtradas.length} de ${staff.length}`}/>
 
-        <p className="text-[11px]" style={{ color:'var(--t3)' }}>
-          {filtradas.length} de {staff.length} cuentas
-          {conteo.retiradas > 0 && ` · ${conteo.retiradas} retirada(s)`}
-        </p>
-
-        <ProgressiveList items={filtradas} className="space-y-3"
+        {loading ? (
+          <div className="space-y-3" role="status" aria-label="Cargando cuentas">
+            {[0,1,2].map(i => <SkeletonBlock key={i} className="h-24"/>)}
+          </div>
+        ) :         <ProgressiveList items={filtradas} className="space-y-3"
           sizes={{ mobile: 5, tablet: 10, desktop: 15 }}
           emptyLabel="Ninguna cuenta coincide con el filtro.">
           {a => {
@@ -314,7 +325,7 @@ export default function AccesoDisposicion() {
               <div key={a.id} className="rounded-xl p-3.5 space-y-2.5"
                 style={{
                   background: 'var(--card-bg)',
-                  border: '1px solid var(--divider)',
+                  border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)',
                   opacity: retirada ? 0.72 : 1,
                 }}>
                 <div className="flex items-start justify-between gap-2">
@@ -326,10 +337,10 @@ export default function AccesoDisposicion() {
                     style={retirada
                       ? { background:'var(--soft-bg)', color:'var(--t3)', border:'1px solid var(--divider)' }
                       : esAdmin
-                        ? { background:'var(--good)', color:'#fff', border:'1px solid var(--good)' }
+                        ? { background:'var(--good-solid)', color:'#fff', border:'1px solid var(--good-solid)' }
                         : esAlumno
                           ? { background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--divider)' }
-                          : { background:'var(--info)', color:'#fff', border:'1px solid var(--info)' }}>
+                          : { background:'var(--info-solid)', color:'#fff', border:'1px solid var(--info-solid)' }}>
                     {retirada ? 'Retirada' : esAdmin ? 'Administrador' : esAlumno ? 'Alumno' : 'Sub-admin'}
                   </span>
                 </div>
@@ -344,8 +355,7 @@ export default function AccesoDisposicion() {
                       a darse de alta.
                     </p>
                     <button onClick={() => pedirAlta(a)}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-lg transition-all active:scale-95"
-                      style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
+                      className="btn-secondary text-xs py-2 w-full sm:w-auto justify-center">
                       <UserCheck size={13}/> Reincorporar
                     </button>
                   </div>
@@ -376,7 +386,8 @@ export default function AccesoDisposicion() {
                       <div key={suc} className="rounded-lg overflow-hidden"
                         style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
                         <div className="flex items-center gap-2.5 px-3 py-2">
-                          <button onClick={() => toggleExpanded(a.id, suc)} style={{ color: 'var(--t3)' }}>
+                          <button onClick={() => toggleExpanded(a.id, suc)} aria-label={isExpanded ? 'Plegar grupos' : 'Ver grupos'}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg" style={{ color: 'var(--t3)' }}>
                             {isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
                           </button>
                           <NeonCheckbox className="flex-1"
@@ -413,8 +424,8 @@ export default function AccesoDisposicion() {
                   {/* La baja va al final y en tono de peligro: es la única acción
                       de esta tarjeta que no se deshace con otro clic. */}
                   <button onClick={() => pedirBaja(a)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-lg transition-all active:scale-95 mt-1"
-                    style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 mt-1"
+                    style={DANGER_BTN_STYLE}>
                     <UserMinus size={13}/> Dar de baja
                   </button>
                 </div>
@@ -422,7 +433,7 @@ export default function AccesoDisposicion() {
               </div>
             )
           }}
-        </ProgressiveList>
+        </ProgressiveList>}
       </div>
 
       {/* ── Confirmación ───────────────────────────────────── */}
@@ -462,14 +473,13 @@ export default function AccesoDisposicion() {
 
             <div className="flex gap-3">
               <button onClick={() => setConfirmacion(null)} disabled={procesando}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-                style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
+                className="btn-secondary flex-1 justify-center disabled:opacity-40">
                 Cancelar
               </button>
               <button onClick={ejecutarConfirmacion} disabled={procesando}
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
                 style={confirmacion.modo === 'baja'
-                  ? { background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }
+                  ? DANGER_BTN_STYLE
                   : { background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}>
                 {procesando
                   ? 'Aplicando…'

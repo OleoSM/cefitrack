@@ -1,67 +1,43 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import {
-  ArrowLeft, Mail, Phone, BookOpen, Calendar, TrendingUp,
-  FileText, Download, CheckCircle, AlertTriangle, QrCode,
-  GraduationCap, Pencil,
+  Mail, Phone, Calendar,
+  FileText, QrCode, ClipboardList, RefreshCw, Users,
 } from 'lucide-react'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell, ResponsiveContainer, Legend,
-} from 'recharts'
-import {
-  getReportsByStudent, studentRadar, studentGradeTrend,
   getStatusConfig, attendanceColors, getAttendanceColor, getSimulacrosByStudent,
 } from '../../data/mockData'
 import {
   fetchStudentById, fetchGroupById, fetchEvaluationsByStudent, fetchStudentAttendance,
+  saveEvaluation, fetchNombresColumnas, setCeldaRegistro,
 } from '../../lib/supabaseData'
-import { exportStudentReport, exportMonthlyReport } from '../../lib/exportReports'
+import { exportStudentReport } from '../../lib/exportReports'
 import ProgressiveList from '../../components/ui/ProgressiveList'
+import { SkeletonBlock } from '../../components/ui/DataTable'
+import DetalleEvaluacion from '../../components/ui/DetalleEvaluacion'
+import ListaEvaluaciones from '../../components/ui/ListaEvaluaciones'
+import { useAdminTheme } from '../../context/AdminThemeContext'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
+import {
+  IconPromedio, IconAsistencia, IconRetardos, IconFaltas, IconRanking,
+} from '../../components/ui/SigaKpiIcons'
 import { useGroupColors } from '../../hooks/useGroupColors'
-import { useRef } from 'react'
-import clsx from 'clsx'
+import { tintaSobre } from '../../lib/color'
+import ResetPasswordModal from '../../components/admin/ResetPasswordModal'
+import { IconResumen, IconHojaCalificaciones, IconPasarLista, IconReporte, IconQrAlumno, IconCuenta } from '../../components/ui/SigaAdminIcons'
+import CredentialsPanel from '../../components/admin/CredentialsPanel'
 
-/* ── Inline editable grade cell ─────────────────────────────── */
-const EVAL_KEY = sid => `edutrack_eval_${sid}`
-
-function EditableGrade({ evalId, value, onSave }) {
-  const [editing, setEditing] = useState(false)
-  const [draft,   setDraft]   = useState('')
-  const ref = useRef(null)
-  const col = value >= 8 ? 'var(--good)' : value >= 6 ? 'var(--info)' : 'var(--bad)'
-
-  const start = () => { setDraft(String(value)); setEditing(true); setTimeout(() => ref.current?.select(), 20) }
-  const commit = () => {
-    setEditing(false)
-    const n = parseFloat(draft)
-    if (!isNaN(n) && n >= 0 && n <= 10) onSave(evalId, +n.toFixed(1))
-  }
-  if (editing) return (
-    <input ref={ref} value={draft} onChange={e => setDraft(e.target.value)}
-      onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
-      className="font-bold text-lg w-16 text-center rounded-lg outline-none"
-      style={{ background:'var(--soft-bg)', border:'1.5px solid var(--card-border)', color:'var(--t1)', padding:'2px 4px' }}
-    />
-  )
-  return (
-    <button onClick={start} title="Click para editar"
-      className="flex items-center gap-1.5 group transition-opacity"
-      style={{ color: col }}>
-      <span className="font-bold text-lg">{value}</span>
-      <Pencil size={10} className="opacity-0 group-hover:opacity-60 transition-opacity"/>
-    </button>
-  )
-}
-
+/* Secciones del perfil. Antes eran cinco pestañas apretadas en una sola
+   píldora; ahora cada una es una tarjeta con su descripción, para que se
+   entienda qué hay dentro antes de abrirla. */
 const TABS = [
-  { id:'resumen',      label:'Resumen',      icon:TrendingUp  },
-  { id:'evaluaciones', label:'Evaluaciones', icon:BookOpen    },
-  { id:'asistencias',  label:'Asistencias',  icon:Calendar    },
-  { id:'reportes',     label:'Reportes',     icon:FileText    },
-  { id:'qr',           label:'Código QR',    icon:QrCode      },
+  { id:'resumen',      label:'Resumen',      icon:IconResumen, desc:'Gráficas y estado general' },
+  { id:'evaluaciones', label:'Evaluaciones', icon:IconHojaCalificaciones, desc:'Todas sus calificaciones' },
+  { id:'asistencias',  label:'Asistencias',  icon:IconPasarLista, desc:'Presentes, retardos y faltas' },
+  { id:'reportes',     label:'Reportes',     icon:IconReporte, desc:'Avance para el tutor' },
+  { id:'qr',           label:'Código QR',    icon:IconQrAlumno, desc:'Su código de asistencia' },
 ]
 
 const PIE_COLORS = ['var(--good)','var(--warn)','var(--bad)','var(--info)']
@@ -76,55 +52,8 @@ const Val  = ({ children, className='' }) => (
     style={{ color:'var(--t1)' }}>{children}</p>
 )
 
-/* ── Iconos de estado de asistencia ────────────────────────────────
-   Set generado por Codex bajo la gramática de lucide-react que usa el resto
-   de la app: rejilla de 24, sin relleno, trazo de 2 y extremos redondeados.
-   La idea de sistema es un calendario común —la sesión, el día de clase—
-   con un símbolo breve dentro que dice qué pasó en ella: palomita, reloj,
-   aspa y documento validado. Al compartir base se leen como familia y no
-   como cuatro iconos sueltos. Heredan el color por `currentColor`, así que
-   sobre el relleno mate salen en blanco sin pasarles ningún color. */
-const HOJA_CALENDARIO = 'M7 3v2m10-2v2M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M3 9h18'
-
-const IconoEstado = ({ children, size = 20 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-    aria-hidden="true">
-    <path d={HOJA_CALENDARIO}/>
-    {children}
-  </svg>
-)
-
-const ICONOS_ASISTENCIA = {
-  /* Palomita: la sesión se cumplió */
-  presente: (
-    <IconoEstado><path d="m8 15 2.5 2.5L16 12"/></IconoEstado>
-  ),
-  /* Reloj: llegó, pero tarde */
-  tardanza: (
-    <IconoEstado><circle cx="12" cy="15.5" r="4"/><path d="M12 13.5v2.25l1.5 1"/></IconoEstado>
-  ),
-  /* Aspa: la sesión no se cubrió */
-  ausente: (
-    <IconoEstado>
-      <line x1="9" y1="12.5" x2="15" y2="18.5"/>
-      <line x1="15" y1="12.5" x2="9" y2="18.5"/>
-    </IconoEstado>
-  ),
-}
-
-/* Relleno mate de cada estado. Es un token, nunca un color literal: cada
-   identidad (default / IPN / UNAM) publica el suyo, y los tres están
-   calibrados para llevar texto blanco encima. */
-const RELLENO_ASISTENCIA = {
-  presente: 'var(--good-solid)',
-  tardanza: 'var(--warn-solid)',
-  ausente:  'var(--bad-solid)',
-}
-
 export default function StudentProfile() {
   const { studentId } = useParams()
-  const navigate = useNavigate()
   const { getAccent } = useGroupColors()
   const [tab, setTab] = useState('resumen')
 
@@ -172,16 +101,6 @@ export default function StudentProfile() {
     }
   }, [tab])
 
-  /* ── Grade overrides (editable by admin, read by student) ───── */
-  const [evalOverrides, setEvalOverrides] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(EVAL_KEY(studentId)) || '{}') } catch { return {} }
-  })
-  const saveOverride = (evalId, newVal) => {
-    const updated = { ...evalOverrides, [evalId]: newVal }
-    setEvalOverrides(updated)
-    localStorage.setItem(EVAL_KEY(studentId), JSON.stringify(updated))
-  }
-
   /* Alumno, grupo, calificaciones y asistencia vienen de la BD.
      Antes se leían de mockData, cuyos ids s1–s20 chocaban con los reales:
      un alumno existente mostraba el perfil de otra persona, y los ids
@@ -191,10 +110,28 @@ export default function StudentProfile() {
   const [evals, setEvals] = useState([])
   const [att, setAtt]     = useState([])
   const [cargando, setCargando] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [reload, setReload] = useState(0)
+  // Botón "Cuenta": usuario y contraseña vigentes (los consulta el servidor,
+  // que solo se los da al admin o al sub-admin del grupo).
+  const [cuentaAbierta, setCuentaAbierta] = useState(false)
+  const [credNueva, setCredNueva] = useState(null)
+  // Detalle de una calificación (asignación completa) y nombres de las
+  // columnas de la hoja ("Tarea 3") para titular cada fila.
+  const [detalle, setDetalle] = useState(null)
+  const [nombresColumnas, setNombresColumnas] = useState({})
+  const navigate = useNavigate()
+  const { t: tAdmin } = useAdminTheme()
+  useEffect(() => {
+    let vivo = true
+    fetchNombresColumnas(evals.map(e => e.columnaId)).then(m => { if (vivo) setNombresColumnas(m) }).catch(() => {})
+    return () => { vivo = false }
+  }, [evals])
 
   useEffect(() => {
     let vivo = true
     setCargando(true)
+    setLoadError(null)
     ;(async () => {
       try {
         const alumno = await fetchStudentById(studentId)
@@ -209,22 +146,61 @@ export default function StudentProfile() {
           if (!vivo) return
           setGrp(g); setEvals(ev); setAtt(as)
         }
-      } catch { /* se muestra el estado vacío */ }
+      } catch (err) {
+        if (vivo) setLoadError(err?.message || 'No se pudo cargar el alumno.')
+      }
       finally { if (vivo) setCargando(false) }
     })()
     return () => { vivo = false }
+  }, [studentId, reload])
+
+  /* Guarda una calificación editada en la BD y recarga el historial. */
+  const guardarCalificacion = useCallback(async (e, n) => {
+    /* Si la calificación sale de una columna de la hoja, se guarda por el
+       mismo camino que la hoja (set_valor_registro): actualiza la CELDA
+       (registro_valores) y la evaluación a la vez. Antes se escribía solo en
+       `evaluations`: el promedio cambiaba pero la hoja seguía mostrando el
+       valor viejo, porque la hoja lee sus celdas. */
+    let res
+    if (e.columnaId) {
+      try { await setCeldaRegistro(studentId, e.columnaId, n); res = { ok: true } }
+      catch (err) {
+        res = { ok: false, message: (err?.message ?? '').includes('forbidden')
+          ? 'No tienes permiso para corregir calificaciones de este grupo.'
+          : 'No se pudo guardar la calificación.' }
+      }
+    } else {
+      res = await saveEvaluation({
+        id: e.id, studentId, materia: e.materia, tipo: e.tipo,
+        calificacion: n, calMax: e.calMax, fecha: e.fecha, periodo: e.periodo,
+      })
+    }
+    if (res.ok) {
+      try { setEvals(await fetchEvaluationsByStudent(studentId)) } catch { /* se queda la lista anterior */ }
+    }
+    return res
   }, [studentId])
 
-  // Los simulacros siguen siendo simulados; no hay tabla todavía.
-  const rpts    = getReportsByStudent(studentId)
-  const radar   = studentRadar[studentId]
-  const trend   = studentGradeTrend[studentId]
-
   if (cargando) return (
-    <p className="text-sm p-6" style={{ color:'var(--t3)' }}>Cargando alumno…</p>
+    <div className="w-full space-y-4" role="status" aria-label="Cargando alumno">
+      <SkeletonBlock className="h-44"/>
+      <SkeletonBlock className="h-11 sm:w-96"/>
+      <SkeletonBlock className="h-64"/>
+    </div>
+  )
+  if (loadError) return (
+    <div role="alert" className="card p-5 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+      style={{ background:'var(--bad-soft)', borderColor:'var(--bad-line)' }}>
+      <span className="text-sm" style={{ color:'var(--bad)' }}>{loadError}</span>
+      <button onClick={() => setReload(r => r + 1)} className="btn-secondary min-h-11 justify-center">
+        <RefreshCw size={14}/> Reintentar
+      </button>
+    </div>
   )
   if (!s) return (
-    <p className="text-sm p-6" style={{ color:'var(--t3)' }}>Alumno no encontrado.</p>
+    <div className="card p-8 text-center">
+      <p className="text-sm" style={{ color:'var(--t3)' }}>Este alumno no existe o fue eliminado.</p>
+    </div>
   )
 
   const cfg   = getStatusConfig(s.status)
@@ -247,148 +223,171 @@ export default function StudentProfile() {
     ? Math.round(((attCounts.presente + attCounts.tardanza) / att.length) * 100)
     : null
 
-  const gradeColor = g => g >= 8 ? 'var(--good)' : g >= 7 ? 'var(--info)' : 'var(--bad)'
-  const attRateColor = r => r >= 85 ? 'var(--good)' : r >= 75 ? 'var(--warn)' : 'var(--bad)'
 
   /* Reporte de aprovechamiento hasta el momento — para el tutor */
   const handleExportReport = () => exportStudentReport({
     student: s,
     group: grp,
-    evals: evals.map(e => ({ ...e, calificacion: evalOverrides[e.id] ?? e.calificacion })),
+    evals,
     attendance: att,
     sims: getSimulacrosByStudent(s.id),
   })
 
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-5">
 
-      {/* ── Back ──────────────────────────────────────────────────── */}
-      {/* ── Profile header ────────────────────────────────────────── */}
-      <div className="card p-5 sm:p-6">
-        <div className="flex flex-col sm:flex-row gap-5">
+      {/* ── Cabecera del perfil ──────────────────────────────────────
+          Orden por importancia: quién es (identidad) → qué puedo hacer con él
+          (acciones, cada una con su descripción) → cómo va (indicadores).
+          Antes la única acción vivía escondida en la tarjeta del tutor. */}
+      <div className="card p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
 
-          {/* Avatar: el que el alumno eligió en su portal, o sus iniciales
-              sobre el color del grupo si aún no ha elegido ninguno. */}
-          {s.avatarSrc ? (
-            <img src={s.avatarSrc} alt=""
-              className="w-[72px] h-[72px] rounded-2xl object-cover flex-shrink-0"
-              style={{ border:'1px solid var(--card-border)' }}/>
-          ) : (
-            <div className="w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-xl font-bold flex-shrink-0"
-              /* Fondo pleno con inicial blanca. Antes era el acento al 16 % de
-                 alfa con un glow de color: sobre página blanca el bloque casi
-                 no existía y la inicial quedaba flotando. */
-              style={{ background: accent, color:'#ffffff', boxShadow:'0 1px 3px rgba(15,23,42,.22)' }}>
-              {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
-            </div>
-          )}
-
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-3 flex-wrap">
-              <div>
-                <h1 className="text-xl font-bold tracking-tight" style={{ color:'var(--t1)' }}>
+          {/* Identidad */}
+          <div className="flex gap-4 flex-1 min-w-0">
+            {/* Avatar: el que el alumno eligió en su portal, o sus iniciales
+                sobre el color del grupo si aún no ha elegido ninguno. */}
+            {s.avatarSrc ? (
+              <img src={s.avatarSrc} alt=""
+                className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl object-cover flex-shrink-0"
+                style={{ border:'1px solid var(--card-border)' }}/>
+            ) : (
+              <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl flex items-center justify-center text-xl font-bold flex-shrink-0"
+                style={{ background: accent, color: tintaSobre(accent), boxShadow:'0 1px 3px rgba(15,23,42,.22)' }}>
+                {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start gap-2 flex-wrap">
+                <h1 className="text-xl font-bold tracking-tight min-w-0" style={{ color:'var(--t1)' }}>
                   {s.name}
                 </h1>
-                <p className="text-sm mt-0.5" style={{ color:'var(--t2)' }}>
-                  {grp?.name} — {grp?.subject}
-                </p>
+                <span className={`badge ${cfg.bg} ${cfg.color} border ${cfg.border} mt-1`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}/>{cfg.label}
+                </span>
               </div>
-              <span className={`badge ${cfg.bg} ${cfg.color} border ${cfg.border} mt-0.5`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}/>{cfg.label}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-4 mt-3 text-sm min-w-0" style={{ color:'var(--t3)' }}>
-              {/* Un correo institucional largo no parte por sí solo y en 411 px
-                  se salía de la tarjeta, donde `.card` lo recortaba. */}
-              <span className="flex items-center gap-1.5 min-w-0 max-w-full">
+              <p className="text-sm mt-0.5" style={{ color:'var(--t2)' }}>
+                {[grp?.name, grp?.subject].filter(Boolean).join(' — ') || 'Sin grupo asignado'}
+              </p>
+              {/* Un correo institucional largo no parte por sí solo: se trunca
+                  con el texto completo en el título. */}
+              <p className="flex items-center gap-1.5 mt-2 text-sm min-w-0" style={{ color:'var(--t3)' }} title={s.email}>
                 <Mail size={13} className="flex-shrink-0"/>
                 <span className="truncate">{s.email}</span>
-              </span>
-            </div>
-
-            {/* Quick stats */}
-            <div className="flex flex-wrap gap-3 mt-4 pt-4"
-              style={{ borderTop:'1px solid var(--divider)' }}>
-              {[
-                { label:'Promedio',   value: s.avgGrade ?? '—',
-                  color: s.avgGrade == null ? 'var(--t3)' : gradeColor(s.avgGrade) },
-                // La asistencia se calcula de las sesiones reales ya cargadas;
-                // students.attendance_rate quedó obsoleto y venía en null.
-                { label:'Asistencia',
-                  value: asistenciaPct === null ? '—' : `${asistenciaPct}%`,
-                  color: asistenciaPct === null ? 'var(--t3)' : attRateColor(asistenciaPct) },
-                { label:'Tareas',
-                  value: s.assignmentsTotal ? `${s.assignmentsDone}/${s.assignmentsTotal}` : '—',
-                  color: s.assignmentsTotal ? 'var(--info)' : 'var(--t3)' },
-                { label:'Ranking',
-                  value: s.rank ? `#${s.rank}` : '—',
-                  color: s.rank ? 'var(--warn)' : 'var(--t3)' },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="text-center px-4 py-2.5 rounded-xl"
-                  style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-                  <p className="text-lg font-bold leading-none" style={{ color }}>{value}</p>
-                  <p className="text-[11px] mt-1" style={{ color:'var(--t3)' }}>{label}</p>
-                </div>
-              ))}
+              </p>
             </div>
           </div>
 
-          {/* Contact card */}
-          <div className="rounded-xl p-4 flex-shrink-0 min-w-[200px]"
-            style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)' }}>
-            <Sub>Contacto del tutor</Sub>
-            {/* Los alumnos dados de alta sin tutor dejaban los iconos huérfanos:
-                cada dato se muestra sólo si existe. */}
-            <Val className="mb-2">{s.tutor?.name || 'Sin tutor registrado'}</Val>
-            {s.tutor?.email && (
-              <div className="flex items-center gap-1.5 text-xs" style={{ color:'var(--t3)' }}>
-                <Mail size={11}/>{s.tutor.email}
-              </div>
-            )}
-            {s.tutor?.phone && (
-              <div className="flex items-center gap-1.5 mt-1.5 text-xs" style={{ color:'var(--t3)' }}>
-                <Phone size={11}/>{s.tutor.phone}
-              </div>
-            )}
-            <button onClick={handleExportReport}
-              className="w-full flex items-center justify-center gap-1.5 mt-3 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
-              style={{ background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}
-              onMouseEnter={e => e.currentTarget.style.background='var(--good-line)'}
-              onMouseLeave={e => e.currentTarget.style.background='var(--good-soft)'}
+          {/* Acciones, cada una con su peso: la cuenta primero (es lo que más
+              se pide en ventanilla: "¿cuál es mi contraseña?"). */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 lg:w-72 flex-shrink-0">
+            <button type="button" onClick={() => setCuentaAbierta(true)}
+              className="w-full flex items-center gap-3 p-3 rounded-xl text-left"
+              style={{ background:'var(--accent)', color:'var(--accent-contrast)' }}
+              title="Ver el usuario y la contraseña con los que entra el alumno">
+              <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:'rgba(255,255,255,.18)' }}>
+                <IconCuenta size={19}/>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold">Cuenta</span>
+                <span className="block text-[11px] opacity-85">Ver su usuario y contraseña</span>
+              </span>
+            </button>
+            <button type="button" onClick={handleExportReport}
+              className="w-full flex items-center gap-3 p-3 rounded-xl text-left"
+              style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t1)' }}
               title="Descarga el aprovechamiento del alumno hasta el momento para compartirlo con el tutor">
-              <Download size={12}/> Reporte de avance
+              <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white" style={{ background:'var(--good-solid)' }}>
+                <IconReporte size={18}/>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold">Reporte de avance</span>
+                <span className="block text-[11px]" style={{ color:'var(--t3)' }}>PDF para compartir con el tutor</span>
+              </span>
             </button>
           </div>
         </div>
+
+        {/* Indicadores rápidos: superficie, para no competir con la
+            cabecera; el color va en la ficha del icono. */}
+        <div className="pt-4" style={{ borderTop:'1px solid var(--divider)' }}>
+              <KpiGrid cols={4}>
+                <KpiCard variant="surface" icon={IconPromedio} label="Promedio"
+                  tone={s.avgGrade == null ? 'neutral' : s.avgGrade >= 8 ? 'good' : s.avgGrade >= 7 ? 'info' : 'bad'}
+                  value={s.avgGrade ?? '—'}/>
+                {/* La asistencia se calcula de las sesiones reales ya cargadas;
+                    students.attendance_rate quedó obsoleto y venía en null. */}
+                <KpiCard variant="surface" icon={IconAsistencia} label="Asistencia"
+                  tone={asistenciaPct === null ? 'neutral' : asistenciaPct >= 85 ? 'good' : asistenciaPct >= 75 ? 'warn' : 'bad'}
+                  value={asistenciaPct === null ? '—' : `${asistenciaPct}%`}/>
+                <KpiCard variant="surface" icon={ClipboardList} label="Tareas"
+                  tone={s.assignmentsTotal ? 'info' : 'neutral'}
+                  value={s.assignmentsTotal ? `${s.assignmentsDone}/${s.assignmentsTotal}` : '—'}/>
+                <KpiCard variant="surface" icon={IconRanking} label="Ranking"
+                  tone={s.rank ? 'warn' : 'neutral'} value={s.rank ? `#${s.rank}` : '—'}/>
+              </KpiGrid>
+        </div>
       </div>
 
-      {/* ── Tabs ──────────────────────────────────────────────────────
-          La píldora se ajusta al contenido a partir de `sm`, donde las seis
-          pestañas caben; por debajo ocupa el ancho disponible y desliza. El
-          `w-fit` a secas hacía crecer el contenedor hasta el ancho de sus
-          botones, así que en móvil se desbordaba de la página en vez de
-          desplazarse por dentro, y `max-w-full` es lo que devuelve el carril
-          en tablets estrechas. `shrink-0` en cada botón evita que el flex los
-          comprima y parta las etiquetas en dos líneas. */}
+      {/* ── Contacto del tutor ── en su propia tarjeta, horizontal. */}
+      <div className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
+            <Users size={18}/>
+          </span>
+          <div className="min-w-0">
+            <Sub>Contacto del tutor</Sub>
+            {/* Cada dato se muestra sólo si existe. */}
+            <Val>{s.tutor?.name || 'Sin tutor registrado'}</Val>
+          </div>
+        </div>
+        {(s.tutor?.email || s.tutor?.phone) && (
+          <div className="flex flex-wrap gap-2 sm:ml-auto">
+            {s.tutor?.email && (
+              <a href={`mailto:${s.tutor.email}`} className="inline-flex items-center gap-1.5 min-h-10 px-3 rounded-xl text-xs font-semibold max-w-full"
+                style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }} title={`Escribir a ${s.tutor.email}`}>
+                <Mail size={13} className="flex-shrink-0"/><span className="truncate">{s.tutor.email}</span>
+              </a>
+            )}
+            {s.tutor?.phone && (
+              <a href={`tel:${s.tutor.phone}`} className="inline-flex items-center gap-1.5 min-h-10 px-3 rounded-xl text-xs font-semibold"
+                style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }} title={`Llamar a ${s.tutor.phone}`}>
+                <Phone size={13}/>{s.tutor.phone}
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Secciones ──────────────────────────────────────────────────
+          Antes: cinco pestañas en una sola píldora con scroll. Ahora una
+          rejilla de tarjetas, cada una con icono y qué contiene. Teclado:
+          flechas ← → entre secciones (patrón WAI-ARIA de pestañas). */}
       <div ref={tabsRef} role="tablist" aria-label="Secciones del alumno"
-        className="flex gap-1 rounded-xl p-1 w-full max-w-full sm:w-fit
-                   scroll-carril snap-x scroll-px-1 scroll-smooth motion-reduce:scroll-auto"
-        style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            data-tab={t.id} id={`pestana-${t.id}`} aria-controls="panel-alumno"
-            role="tab" aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1}
-            onKeyDown={onTabKeyDown}
-            className="flex shrink-0 snap-start items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap"
-            style={tab === t.id
-              ? { background:'white', color:'black', boxShadow:'0 2px 8px rgba(0,0,0,.35)' }
-              : { color:'var(--t2)' }}
-            onMouseEnter={e => { if (tab !== t.id) e.currentTarget.style.color='var(--t1)' }}
-            onMouseLeave={e => { if (tab !== t.id) e.currentTarget.style.color='var(--t2)' }}>
-            <t.icon size={14}/>{t.label}
-          </button>
-        ))}
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        {TABS.map(t => {
+          const activa = tab === t.id
+          return (
+            <button key={t.id} type="button" onClick={() => setTab(t.id)}
+              data-tab={t.id} id={`pestana-${t.id}`} aria-controls="panel-alumno"
+              role="tab" aria-selected={activa} tabIndex={activa ? 0 : -1}
+              onKeyDown={onTabKeyDown}
+              className="w-full flex items-center gap-2.5 p-2.5 sm:p-3 rounded-xl text-left min-h-14"
+              style={activa
+                ? { background:'var(--card-bg)', border:'2px solid var(--accent)', boxShadow:'var(--card-shadow)' }
+                : { background:'var(--card-bg)', border:'1px solid var(--card-border)' }}>
+              <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={activa ? { background:'var(--accent)', color:'var(--accent-contrast)' } : { background:'var(--soft-bg)', color:'var(--t2)' }}>
+                <t.icon size={17}/>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold truncate" style={{ color:'var(--t1)' }}>{t.label}</span>
+                <span className="hidden sm:block text-[11px] truncate" style={{ color:'var(--t3)' }}>{t.desc}</span>
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Un solo panel para las seis secciones: como sólo se pinta la activa,
@@ -411,51 +410,16 @@ export default function StudentProfile() {
               la rejilla no vuelve a encoger al girar el teléfono. */}
           <div className="card p-5 min-w-0">
             <h3 className="section-title mb-4">Competencias</h3>
-            {radar ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <RadarChart data={radar}>
-                  <PolarGrid stroke="var(--grid)"/>
-                  <PolarAngleAxis dataKey="comp" tick={{ fontSize:10, fill:'var(--axis)' }}/>
-                  <PolarRadiusAxis angle={90} domain={[0,10]} tick={{ fontSize:9, fill:'var(--axis)' }}/>
-                  <Radar name="Alumno" dataKey="valor" stroke={accent} fill={accent} fillOpacity={0.12} strokeWidth={2}/>
-                </RadarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-48 flex items-center justify-center text-sm"
-                style={{ color:'var(--t3)' }}>Sin datos de radar</div>
-            )}
+            {/* No hay fuente real de competencias todavía. Antes se leía un
+                mock indexado por id que mostraba datos de otra persona. */}
+            <div className="h-48 flex items-center justify-center text-sm"
+              style={{ color:'var(--t3)' }}>Sin datos todavía</div>
           </div>
 
           <div className="card p-5 min-w-0 xl:col-span-2">
             <h3 className="section-title mb-4">Evolución de Calificaciones</h3>
-            {trend ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={trend} margin={{ top:5, right:10, bottom:0, left:-20 }}>
-                  <defs>
-                    {['var(--info)','var(--good)','var(--warn)'].map((c, i) => (
-                      <linearGradient key={i} id={`g${i}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={c} stopOpacity={0.15}/>
-                        <stop offset="95%" stopColor={c} stopOpacity={0}/>
-                      </linearGradient>
-                    ))}
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)"/>
-                  <XAxis dataKey="mes" tick={{ fontSize:11, fill:'var(--axis)' }} axisLine={false} tickLine={false}/>
-                  <YAxis domain={[4,10]} tick={{ fontSize:11, fill:'var(--axis)' }} axisLine={false} tickLine={false}/>
-                  <Tooltip wrapperStyle={{ outline:'none' }} cursor={{ stroke:'var(--grid)', strokeWidth:1 }}
-                    contentStyle={{ fontSize:11, borderRadius:10, background:'var(--tooltip-bg)', border:'1px solid var(--tooltip-border)', color:'var(--tooltip-text)' }}/>
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, color:'var(--t2)' }}/>
-                  {Object.keys(trend[0]).filter(k => k !== 'mes').map((k, i) => (
-                    <Area key={k} type="monotone" dataKey={k} name={k}
-                      stroke={['var(--info)','var(--good)','var(--warn)'][i]}
-                      fill={`url(#g${i})`} strokeWidth={2}/>
-                  ))}
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-48 flex items-center justify-center text-sm"
-                style={{ color:'var(--t3)' }}>Sin datos de tendencia</div>
-            )}
+            <div className="h-48 flex items-center justify-center text-sm"
+              style={{ color:'var(--t3)' }}>Sin datos todavía</div>
           </div>
 
           <div className="card p-5 min-w-0">
@@ -486,94 +450,25 @@ export default function StudentProfile() {
       {/* ══════════════════════════════════════════════════════════
           TAB: EVALUACIONES
       ══════════════════════════════════════════════════════════ */}
-      {tab === 'evaluaciones' && (() => {
-        const effectiveEvals = evals.map(e => ({
-          ...e,
-          calificacion: evalOverrides[e.id] !== undefined ? evalOverrides[e.id] : e.calificacion,
-        }))
-        return (
-          <div className="card overflow-hidden">
-            {/* La pista de edición y el título sumaban ~370 px en una caja de
-                339: sin `flex-wrap` el texto se salía y `.card` lo recortaba a
-                media frase. En teléfono la pista sobra —ahí no hay ratón que
-                pueda "hacer clic"— así que se retira por clase. */}
-            <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-2 flex-wrap"
-              style={{ borderBottom:'1px solid var(--divider)', background:'var(--soft-bg)' }}>
-              <h3 className="section-title">Historial de Evaluaciones</h3>
-              <span className="hidden sm:flex items-center gap-1.5 text-xs" style={{ color:'var(--t3)' }}>
-                <Pencil size={11}/> Click en calificación para editar
+      {tab === 'evaluaciones' && (
+        <section className="card p-4 sm:p-5 space-y-3">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div>
+              <h3 className="section-title">Historial de evaluaciones</h3>
+              <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
+                Toca una calificación para ver la asignación completa o corregirla.
+              </p>
+            </div>
+            {evals.length > 0 && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
+                {evals.length} registrada{evals.length !== 1 ? 's' : ''}
               </span>
-            </div>
-            {/* El barrido horizontal sobre la tabla disparaba el gesto de
-                "atrás" del navegador al llegar al borde. */}
-            <div className="responsive-table-wrap" style={{ overscrollBehaviorX:'contain' }}>
-              {/* Tres niveles de ancho. En teléfono la tabla cabe entera —sin
-                  Periodo ni Fecha, que se pliegan bajo la materia— y no hace
-                  falta desplazarla; de `sm` en adelante se le da un mínimo
-                  cómodo para que las columnas no se aplasten. */}
-              <table className="responsive-table w-full min-w-0 sm:min-w-[480px] lg:min-w-[560px]">
-                <thead>
-                  <tr style={{ borderBottom:'1px solid var(--divider)' }}>
-                    <th className="table-header px-2 sm:px-4 text-[9px] sm:text-[11px]">Materia</th>
-                    <th className="table-header px-2 sm:px-4 text-[9px] sm:text-[11px]">Tipo</th>
-                    <th className="table-header px-2 sm:px-4 text-[9px] sm:text-[11px]">
-                      <span className="sm:hidden">Calif.</span>
-                      <span className="hidden sm:inline">Calificación</span>
-                    </th>
-                    <th className="table-header hidden sm:table-cell">Periodo</th>
-                    <th className="table-header hidden sm:table-cell">Fecha</th>
-                  </tr>
-                </thead>
-                {/* Regla de despliegue: no se vuelca el historial completo de
-                    golpe. Además, así la tabla tiene por fin estado vacío —
-                    antes un alumno sin evaluaciones mostraba una cabecera
-                    suelta sobre nada. */}
-                <ProgressiveList as="tbody" colSpan={5} items={effectiveEvals}
-                  sizes={{ mobile: 5, tablet: 10, desktop: 20 }}
-                  emptyLabel="Este alumno todavía no tiene evaluaciones capturadas.">
-                  {e => (
-                    <tr key={e.id}
-                      style={{ borderBottom:'1px solid var(--divider)' }}
-                      onMouseEnter={ev => ev.currentTarget.style.background='var(--soft-bg)'}
-                      onMouseLeave={ev => ev.currentTarget.style.background='transparent'}>
-                      <td className="table-cell px-2 sm:px-4 text-xs sm:text-sm font-medium max-w-0 break-words" style={{ color:'var(--t1)' }}>
-                        {e.materia}
-                        {/* Fecha y periodo no desaparecen en teléfono: bajan
-                            aquí como línea secundaria, que es donde se leen sin
-                            robarle ancho a la calificación. */}
-                        <span className="block sm:hidden text-[11px] font-normal mt-0.5"
-                          style={{ color:'var(--t3)' }}>
-                          {e.fecha}{e.periodo ? ` · ${e.periodo}` : ''}
-                        </span>
-                      </td>
-                      <td className="table-cell px-2 sm:px-4">
-                        <span className="badge text-[9px] sm:text-[11px] px-1 sm:px-2 py-0.5 max-w-full truncate"
-                          style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
-                          {e.tipo}
-                        </span>
-                      </td>
-                      <td className="table-cell px-2 sm:px-4 text-xs sm:text-sm">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <EditableGrade evalId={e.id} value={e.calificacion} onSave={saveOverride}/>
-                          <span className="text-xs" style={{ color:'var(--t3)' }}>/{e.calMax}</span>
-                          {evalOverrides[e.id] !== undefined && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
-                              style={{ background:'var(--warn-soft)', color:'var(--warn)' }}>
-                              editado
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="table-cell hidden sm:table-cell" style={{ color:'var(--t2)' }}>{e.periodo}</td>
-                      <td className="table-cell hidden sm:table-cell text-xs" style={{ color:'var(--t3)' }}>{e.fecha}</td>
-                    </tr>
-                  )}
-                </ProgressiveList>
-              </table>
-            </div>
+            )}
           </div>
-        )
-      })()}
+          <ListaEvaluaciones evaluaciones={evals} nombresColumnas={nombresColumnas}
+            light={tAdmin.light} onAbrir={setDetalle}/>
+        </section>
+      )}
 
       {/* ══════════════════════════════════════════════════════════
           TAB: ASISTENCIAS
@@ -586,30 +481,24 @@ export default function StudentProfile() {
               (página blanca) se veían fuera de registro. Ojo: ese mapa sigue
               alimentando la lista de sesiones de abajo y otras pantallas, por
               eso se deja intacto y aquí sólo se toma la etiqueta. */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Object.entries(attCounts).map(([k, v]) => (
-              <div key={k}
-                className="rounded-2xl p-5 transition-transform duration-300 hover:-translate-y-1"
-                style={{
-                  background: RELLENO_ASISTENCIA[k],
-                  color:'#ffffff',
-                  boxShadow:'0 1px 3px rgba(15,23,42,.22)',
-                }}>
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-2xl font-bold leading-none">{v}</p>
-                  <span style={{ opacity:.9 }}>{ICONOS_ASISTENCIA[k]}</span>
-                </div>
-                <p className="text-xs font-medium mt-1.5" style={{ opacity:.85 }}>
-                  {attendanceColors[k].label}
-                </p>
-              </div>
+          <KpiGrid cols={4}>
+            {[
+              { k:'presente', tone:'good', icon:IconAsistencia },
+              { k:'tardanza', tone:'warn', icon:IconRetardos },
+              { k:'ausente',  tone:'bad',  icon:IconFaltas },
+            ].map(({ k, tone, icon }) => (
+              <KpiCard key={k} icon={icon} tone={tone}
+                label={attendanceColors[k].label} value={attCounts[k]}
+                sub={att.length ? `${Math.round((attCounts[k] / att.length) * 100)}% del total` : 'Sin sesiones'}/>
             ))}
-          </div>
+            <KpiCard icon={Calendar} tone="info" label="Sesiones" value={att.length}
+              sub={asistenciaPct === null ? 'Sin sesiones' : `${asistenciaPct}% asistió`}/>
+          </KpiGrid>
 
           <div className="card overflow-hidden">
             <div className="px-5 py-3"
               style={{ borderBottom:'1px solid var(--divider)', background:'var(--soft-bg)' }}>
-              <h3 className="section-title">Registro de Asistencias (Abril 2026)</h3>
+              <h3 className="section-title">Registro de asistencias</h3>
             </div>
             <div className="max-h-96 overflow-y-auto p-2 sm:p-0">
               <ProgressiveList className="divide-y" items={att}
@@ -651,97 +540,12 @@ export default function StudentProfile() {
           TAB: REPORTES
       ══════════════════════════════════════════════════════════ */}
       {tab === 'reportes' && (
-        <div className="space-y-4">
-          {rpts.length === 0 && (
-            <div className="card p-10 text-center" style={{ color:'var(--t3)' }}>
-              <FileText size={36} className="mx-auto mb-2 opacity-30"/>
-              <p>Sin reportes generados aún.</p>
-            </div>
-          )}
-          {rpts.map(r => (
-            <div key={r.id} className="card p-5 space-y-4">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-                    <FileText size={16} style={{ color:'var(--t2)' }}/>
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-sm truncate" style={{ color:'var(--t1)' }}>
-                      Reporte — {r.mes}
-                    </h3>
-                    <p className="text-xs truncate" style={{ color:'var(--t3)' }}>
-                      Generado por {r.generadoPor}
-                    </p>
-                  </div>
-                </div>
-                <button onClick={() => exportMonthlyReport(s, r)}
-                  className="btn-secondary text-xs py-1.5 flex-shrink-0 whitespace-nowrap">
-                  <Download size={13}/>Descargar
-                </button>
-              </div>
-
-              {/* Mini stats */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label:'Promedio',   value: r.promedio,                            color: gradeColor(r.promedio) },
-                  { label:'Asistencia', value: `${r.asistencia}%`,                    color: attRateColor(r.asistencia) },
-                  { label:'Tareas',     value: `${r.tareasEntregadas}/${r.tareasTotal}`, color:'var(--info)' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="rounded-xl p-3 text-center"
-                    style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-                    <p className="text-xl font-bold" style={{ color }}>{value}</p>
-                    <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>{label}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Strengths / areas */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"
-                    style={{ color:'var(--good)' }}>
-                    <CheckCircle size={12}/> Fortalezas
-                  </p>
-                  <ul className="space-y-1.5">
-                    {r.fortalezas.map((f, i) => (
-                      <li key={i} className="text-sm flex items-start gap-2"
-                        style={{ color:'var(--t2)' }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0"/>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"
-                    style={{ color:'var(--warn)' }}>
-                    <AlertTriangle size={12}/> Áreas de mejora
-                  </p>
-                  <ul className="space-y-1.5">
-                    {r.areas.map((a, i) => (
-                      <li key={i} className="text-sm flex items-start gap-2"
-                        style={{ color:'var(--t2)' }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 flex-shrink-0"/>
-                        {a}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Comment */}
-              <div className="pt-3" style={{ borderTop:'1px solid var(--divider)' }}>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                  style={{ color:'var(--t3)' }}>
-                  Comentario del docente
-                </p>
-                <p className="text-sm leading-relaxed italic" style={{ color:'var(--t2)' }}>
-                  "{r.comentario}"
-                </p>
-              </div>
-            </div>
-          ))}
+        /* Los reportes mensuales salían de un mock indexado por id (datos de
+           otra persona). Hasta que exista la tabla, no se inventan. */
+        <div className="card p-8 text-center" style={{ color:'var(--t3)' }}>
+          <FileText size={36} className="mx-auto mb-2 opacity-40"/>
+          <p className="text-sm">Sin datos todavía. Los reportes mensuales aún no se generan.</p>
+          <p className="text-xs mt-1">Usa «Reporte de avance» en la cabecera para descargar el aprovechamiento actual.</p>
         </div>
       )}
 
@@ -754,14 +558,16 @@ export default function StudentProfile() {
             <div className="flex items-center gap-2 mb-5 self-start">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
                 style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-                <QrCode size={15} className="text-white"/>
+                <QrCode size={16} style={{ color:'var(--t2)' }}/>
               </div>
               <span className="font-bold text-sm" style={{ color:'var(--t1)' }}>
                 Código QR de asistencia
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl" style={{ background:'#ffffff', boxShadow:'0 4px 24px rgba(0,0,0,.35)' }}>
+            {/* El QR va sobre blanco en las tres identidades: es lo que lee el
+                escáner, no decoración. */}
+            <div className="p-4 rounded-2xl" style={{ background:'#ffffff', boxShadow:'var(--card-shadow)', border:'1px solid var(--card-border)' }}>
               <QRCodeSVG
                 value={`EDUTRACK:${s.id}`}
                 size={230}
@@ -776,8 +582,8 @@ export default function StudentProfile() {
               <p className="text-sm mt-0.5" style={{ color:'var(--t3)' }}>
                 {grp?.name} — {grp?.subject}
               </p>
-              <code className="text-[11px] font-mono block mt-2" style={{ color:'var(--t4)' }}>
-                EDUTRACK:{s.id}
+              <code className="text-[11px] font-mono block mt-2" style={{ color:'var(--t3)' }}>
+                ID {s.id}
               </code>
             </div>
           </div>
@@ -796,6 +602,26 @@ export default function StudentProfile() {
       )}
 
       </div>
+
+      {cuentaAbierta && (
+        <ResetPasswordModal
+          student={s}
+          onClose={() => setCuentaAbierta(false)}
+          onDone={cred => { setCuentaAbierta(false); setCredNueva(cred) }}/>
+      )}
+      {credNueva && <CredentialsPanel cred={credNueva} onClose={() => setCredNueva(null)}/>}
+      {detalle && (
+        <DetalleEvaluacion evaluacion={detalle} grupo={grp?.name} light={tAdmin.light}
+          onClose={() => setDetalle(null)}
+          onGuardar={async n => {
+            const res = await guardarCalificacion(detalle, n)
+            if (res?.ok) setDetalle(d => ({ ...d, calificacion: n }))
+            return res
+          }}
+          onAbrirHoja={() => navigate('/admin/registrar', {
+            state: { groupId: s.groupId, columnaId: detalle.columnaId, studentId: s.id },
+          })}/>
+      )}
     </div>
   )
 }

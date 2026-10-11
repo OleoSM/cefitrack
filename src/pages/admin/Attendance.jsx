@@ -14,10 +14,17 @@ import {
 } from '../../lib/attendanceDb'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
+import ModalPortal from '../../components/ui/ModalPortal'
+import ProgressiveList from '../../components/ui/ProgressiveList'
+import { DataTable, DataTableRow, SkeletonBlock } from '../../components/ui/DataTable'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
+import { IconAsistencia, IconRetardos, IconFaltas, IconAlumnos } from '../../components/ui/SigaKpiIcons'
+import { DANGER_BTN_STYLE } from '../../components/admin/ConfirmDialog'
+import { tintaSobre } from '../../lib/color'
 import {
   ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
   FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
-  ChevronRight, UserCheck, CheckSquare, RotateCw,
+  ChevronRight, UserCheck, CheckSquare, RotateCw, RefreshCw, CloudOff,
   Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown, Download, X
 } from 'lucide-react'
 
@@ -27,6 +34,13 @@ const DEBOUNCE_MS = 3000
 const fmtMMSS = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 const fmtDate = iso => new Date(`${iso}T00:00:00`).toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' })
 const TOL_PRESETS = [5, 10, 15, 20]
+
+const COLUMNS_LISTA = [
+  { key:'n',       label:'#',          className:'w-8 hidden sm:flex' },
+  { key:'alumno',  label:'Alumno',     className:'flex-grow min-w-0' },
+  { key:'hora',    label:'Hora',       className:'w-16 sm:w-20 flex justify-end' },
+  { key:'retardo', label:'Retardo',    className:'w-16 sm:w-20 flex justify-center' },
+]
 
 export default function Attendance() {
   const { sucursales, nombreDe } = useSucursales()
@@ -50,6 +64,14 @@ export default function Attendance() {
   const [resumeSession,  setResumeSession] = useState(null) // sesión guardada de HOY, detectada al elegir grupo
   const [showConfirm,    setShowConfirm]   = useState(false)
   const [finished,       setFinished]      = useState(false)
+  /* Estado de guardado visible: antes cada escritura terminaba en
+     `.catch(() => {})` y una lista podía perderse sin que nadie lo notara. */
+  const [loading,        setLoading]       = useState(true)
+  const [loadError,      setLoadError]     = useState('')
+  const [saveState,      setSaveState]     = useState('idle')   // idle | saving | saved | error
+  const [saveRetry,      setSaveRetry]     = useState(0)
+  const [actionBusy,     setActionBusy]    = useState(false)
+  const [actionError,    setActionError]   = useState('')
 
   /* ── Historial ── */
   const [showHistoryModal, setShowHistoryModal] = useState(false)
@@ -76,13 +98,16 @@ export default function Attendance() {
   useEffect(() => { studentsRef.current = students }, [students])
 
   // Carga inicial desde Supabase: grupos, alumnos, evaluaciones e historial de listas.
-  useEffect(() => {
+  const cargarTodo = useCallback(() => {
+    setLoading(true); setLoadError('')
     Promise.all([fetchGroups(), fetchStudents(), fetchSessionIndex(), fetchEvaluations()])
       .then(([gs, ss, idx, evs]) => {
         setGroups(gs); setStudents(ss); setSessionIndex(idx); setEvaluations(evs)
       })
-      .catch(() => {})
+      .catch(err => setLoadError(err?.message || 'No se pudieron cargar los grupos y las listas.'))
+      .finally(() => setLoading(false))
   }, [])
+  useEffect(() => { cargarTodo() }, [cargarTodo])
 
   const refreshIndex = () => fetchSessionIndex().then(setSessionIndex).catch(() => {})
 
@@ -207,15 +232,19 @@ export default function Attendance() {
   // con un pequeño debounce para no disparar una escritura por cada escaneo.
   useEffect(() => {
     if (!(selectedGrp && selectedDate && scannedLog.length > 0)) return
+    let vigente = true
     const t = setTimeout(() => {
+      setSaveState('saving')
       saveSessionDb(
         selectedGrp, selectedDate,
         { tolMin, startedAt, pausedAt, pausedAccumMs, finished },
         scannedLog.map(e => ({ studentId: e.student.id, time: e.time, retardo: !!retardos[e.student.id] })),
-      ).catch(() => {})
+      )
+        .then(() => { if (vigente) setSaveState('saved') })
+        .catch(() => { if (vigente) setSaveState('error') })
     }, 800)
-    return () => clearTimeout(t)
-  }, [scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished, selectedGrp, selectedDate])
+    return () => { vigente = false; clearTimeout(t) }
+  }, [scannedLog, retardos, tolMin, startedAt, pausedAt, pausedAccumMs, finished, selectedGrp, selectedDate, saveRetry])
 
   // Warn on browser refresh/close when session is active
   useEffect(() => {
@@ -313,19 +342,82 @@ export default function Attendance() {
     setShowLeaveModal(false)
     setResumeSession(null)
     setFinished(false)
+    setSaveState('idle')
+    setActionError('')
     resetTimerState()
   }
 
-  const handleFinish = () => setShowConfirm(true)
-  const handleConfirmFinish = () => {
+  const handleFinish = () => { setActionError(''); setShowConfirm(true) }
+  /* Se guarda explícitamente como finalizada (queda en el historial). Si la
+     escritura falla, la lista NO se descarta: se avisa y se queda abierta. */
+  const handleConfirmFinish = async () => {
+    setActionBusy(true); setActionError('')
+    try {
+      await saveSessionDb(
+        selectedGrp, selectedDate,
+        { tolMin, startedAt, pausedAt, pausedAccumMs, finished: true },
+        buildRecords(),
+      )
+    } catch (err) {
+      setActionError(`No se pudo guardar la lista: ${err?.message || 'error de conexión'}. Sigue abierta; vuelve a intentarlo.`)
+      setActionBusy(false)
+      return
+    }
     exportExcel()
-    // Se guarda explícitamente como finalizada (queda en el historial, no se borra)
-    saveSessionDb(
-      selectedGrp, selectedDate,
-      { tolMin, startedAt, pausedAt, pausedAccumMs, finished: true },
-      buildRecords(),
-    ).then(refreshIndex).catch(() => {})
+    refreshIndex()
+    setActionBusy(false)
     goBack(true)
+  }
+
+  const guardarBorradorYSalir = async () => {
+    setActionBusy(true); setActionError('')
+    try {
+      await saveSessionDb(
+        selectedGrp, selectedDate,
+        { tolMin, startedAt, pausedAt, pausedAccumMs, finished },
+        buildRecords(),
+      )
+    } catch (err) {
+      setActionError(`No se pudo guardar el borrador: ${err?.message || 'error de conexión'}.`)
+      setActionBusy(false)
+      return
+    }
+    refreshIndex()
+    setActionBusy(false)
+    goBack(true)
+  }
+
+  const borrarListaYSalir = async () => {
+    setActionBusy(true); setActionError('')
+    try {
+      await deleteSessionDb(selectedGrp, selectedDate)
+    } catch (err) {
+      setActionError(`No se pudo borrar la lista guardada: ${err?.message || 'error de conexión'}.`)
+      setActionBusy(false)
+      return
+    }
+    refreshIndex()
+    setActionBusy(false)
+    goBack(true)
+  }
+
+  const empezarDeNuevo = async () => {
+    setActionBusy(true); setActionError('')
+    try {
+      await deleteSessionDb(selectedGrp, selectedDate)
+    } catch (err) {
+      setActionError(`No se pudo descartar la lista guardada: ${err?.message || 'error de conexión'}.`)
+      setActionBusy(false)
+      return
+    }
+    refreshIndex()
+    setActionBusy(false)
+    setScannedLog([])
+    setRetardos({})
+    setFinished(false)
+    setResumeSession(null)
+    setTolInput(String(loadSettings().toleranciaMin))
+    setShowTolModal(true)
   }
 
   /* ── Excel export ───────────────────────────────────────────── */
@@ -388,6 +480,68 @@ export default function Attendance() {
     XLSX.writeFile(wb, `${grupo?.name?.replace(/\s+/g, '') ?? 'Grupo'}_${sesion.date}.xlsx`)
   }
 
+  /* ── Modal: historial de listas (compartido por las dos vistas) ── */
+  const HistoryModal = showHistoryModal && (
+    <ModalPortal maxWidth="max-w-md" onClose={() => setShowHistoryModal(false)}>
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5" style={{ borderBottom:'1px solid var(--divider)' }}>
+        <div className="min-w-0">
+          <h2 className="text-sm font-bold truncate" style={{ color: 'var(--t1)' }}>
+            Historial — {groups.find(g => g.id === historyGroupId)?.name}
+          </h2>
+          <p className="text-xs" style={{ color: 'var(--t3)' }}>
+            Retoma cualquier lista para editarla o agregar alumnos.
+          </p>
+        </div>
+        <button onClick={() => setShowHistoryModal(false)} aria-label="Cerrar"
+          className="w-11 h-11 flex items-center justify-center rounded-lg flex-shrink-0" style={{ color:'var(--t3)' }}>
+          <X size={15}/>
+        </button>
+      </div>
+      <div className="p-5 space-y-2">
+        {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => {
+          const actual = view === 'scan' && s.date === selectedDate
+          return (
+            <div key={s.date}
+              className="w-full flex items-center justify-between gap-2 p-3 rounded-xl transition-all"
+              style={{
+                background: 'var(--card-bg)',
+                border: actual ? `2px solid ${accentColor}` : '1px solid var(--card-border)',
+              }}>
+              {/* Fila y descarga son botones hermanos: anidarlos sería HTML inválido */}
+              <button onClick={() => applySession(toUiSession(s))}
+                className="flex-1 min-w-0 text-left active:scale-[.98] transition-transform">
+                <p className="text-sm font-semibold" style={{ color:'var(--t1)' }}>{fmtDate(s.date)}</p>
+                <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
+                  {s.records.length} presentes
+                  {s.records.filter(r => r.retardo).length > 0 &&
+                    ` · ${s.records.filter(r => r.retardo).length} retardos`}
+                </p>
+              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="badge text-[10px] px-2 py-1"
+                  style={s.finished
+                    ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
+                    : { background:'var(--warn-soft)', color:'var(--warn)', border:'1px solid var(--warn-line)' }}>
+                  {s.finished ? 'Finalizada' : 'Borrador'}
+                </span>
+                <button onClick={() => exportSessionExcel(s)} title="Descargar esta lista en Excel" aria-label="Descargar en Excel"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
+                  style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}
+                  onMouseEnter={e => e.currentTarget.style.color='var(--good)'}
+                  onMouseLeave={e => e.currentTarget.style.color='var(--t2)'}>
+                  <Download size={14}/>
+                </button>
+              </div>
+            </div>
+          )
+        })}
+        {sessionIndex.every(s => s.groupId !== historyGroupId) && (
+          <p className="text-sm py-6 text-center" style={{ color:'var(--t3)' }}>Este grupo aún no tiene listas guardadas.</p>
+        )}
+      </div>
+    </ModalPortal>
+  )
+
   /* ══════════════════════════════════════════════════════════════
      VIEW: GROUP PICKER
   ══════════════════════════════════════════════════════════════ */
@@ -424,8 +578,25 @@ export default function Attendance() {
           }}
           resumen={`${gruposVisibles.length} grupo(s)`}/>
 
-        <div className="grid gap-3 sm:gap-4">
-          {gruposVisibles.map(g => {
+        {loadError && (
+          <div role="alert" className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+            style={{ background:'var(--bad-soft)', borderColor:'var(--bad-line)' }}>
+            <span className="text-sm" style={{ color:'var(--bad)' }}>{loadError}</span>
+            <button onClick={cargarTodo} className="btn-secondary min-h-11 justify-center"><RefreshCw size={14}/> Reintentar</button>
+          </div>
+        )}
+
+        {loading && (
+          <div className="grid gap-4" role="status" aria-label="Cargando grupos">
+            {[0,1,2].map(i => <SkeletonBlock key={i} className="h-28"/>)}
+          </div>
+        )}
+
+        {!loading && !loadError && (
+        <ProgressiveList items={gruposVisibles} className="grid gap-4"
+          sizes={{ mobile: 4, tablet: 8, desktop: 12 }}
+          emptyLabel={groups.length ? 'Ningún grupo coincide con la sucursal o la búsqueda.' : 'No hay grupos todavía.'}>
+          {g => {
             const count = students.filter(s => s.groupId === g.id).length
             const hasHistory = sessionIndex.some(s => s.groupId === g.id)
             return (
@@ -434,11 +605,8 @@ export default function Attendance() {
                 footer={hasHistory && (
                   <button
                     onClick={() => openHistory(g.id)}
-                    className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
-                    style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
-                    onMouseEnter={e => { e.currentTarget.style.background= 'var(--t4)'; e.currentTarget.style.color='white' }}
-                    onMouseLeave={e => { e.currentTarget.style.background= 'var(--t2)'; e.currentTarget.style.color= 'var(--t2)' }}>
-                    <FolderClock size={13}/> Ver historial de listas
+                    className="btn-secondary text-xs py-2">
+                    <FolderClock size={14}/> Ver historial de listas
                   </button>
                 )}>
                 <div>
@@ -451,74 +619,11 @@ export default function Attendance() {
                 </div>
               </GroupShaderCard>
             )
-          })}
-        </div>
-
-        {/* ── Modal: historial de listas ── */}
-        {showHistoryModal && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-            style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
-            onClick={() => setShowHistoryModal(false)}>
-            <div className="w-full max-w-md rounded-2xl p-6 space-y-4 animate-scale-in max-h-[80vh] overflow-y-auto"
-              style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
-              onClick={e => e.stopPropagation()}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>
-                  <History size={18} style={{ color: 'var(--t2)' }}/>
-                </div>
-                <div>
-                  <h2 className="text-base font-bold" style={{ color: 'var(--t1)' }}>
-                    Historial — {groups.find(g => g.id === historyGroupId)?.name}
-                  </h2>
-                  <p className="text-xs" style={{ color: 'var(--t3)' }}>
-                    Retoma cualquier lista para editarla o agregar alumnos.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => (
-                  <div key={s.date}
-                    className="w-full flex items-center justify-between gap-2 p-3 rounded-xl transition-all"
-                    style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)' }}>
-                    {/* Fila y descarga son botones hermanos: anidarlos sería HTML inválido */}
-                    <button onClick={() => applySession(toUiSession(s))}
-                      className="flex-1 min-w-0 text-left active:scale-[.98] transition-transform">
-                      <p className="text-sm font-semibold" style={{ color:'var(--t1)' }}>{fmtDate(s.date)}</p>
-                      <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
-                        {s.records.length} presentes
-                        {s.records.filter(r => r.retardo).length > 0 &&
-                          ` · ${s.records.filter(r => r.retardo).length} retardos`}
-                      </p>
-                    </button>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"
-                        style={s.finished
-                          ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
-                          : { background:'var(--warn-soft)', color:'var(--warn)', border:'1px solid var(--warn-line)' }}>
-                        {s.finished ? 'Finalizada' : 'Borrador'}
-                      </span>
-                      <button onClick={() => exportSessionExcel(s)} title="Descargar esta lista en Excel"
-                        className="p-2 rounded-lg transition-colors"
-                        style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}
-                        onMouseEnter={e => e.currentTarget.style.color='var(--good)'}
-                        onMouseLeave={e => e.currentTarget.style.color='var(--t2)'}>
-                        <Download size={14}/>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button onClick={() => setShowHistoryModal(false)}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold"
-                style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
-                Cerrar
-              </button>
-            </div>
-          </div>
+          }}
+        </ProgressiveList>
         )}
+
+        {HistoryModal}
       </div>
     )
   }
@@ -533,15 +638,14 @@ export default function Attendance() {
 
   /* ── Resume session modal ────────────────────────────────── */
   const ResumeModal = resumeSession && (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
-      <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        role="dialog" aria-modal="true"
-        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)', position:'relative' }}>
-        <button onClick={() => startTolerance(null)} aria-label="Cerrar y continuar sin cronómetro"
-          className="absolute right-3 top-3 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-          style={{color:'var(--t2)',background:'var(--soft-bg)',border:'1px solid var(--card-border)'}}>
-          <X size={16}/>
+    <ModalPortal maxWidth="max-w-sm" onClose={actionBusy ? undefined : () => goBack(true)}>
+      <div className="relative p-6 space-y-4" role="document">
+        {/* Cerrar el aviso = volver a elegir grupo sin tocar la lista guardada.
+            Seguir aquí sin retomarla haría que el autoguardado la pisara. */}
+        <button onClick={() => goBack(true)} disabled={actionBusy} aria-label="Cerrar aviso y volver a los grupos"
+          className="absolute right-2 top-2 w-11 h-11 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40"
+          style={{ color:'var(--t3)' }}>
+          <X size={15}/>
         </button>
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
           style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
@@ -557,35 +661,27 @@ export default function Attendance() {
             {' '}escaneados{resumeSession.finished ? ' (finalizada)' : ''}. ¿Deseas continuar donde te quedaste?
           </p>
         </div>
+        {actionError && (
+          <p role="alert" className="text-xs rounded-lg px-3 py-2" style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>{actionError}</p>
+        )}
         <div className="space-y-2">
-          <button onClick={() => applySession(resumeSession)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
-            style={{ background:'white', color:'black' }}>
-            <RotateCw size={13}/> Continuar lista
+          <button onClick={() => applySession(resumeSession)} disabled={actionBusy}
+            className="btn-primary w-full justify-center">
+            <RotateCw size={14}/> Continuar lista
           </button>
-          <button onClick={() => {
-            deleteSessionDb(selectedGrp, selectedDate).then(refreshIndex).catch(() => {})
-            setScannedLog([])
-            setRetardos({})
-            setFinished(false)
-            setResumeSession(null)
-            setTolInput(String(loadSettings().toleranciaMin))
-            setShowTolModal(true)
-          }} className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
-            Empezar de nuevo
+          <button onClick={empezarDeNuevo} disabled={actionBusy}
+            className="btn-secondary w-full justify-center disabled:opacity-40">
+            {actionBusy ? 'Descartando…' : 'Empezar de nuevo'}
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 
   /* ── Leave session modal ──────────────────────────────────── */
   const LeaveModal = showLeaveModal && (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
-      <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+    <ModalPortal maxWidth="max-w-sm" onClose={actionBusy ? undefined : () => setShowLeaveModal(false)}>
+      <div className="p-6 space-y-4">
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
           style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
           <AlertTriangle size={20} style={{ color:'var(--warn)' }}/>
@@ -599,43 +695,33 @@ export default function Attendance() {
             Si sales ahora, la lista se guardará en el historial y podrás continuar al regresar.
           </p>
         </div>
+        {actionError && (
+          <p role="alert" className="text-xs rounded-lg px-3 py-2" style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>{actionError}</p>
+        )}
         <div className="space-y-2">
-          <button onClick={() => {
-            saveSessionDb(
-              selectedGrp, selectedDate,
-              { tolMin, startedAt, pausedAt, pausedAccumMs, finished },
-              buildRecords(),
-            ).then(refreshIndex).catch(() => {})
-            goBack(true)
-          }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-110 hover:-translate-y-0.5"
-            style={{ background:'var(--good)', color:'#fff', boxShadow:'0 8px 22px var(--good-soft)' }}>
-            Guardar borrador y salir
+          <button onClick={guardarBorradorYSalir} disabled={actionBusy}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
+            style={{ background:'var(--good-solid)', color:'#fff' }}>
+            {actionBusy ? 'Guardando…' : 'Guardar borrador y salir'}
           </button>
-          <button onClick={() => { deleteSessionDb(selectedGrp, selectedDate).then(refreshIndex).catch(() => {}); goBack(true) }}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>
+          <button onClick={borrarListaYSalir} disabled={actionBusy}
+            className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
+            style={DANGER_BTN_STYLE}>
             Salir sin guardar
           </button>
-          <button onClick={() => setShowLeaveModal(false)}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold"
-            style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
+          <button onClick={() => { setActionError(''); setShowLeaveModal(false) }} disabled={actionBusy}
+            className="btn-secondary w-full justify-center disabled:opacity-40">
             Seguir pasando lista
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 
   /* ── Confirm finish modal ─────────────────────────────────── */
   const ConfirmModal = showConfirm && (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)', WebkitBackdropFilter:'blur(6px)' }}
-      onClick={() => setShowConfirm(false)}>
-      <div
-        className="w-full max-w-sm rounded-2xl p-6 animate-scale-in"
-        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
-        onClick={e => e.stopPropagation()}>
+    <ModalPortal maxWidth="max-w-sm" onClose={actionBusy ? undefined : () => setShowConfirm(false)}>
+      <div className="p-6">
 
         {/* Icon */}
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
@@ -659,50 +745,44 @@ export default function Attendance() {
             <p className="text-lg font-bold" style={{ color:'var(--good)' }}>{presentCount}</p>
             <p className="text-[11px]" style={{ color: 'var(--t3)' }}>Presentes</p>
           </div>
-          <div className="w-px h-8" style={{ background: 'var(--soft-bg)' }}/>
+          <div className="w-px h-8" style={{ background: 'var(--divider)' }}/>
           <div className="text-center">
             <p className="text-lg font-bold" style={{ color: 'var(--t3)' }}>{absentCount}</p>
             <p className="text-[11px]" style={{ color: 'var(--t3)' }}>Ausentes</p>
           </div>
-          <div className="w-px h-8" style={{ background: 'var(--soft-bg)' }}/>
+          <div className="w-px h-8" style={{ background: 'var(--divider)' }}/>
           <div className="text-center">
-            <p className="text-lg font-bold" style={{ color: accentColor }}>{totalCount}</p>
+            <p className="text-lg font-bold" style={{ color: 'var(--t1)' }}>{totalCount}</p>
             <p className="text-[11px]" style={{ color: 'var(--t3)' }}>Total</p>
           </div>
         </div>
 
+        {actionError && (
+          <p role="alert" className="text-xs rounded-lg px-3 py-2 mb-4" style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>{actionError}</p>
+        )}
+
         {/* Actions */}
         <div className="flex gap-3">
-          <button
-            onClick={() => setShowConfirm(false)}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
-            onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
-            onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
+          <button onClick={() => setShowConfirm(false)} disabled={actionBusy}
+            className="btn-secondary flex-1 justify-center disabled:opacity-40">
             Cancelar
           </button>
-          <button
-            onClick={handleConfirmFinish}
-            className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2"
-            style={{ background:'white', color:'black' }}
-            onMouseEnter={e => e.currentTarget.style.background= 'var(--t1)'}
-            onMouseLeave={e => e.currentTarget.style.background='white'}>
-            <CheckSquare size={14}/> Confirmar
+          <button onClick={handleConfirmFinish} disabled={actionBusy}
+            className="btn-primary flex-1 justify-center">
+            <CheckSquare size={14}/> {actionBusy ? 'Guardando…' : actionError ? 'Reintentar' : 'Confirmar'}
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 
   /* ── Tolerance modal (pop-up antes de comenzar) ─────────── */
   const ToleranceModal = showTolModal && !resumeSession && (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
-      <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
+    <ModalPortal maxWidth="max-w-sm">
+      <div className="p-6 space-y-4">
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
-          style={{ background:`${accentColor}1f`, border:`1px solid ${accentColor}44` }}>
-          <Timer size={20} style={{ color: accentColor }}/>
+          style={{ background: accentColor, color: tintaSobre(accentColor) }}>
+          <Timer size={20}/>
         </div>
         <div className="text-center">
           <h2 className="text-base font-bold mb-1" style={{ color: 'var(--t1)' }}>
@@ -718,9 +798,10 @@ export default function Attendance() {
         <div className="grid grid-cols-4 gap-2">
           {TOL_PRESETS.map(m => (
             <button key={m} onClick={() => setTolInput(String(m))}
-              className="py-2 rounded-xl text-sm font-bold transition-all"
+              aria-pressed={String(m) === tolInput}
+              className="min-h-11 rounded-xl text-sm font-bold transition-all"
               style={String(m) === tolInput
-                ? { background:'white', color:'black' }
+                ? { background:'var(--accent)', color:'var(--accent-contrast)', border:'1px solid var(--accent)' }
                 : { background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}>
               {m} min
             </button>
@@ -741,16 +822,16 @@ export default function Attendance() {
               onClick={() => setTolInput(String(Math.min(120, (parseInt(tolInput, 10) || 0) + 1)))}
               className="w-6 h-4 flex items-center justify-center transition-colors"
               style={{ background: 'var(--soft-bg)', color: 'var(--t2)', borderBottom: '1px solid var(--card-border)' }}
-              onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
-              onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
+              onMouseEnter={e => e.currentTarget.style.background= 'var(--divider)'}
+              onMouseLeave={e => e.currentTarget.style.background= 'var(--soft-bg)'}>
               <ChevronUp size={11}/>
             </button>
             <button type="button" aria-label="Restar un minuto"
               onClick={() => setTolInput(String(Math.max(1, (parseInt(tolInput, 10) || 0) - 1)))}
               className="w-6 h-4 flex items-center justify-center transition-colors"
               style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}
-              onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
-              onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
+              onMouseEnter={e => e.currentTarget.style.background= 'var(--divider)'}
+              onMouseLeave={e => e.currentTarget.style.background= 'var(--soft-bg)'}>
               <ChevronDown size={11}/>
             </button>
           </div>
@@ -760,20 +841,16 @@ export default function Attendance() {
           <button onClick={() => {
             const m = parseInt(tolInput, 10)
             if (!isNaN(m) && m > 0) startTolerance(Math.min(m, 120))
-          }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
-            style={{ background:'white', color:'black' }}>
-            <Play size={13}/> Comenzar pase de lista
+          }} className="btn-primary w-full justify-center">
+            <Play size={14}/> Comenzar pase de lista
           </button>
           <button onClick={() => startTolerance(null)}
-            className="w-full py-2.5 rounded-xl text-xs font-semibold transition-all hover:-translate-y-0.5"
-            style={{ color:'var(--t1)', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
-            onMouseEnter={e => e.currentTarget.style.borderColor='var(--accent)'}
-            onMouseLeave={e => e.currentTarget.style.borderColor='var(--card-border)'}>
+            className="btn-secondary w-full justify-center">
             Continuar sin cronómetro
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 
   return (
@@ -789,76 +866,73 @@ export default function Attendance() {
           <ArrowLeft size={15}/> Pasar Lista
         </button>
         <ChevronRight size={12} style={{ color: 'var(--t4)' }}/>
-        <span className="text-sm font-semibold" style={{ color: accentColor }}>
+        <span className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>
           {grp?.sucursal ? `${nombreDe(grp.sucursal)} - ${grp.name}` : grp?.name}
         </span>
         <span className="text-xs hidden sm:inline" style={{ color: 'var(--t4)' }}>· {grp?.subject}</span>
         {finished && (
-          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+          <span className="badge text-[10px] px-2 py-0.5"
             style={{ background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }}>
             Reabierta desde historial
           </span>
         )}
-        <button onClick={() => openHistory(selectedGrp)}
-          className="ml-auto flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
-          style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
-          onMouseEnter={e => { e.currentTarget.style.background= 'var(--t4)'; e.currentTarget.style.color='white' }}
-          onMouseLeave={e => { e.currentTarget.style.background= 'var(--t2)'; e.currentTarget.style.color= 'var(--t2)' }}>
-          <History size={13}/> Ver historial
-        </button>
+        <span className="ml-auto flex items-center gap-2">
+          {saveState === 'error' ? (
+            <button onClick={() => setSaveRetry(n => n + 1)} role="alert"
+              className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-2 rounded-xl"
+              style={DANGER_BTN_STYLE}
+              title="El último cambio no llegó a la base de datos">
+              <CloudOff size={14}/> Sin guardar · Reintentar
+            </button>
+          ) : saveState !== 'idle' && (
+            <span className="text-[11px] font-semibold" role="status"
+              style={{ color: saveState === 'saved' ? 'var(--good)' : 'var(--t3)' }}>
+              {saveState === 'saving' ? 'Guardando…' : 'Guardado'}
+            </span>
+          )}
+          <button onClick={() => openHistory(selectedGrp)} className="btn-secondary text-xs py-2">
+            <History size={14}/> Ver historial
+          </button>
+        </span>
       </div>
 
-      {/* ── Progress KPI bar ───────────────────────────────── */}
-      <div className="card px-5 py-4">
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-          <div className="flex items-center flex-wrap gap-3 sm:gap-5">
-            {[
-              { label:'Presentes',      value: presentCount, color:'var(--good)' },
-              { label:'Retardos',       value: retardoCount, color:'var(--warn)' },
-              { label:'Sin escanear',   value: absentCount,  color: 'var(--t3)' },
-              { label:'Total',          value: totalCount,   color: accentColor },
-            ].map((k, i) => (
-              <div key={k.label} className="flex items-center gap-3 sm:gap-5">
-                {i > 0 && <div className="hidden sm:block w-px h-7" style={{ background: 'var(--soft-bg)' }}/>}
-                <div className="text-center">
-                  <p className="text-2xl font-bold leading-none tabular-nums" style={{ color: k.color }}>{k.value}</p>
-                  <p className="text-[11px] mt-0.5" style={{ color:'var(--t3)' }}>{k.label}</p>
-                </div>
+      {/* ── Indicadores de la lista ─────────────────────────── */}
+      <KpiGrid cols={4}>
+        <KpiCard variant="surface" icon={IconAsistencia} tone="good" label="Presentes" value={presentCount}/>
+        <KpiCard variant="surface" icon={IconRetardos} tone="warn" label="Retardos" value={retardoCount}/>
+        <KpiCard variant="surface" icon={IconFaltas} tone="neutral" label="Sin escanear" value={absentCount}/>
+        <KpiCard variant="surface" icon={IconAlumnos} tone="info" label="Total" value={totalCount}
+          sub={`${pct}% completado`}/>
+      </KpiGrid>
+
+      <div className="card px-5 py-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <p className="text-sm font-semibold" style={{ color:'var(--t2)' }}>
+            Avance de la lista · <span className="tabular-nums" style={{ color:'var(--t1)' }}>{pct}%</span>
+          </p>
+          {tolMin !== null && remainingSec !== null && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-sm font-bold tabular-nums"
+                style={tolExpired
+                  ? { background:'var(--bad-soft)',  border:'1px solid var(--bad-line)',  color:'var(--bad)' }
+                  : timerPaused
+                    ? { background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--warn)' }
+                    : { background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}>
+                <Timer size={14}/>
+                {tolExpired ? 'Tolerancia vencida' : fmtMMSS(remainingSec)}
               </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            {tolMin !== null && remainingSec !== null && (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-sm font-bold tabular-nums"
-                  style={tolExpired
-                    ? { background:'var(--bad-soft)',  border:'1px solid var(--bad-line)',  color:'var(--bad)' }
-                    : timerPaused
-                      ? { background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--warn)' }
-                      : { background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}>
-                  <Timer size={13}/>
-                  {tolExpired ? 'Tolerancia vencida' : fmtMMSS(remainingSec)}
-                </div>
-                {!tolExpired && (
-                  <button onClick={togglePause}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
-                    style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
-                    onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
-                    onMouseLeave={e => e.currentTarget.style.background= 'var(--t2)'}>
-                    {timerPaused ? <><Play size={12}/> Reanudar</> : <><Pause size={12}/> Pausar</>}
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="text-right hidden sm:block">
-              <p className="text-2xl font-bold tabular-nums" style={{ color: accentColor }}>{pct}%</p>
-              <p className="text-[11px]" style={{ color:'var(--t3)' }}>completado</p>
+              {!tolExpired && (
+                <button onClick={togglePause} className="btn-secondary text-xs py-2">
+                  {timerPaused ? <><Play size={14}/> Reanudar</> : <><Pause size={14}/> Pausar</>}
+                </button>
+              )}
             </div>
-          </div>
+          )}
         </div>
+        {/* Barra de una sola tinta: representa una cantidad (regla 2-bis). */}
         <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--soft-bg)' }}>
           <div className="h-full rounded-full transition-all duration-700 ease-out"
-            style={{ width:`${pct}%`, background:`linear-gradient(90deg, var(--good), ${accentColor})` }}/>
+            style={{ width:`${pct}%`, background: accentColor }}/>
         </div>
       </div>
 
@@ -883,7 +957,7 @@ export default function Attendance() {
             {/* Idle overlay */}
             {!scanning && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center"
-                style={{ background:'#0a0a14', minHeight: 280 }}>
+                style={{ background:'var(--panel-bg)', minHeight: 280 }}>
                 {camError ? (
                   <div className="text-center px-8 space-y-3">
                     <AlertTriangle size={32} className="mx-auto" style={{ color:'var(--bad)' }}/>
@@ -893,7 +967,7 @@ export default function Attendance() {
                       </p>
                       <p className="text-xs mt-1" style={{ color: 'var(--t3)' }}>{camError}</p>
                     </div>
-                    <button onClick={startScanner} className="btn-primary text-xs py-2 px-4">
+                    <button onClick={startScanner} className="btn-primary text-xs py-2 px-4 mx-auto">
                       Reintentar
                     </button>
                   </div>
@@ -902,7 +976,7 @@ export default function Attendance() {
                     {/* Animated scan frame */}
                     <div className="relative w-28 h-28 mx-auto mb-4">
                       <div className="absolute inset-0 rounded-2xl"
-                        style={{ border:'1.5px dashed rgba(255,255,255,.10)' }}/>
+                        style={{ border:'1.5px dashed var(--card-border)' }}/>
                       <span className="absolute top-0 left-0 w-7 h-7 rounded-tl-2xl"
                         style={{ borderTop:`2px solid ${accentColor}`, borderLeft:`2px solid ${accentColor}` }}/>
                       <span className="absolute top-0 right-0 w-7 h-7 rounded-tr-2xl"
@@ -929,8 +1003,8 @@ export default function Attendance() {
             {scanning && (
               <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
-                  style={{ background:'rgba(0,0,0,.68)', backdropFilter:'blur(8px)', color: 'var(--t1)' }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+                  style={{ background:'var(--panel-bg)', border:'1px solid var(--card-border)', color: 'var(--t1)' }}>
+                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background:'var(--good)' }}/>
                   Escaneando…
                 </div>
               </div>
@@ -940,15 +1014,13 @@ export default function Attendance() {
           {/* Toggle button */}
           {!scanning ? (
             <button onClick={startScanner} className="btn-primary w-full justify-center">
-              <Camera size={15}/> Activar cámara
+              <Camera size={14}/> Activar cámara
             </button>
           ) : (
             <button onClick={stopScanner}
-              className="w-full flex items-center justify-center gap-2 rounded-xl font-semibold text-sm py-2.5 transition-all"
-              style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}
-              onMouseEnter={e => e.currentTarget.style.background='var(--bad-soft)'}
-              onMouseLeave={e => e.currentTarget.style.background='var(--bad-soft)'}>
-              <CameraOff size={15}/> Pausar escaneo
+              className="w-full flex items-center justify-center gap-2 rounded-xl font-bold text-sm py-2.5 transition-all"
+              style={DANGER_BTN_STYLE}>
+              <CameraOff size={14}/> Pausar escaneo
             </button>
           )}
 
@@ -1010,64 +1082,44 @@ export default function Attendance() {
                 </p>
               </div>
             ) : (
-              <div className="responsive-table-wrap">
-              {/* Sin ancho minimo en telefono: forzaba barrido horizontal desde el
-                  primer pixel contra los ~379 px utiles. De `sm` en adelante se
-                  recupera, que es donde el minimo si aporta. */}
-              <table className="responsive-table w-full min-w-0 sm:min-w-[420px]">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--divider)' }}>
-                    <th className="hidden sm:table-cell px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest w-10"
-                      style={{ color: 'var(--t4)' }}>#</th>
-                    <th className="px-2 sm:px-4 py-2 text-left text-[9px] sm:text-[10px] font-bold uppercase tracking-normal sm:tracking-widest"
-                      style={{ color: 'var(--t4)' }}><span className="sm:hidden">Alumno</span><span className="hidden sm:inline">Nombre del Alumno</span></th>
-                    <th className="px-1 sm:pr-4 py-2 text-right text-[9px] sm:text-[10px] font-bold uppercase tracking-normal sm:tracking-widest"
-                      style={{ color: 'var(--t4)' }}><span className="sm:hidden">Hora</span><span className="hidden sm:inline">Hora de llegada</span></th>
-                    <th className="px-1 sm:pr-4 py-2 text-center text-[9px] sm:text-[10px] font-bold uppercase tracking-normal sm:tracking-widest w-16 sm:w-20"
-                      style={{ color: 'var(--t4)' }}>Retardo</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <div className="p-2 sm:p-3">
+                <DataTable columns={COLUMNS_LISTA}>
                   {scannedLog.map((entry, i) => (
-                    <tr key={entry.student.id}
-                      className="transition-colors animate-fade-in"
-                      style={{ borderBottom: '1px solid var(--divider)' }}
-                      onMouseEnter={e => e.currentTarget.style.background= 'var(--t2)'}
-                      onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                      <td className="hidden sm:table-cell px-4 py-3">
-                        <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--t4)' }}>
+                    <DataTableRow key={entry.student.id} cells={[
+                      { className:'w-8 hidden sm:flex', content: (
+                        <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--t3)' }}>
                           {String(i + 1).padStart(2, '0')}
                         </span>
-                      </td>
-                      <td className="px-2 sm:px-4 py-2 sm:py-3 max-w-0">
+                      )},
+                      { className:'flex-grow min-w-0', content: (
                         <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
                           <AvatarAlumno student={entry.student} size={24}
-                            style={{ background:'var(--good-soft)', color:'var(--good)' }}/>
+                            style={{ background:'var(--good-solid)', color:'#fff' }}/>
                           <span className="text-xs sm:text-sm font-medium truncate min-w-0" style={{ color: 'var(--t1)' }}>
                             {entry.student.name}
                           </span>
                         </div>
-                      </td>
-                      <td className="px-1 sm:pr-4 py-2 sm:py-3 text-right">
+                      )},
+                      { className:'w-16 sm:w-20 flex justify-end', content: (
                         <span className="font-mono text-[10px] sm:text-xs font-semibold tabular-nums whitespace-nowrap"
                           style={{ color: retardos[entry.student.id] ? 'var(--warn)' : 'var(--t2)' }}>
                           {entry.time}
                         </span>
-                      </td>
-                      <td className="px-1 sm:pr-4 py-2 sm:py-3 text-center">
+                      )},
+                      { className:'w-16 sm:w-20 flex justify-center', content: (
                         <button onClick={() => toggleRetardo(entry.student.id)}
                           role="switch" aria-checked={!!retardos[entry.student.id]}
+                          aria-label={`Retardo de ${entry.student.name}`}
                           title={retardos[entry.student.id] ? 'Con retardo — clic para quitar' : 'Marcar retardo'}
-                          className="relative inline-flex w-8 sm:w-9 h-[18px] sm:h-5 rounded-full transition-colors duration-200 align-middle"
-                          style={{ background: retardos[entry.student.id] ? 'var(--warn)' : 'var(--t4)' }}>
-                          <span className="absolute top-0.5 left-0.5 w-3.5 sm:w-4 h-3.5 sm:h-4 rounded-full bg-white transition-transform duration-200"
-                            style={{ transform: retardos[entry.student.id] ? 'translateX(14px)' : 'translateX(0)' }}/>
+                          className="relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 align-middle"
+                          style={{ background: retardos[entry.student.id] ? 'var(--warn-solid)' : 'var(--t4)' }}>
+                          <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                            style={{ transform: retardos[entry.student.id] ? 'translateX(16px)' : 'translateX(0)' }}/>
                         </button>
-                      </td>
-                    </tr>
+                      )},
+                    ]}/>
                   ))}
-                </tbody>
-              </table>
+                </DataTable>
               </div>
             )}
           </div>
@@ -1087,15 +1139,11 @@ export default function Attendance() {
                   style={{ background:'var(--good-soft)', border:'1px solid var(--good-line)', color:'var(--good)' }}
                   onMouseEnter={e => e.currentTarget.style.background='var(--good-line)'}
                   onMouseLeave={e => e.currentTarget.style.background='var(--good-soft)'}>
-                  <FileSpreadsheet size={13}/>
+                  <FileSpreadsheet size={14}/>
                   <span className="hidden sm:inline">Excel</span>
                 </button>
               )}
-              <button onClick={handleFinish}
-                className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all active:scale-95"
-                style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)', color: 'var(--t2)' }}
-                onMouseEnter={e => { e.currentTarget.style.background= 'var(--t2)'; e.currentTarget.style.color='white' }}
-                onMouseLeave={e => { e.currentTarget.style.background= 'var(--t2)'; e.currentTarget.style.color= 'var(--t2)' }}>
+              <button onClick={handleFinish} className="btn-primary text-sm py-2">
                 <CheckSquare size={14}/> Terminar pase de lista
               </button>
             </div>
@@ -1109,73 +1157,7 @@ export default function Attendance() {
       {LeaveModal}
       {ToleranceModal}
 
-      {/* ── Modal: historial de listas (accesible también desde la vista de escaneo) ── */}
-      {showHistoryModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-          style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
-          onClick={() => setShowHistoryModal(false)}>
-          <div className="w-full max-w-md rounded-2xl p-6 space-y-4 animate-scale-in max-h-[80vh] overflow-y-auto"
-            style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>
-                <History size={18} style={{ color: 'var(--t2)' }}/>
-              </div>
-              <div>
-                <h2 className="text-base font-bold" style={{ color: 'var(--t1)' }}>
-                  Historial — {groups.find(g => g.id === historyGroupId)?.name}
-                </h2>
-                <p className="text-xs" style={{ color: 'var(--t3)' }}>
-                  Retoma cualquier lista para editarla o agregar alumnos.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => (
-                <div key={s.date}
-                  className="w-full flex items-center justify-between gap-2 p-3 rounded-xl transition-all"
-                  style={{
-                    background: s.date === selectedDate ? `${accentColor}1a` : 'var(--card-bg)',
-                    border: s.date === selectedDate ? `1px solid ${accentColor}55` : '1px solid var(--card-border)',
-                  }}>
-                  <button onClick={() => applySession(toUiSession(s))}
-                    className="flex-1 min-w-0 text-left active:scale-[.98] transition-transform">
-                    <p className="text-sm font-semibold" style={{ color:'var(--t1)' }}>{fmtDate(s.date)}</p>
-                    <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
-                      {s.records.length} presentes
-                      {s.records.filter(r => r.retardo).length > 0 &&
-                        ` · ${s.records.filter(r => r.retardo).length} retardos`}
-                    </p>
-                  </button>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"
-                      style={s.finished
-                        ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
-                        : { background:'var(--warn-soft)', color:'var(--warn)', border:'1px solid var(--warn-line)' }}>
-                      {s.finished ? 'Finalizada' : 'Borrador'}
-                    </span>
-                    <button onClick={() => exportSessionExcel(s)} title="Descargar esta lista en Excel"
-                      className="p-2 rounded-lg transition-colors"
-                      style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}
-                      onMouseEnter={e => e.currentTarget.style.color='var(--good)'}
-                      onMouseLeave={e => e.currentTarget.style.color='var(--t2)'}>
-                      <Download size={14}/>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button onClick={() => setShowHistoryModal(false)}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold"
-              style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
-              Cerrar
-            </button>
-          </div>
-        </div>
-      )}
+      {HistoryModal}
     </div>
   )
 }

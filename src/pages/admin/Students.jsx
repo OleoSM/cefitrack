@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Pencil, Trash2, KeyRound } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, KeyRound, AlertCircle, RefreshCw } from 'lucide-react'
 import { statusConfig, getStatusConfig } from '../../data/mockData'
 import { fetchStudents, fetchGroups, deleteStudent, fetchAttendanceStats } from '../../lib/supabaseData'
 import {
   DataTable, DataTableRow,
-  DataTableAvatar, DataTableBadge, DataTableBar,
+  DataTableAvatar, DataTableBadge, DataTableBar, SkeletonRows,
 } from '../../components/ui/DataTable'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import { useAuth } from '../../context/AuthContext'
@@ -29,7 +29,7 @@ const COLUMNS = [
   { key:'tasks',   label:'Tareas',     className:'w-32 hidden xl:flex' },
   { key:'status',  label:'Estado',     className:'w-28 hidden md:flex' },
   { key:'contact', label:'Contacto',   className:'w-40 hidden xl:flex' },
-  { key:'action',  label:'',           className:'w-[4.5rem] md:w-28 flex justify-end' },
+  { key:'action',  label:'',           className:'w-[6.5rem] md:w-32 flex justify-end' },
 ]
 
 export default function Students() {
@@ -56,14 +56,22 @@ export default function Students() {
   const [deleteFor, setDeleteFor] = useState(null)
   const [lastCred, setLastCred]   = useState(null)
 
+  const [loadError, setLoadError] = useState(null)
+
   const load = useCallback(async () => {
-    const [s, g] = await Promise.all([fetchStudents(), fetchGroups()])
-    // `students.attendance_rate` es el valor sembrado y quedó obsoleto: la tasa
-    // real se calcula de las sesiones capturadas, igual que en Grupos y Rankings.
-    const stats = await fetchAttendanceStats(s)
-    setStudents(s.map(st => ({ ...st, attendanceRate: stats.byStudent[st.id] ?? null })))
-    setGroups(g)
-    setLoading(false)
+    try {
+      const [s, g] = await Promise.all([fetchStudents(), fetchGroups()])
+      // `students.attendance_rate` es el valor sembrado y quedó obsoleto: la tasa
+      // real se calcula de las sesiones capturadas, igual que en Grupos y Rankings.
+      const stats = await fetchAttendanceStats(s)
+      setStudents(s.map(st => ({ ...st, attendanceRate: stats.byStudent[st.id] ?? null })))
+      setGroups(g)
+      setLoadError(null)
+    } catch (err) {
+      setLoadError(err?.message || 'No se pudieron cargar los alumnos.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -96,12 +104,17 @@ export default function Students() {
       const desc = (x, y) => (y ?? -Infinity) - (x ?? -Infinity)
       if (sort === 'grade')  return desc(a.avgGrade, b.avgGrade)
       if (sort === 'attend') return desc(a.attendanceRate, b.attendanceRate)
-      if (sort === 'rank')   return (a.rank ?? Infinity) - (b.rank ?? Infinity)
       return a.name.localeCompare(b.name)
     })
 
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-5">
+      <div>
+        <h1 className="page-title">Alumnos</h1>
+        <p className="text-sm mt-1" style={{ color:'var(--t3)' }}>
+          Busca a un alumno, revisa su avance y administra su cuenta.
+        </p>
+      </div>
 
       {formFor && (
         <StudentFormModal
@@ -123,7 +136,7 @@ export default function Students() {
           title="Eliminar alumno"
           message={`Se eliminará a ${deleteFor.name} junto con su cuenta de acceso.`}
           detail="También se borran sus calificaciones y registros de asistencia. Esta acción no se puede deshacer."
-          onConfirm={async () => { await deleteStudent(deleteFor.id); await load() }}
+          onConfirm={async () => { const res = await deleteStudent(deleteFor.id); if (res?.ok === false) return res; await load() }}
           onClose={() => setDeleteFor(null)}
         />
       )}
@@ -143,7 +156,7 @@ export default function Students() {
               ...Object.entries(statusConfig).map(([k,v]) => ({ value:k, label:v.label }))] },
           { id:'orden', label:'Ordenar', value:sort, onChange:setSort, porDefecto:'name',
             options:[{ value:'name', label:'Nombre A-Z' }, { value:'grade', label:'Mayor promedio' },
-              { value:'attend', label:'Mayor asistencia' }, { value:'rank', label:'Ranking' }] },
+              { value:'attend', label:'Mayor asistencia' }] },
         ]}
         busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno…' }}
         resumen={`${filtered.length} de ${students.length}`}
@@ -154,19 +167,26 @@ export default function Students() {
           </button>
         }/>
 
-      <p className="text-[11px] flex items-center gap-1.5 px-1" style={{ color:'var(--t3)' }}>
-        <Users size={11} />
-        {filtered.length} de {students.length} alumnos
-      </p>
+      {loadError && (
+        <div role="alert" className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+          style={{ background:'var(--bad-soft)', borderColor:'var(--bad-line)' }}>
+          <span className="text-sm flex items-center gap-2" style={{ color:'var(--bad)' }}>
+            <AlertCircle size={14}/>{loadError}
+          </span>
+          <button onClick={() => { setLoading(true); load() }} className="btn-secondary min-h-11 justify-center">
+            <RefreshCw size={14}/> Reintentar
+          </button>
+        </div>
+      )}
 
       {/* ── Tabla ───────────────────────────────────────────── */}
       <DataTable
         columns={COLUMNS}
-        isEmpty={!loading && filtered.length === 0}
+        isEmpty={!loading && !loadError && filtered.length === 0}
         emptyIcon={<Users size={36} />}
         emptyText="No se encontraron alumnos con ese criterio.">
 
-        {loading ? null : (
+        {loading ? <SkeletonRows/> : (
         <ProgressiveList items={filtered} emptyLabel="No se encontraron alumnos con ese criterio.">
         {s => {
           const cfg         = getStatusConfig(s.status)
@@ -284,9 +304,9 @@ export default function Students() {
                 },
                 /* Acciones */
                 {
-                  className: 'w-[4.5rem] md:w-28 flex justify-end',
+                  className: 'w-[6.5rem] md:w-32 flex justify-end',
                   content: (
-                    <div className="flex items-center gap-0 sm:gap-0.5">
+                    <div className="flex items-center gap-1">
                       {[
                         { icon: Pencil,   title: 'Editar alumno',           hover: 'var(--info)', act: () => setFormFor({ student: s }) },
                         { icon: KeyRound, title: 'Restablecer contraseña',  hover: 'var(--warn)', act: () => setResetFor(s) },
@@ -294,11 +314,12 @@ export default function Students() {
                       ].map(({ icon: Icon, title, hover, act }) => (
                         <button key={title} title={title}
                           onClick={e => { e.stopPropagation(); act() }}
-                          className="p-1 sm:p-1.5 rounded-lg transition-colors"
-                          style={{ color:'var(--t4)' }}
+                          aria-label={title}
+                          className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-colors"
+                          style={{ color:'var(--t2)', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
                           onMouseEnter={e => e.currentTarget.style.color = hover}
-                          onMouseLeave={e => e.currentTarget.style.color = 'var(--t4)'}>
-                          <Icon className="w-3 h-3 sm:w-[13px] sm:h-[13px]"/>
+                          onMouseLeave={e => e.currentTarget.style.color = 'var(--t2)'}>
+                          <Icon size={14}/>
                         </button>
                       ))}
                     </div>

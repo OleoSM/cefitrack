@@ -10,8 +10,6 @@ import LoadingPage  from './components/LoadingPage'
 /* ── Admin pages (lazy) ──────────────────────────────────── */
 const Dashboard      = lazy(() => import('./pages/admin/Dashboard'))
 const Attendance     = lazy(() => import('./pages/admin/Attendance'))
-const QRScanner      = lazy(() => import('./pages/admin/QRScanner'))
-const SessionQR      = lazy(() => import('./pages/admin/SessionQR'))
 const Groups         = lazy(() => import('./pages/admin/Groups'))
 const GroupDetail    = lazy(() => import('./pages/admin/GroupDetail'))
 const Students       = lazy(() => import('./pages/admin/Students'))
@@ -24,7 +22,6 @@ const StudentDashboard = lazy(() => import('./pages/student/Dashboard'))
 const MyGrades         = lazy(() => import('./pages/student/MyGrades'))
 const MyAttendance     = lazy(() => import('./pages/student/MyAttendance'))
 const MyQR             = lazy(() => import('./pages/student/MyQR'))
-const ScanQR           = lazy(() => import('./pages/student/ScanQR'))
 const Terms            = lazy(() => import('./pages/student/Terms'))
 const StudentSettings  = lazy(() => import('./pages/student/Settings'))
 const TermsManager     = lazy(() => import('./pages/admin/TermsManager'))
@@ -78,8 +75,6 @@ export default function App() {
             }>
               <Route index                        element={<Dashboard />} />
               <Route path="asistencias"           element={<Attendance />} />
-              <Route path="asistencias/qr"        element={<QRScanner />} />
-              <Route path="asistencias/qr-sesion" element={<SessionQR />} />
               <Route path="grupos"                element={<Groups />} />
               <Route path="grupos/:groupId"       element={<GroupDetail />} />
               <Route path="alumnos"               element={<Students />} />
@@ -102,7 +97,6 @@ export default function App() {
               <Route path="calificaciones"          element={<MyGrades />} />
               <Route path="asistencias"             element={<MyAttendance />} />
               <Route path="mi-qr"                   element={<MyQR />} />
-              <Route path="escanear-qr"             element={<ScanQR />} />
               <Route path="terminos"               element={<Terms />} />
               <Route path="configuracion"          element={<StudentSettings />} />
             </Route>

@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
-import { createPortal } from 'react-dom'
 import { fetchStudents, fetchGroups, resetTerms } from '../../lib/supabaseData'
 import {
   CheckCircle2, Clock, FileText, Trash2, Upload, Check, X, PenLine,
-  Shield, AlertTriangle, Search, Eye, RefreshCw, ShieldCheck,
+  AlertTriangle, Eye, RefreshCw, ShieldCheck,
 } from 'lucide-react'
-import clsx from 'clsx'
-import KpiCard from '../../components/ui/KpiCard'
+import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
+import { DataTable, DataTableRow, SkeletonRows } from '../../components/ui/DataTable'
+import { IconExpediente } from '../../components/ui/SigaKpiIcons'
+import { DANGER_BTN_STYLE } from '../../components/admin/ConfirmDialog'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import ModalPortal from '../../components/ui/ModalPortal'
 import BarraFiltros from '../../components/ui/BarraFiltros'
@@ -36,7 +37,7 @@ function CeldaDocumento({ etiqueta, doc, onVer, onAprobar, onRechazar, ocupado }
   const trabajando = ocupado === doc?.id
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      <span className="md:hidden text-[10px] font-bold uppercase tracking-wider w-20 flex-shrink-0"
+      <span className="lg:hidden text-[10px] font-bold uppercase tracking-wider w-20 flex-shrink-0"
         style={{ color:'var(--t3)' }}>{etiqueta}</span>
       {!doc
         ? <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={estiloEstado(null)}>Sin entregar</span>
@@ -70,6 +71,15 @@ function CeldaDocumento({ etiqueta, doc, onVer, onAprobar, onRechazar, ocupado }
   )
 }
 
+const COLUMNS_TC = [
+  { key:'alumno',   label:'Alumno',    className:'flex-grow min-w-[150px]' },
+  { key:'firma',    label:'Firma T&C', className:'w-40 hidden sm:flex' },
+  { key:'curp',     label:'CURP',      className:'w-52 hidden lg:flex' },
+  { key:'ine',      label:'INE tutor', className:'w-52 hidden lg:flex' },
+  { key:'garantia', label:'Garantía',  className:'w-52 hidden lg:flex' },
+  { key:'acceso',   label:'Acceso',    className:'w-24 flex' },
+]
+
 export default function TermsManager() {
   const [list, setList]         = useState([])
   const [grupos, setGrupos]     = useState([])
@@ -91,6 +101,8 @@ export default function TermsManager() {
   const [rechazo, setRechazo]   = useState(null)  // { doc, motivo }
   const [ocupado, setOcupado]   = useState(null)  // id de la fila en curso
   const [aviso, setAviso]       = useState('')
+  const [loading, setLoading]   = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   const signed   = list.filter(s => s.termsStatus === 'firmado').length
   const pending  = list.filter(s => s.termsStatus !== 'firmado').length
@@ -125,7 +137,12 @@ export default function TermsManager() {
       const docs = await fetchDocumentosAlumnos(students.map(s=>s.id))
       setGrupos(grs)
       setList(students.map(s=>({ ...s, documents:docs.filter(d=>d.student_id===s.id) })))
-    } catch { /* lista vacía */ }
+      setLoadError(null)
+    } catch (err) {
+      setLoadError(err?.message || 'No se pudo cargar el expediente de los alumnos.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   /* Si al cambiar de sucursal el grupo elegido ya no está, el filtro dejaría
@@ -189,32 +206,39 @@ export default function TermsManager() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="w-full space-y-5">
       <div>
-        <h1 className="page-title">Gestión de T&C</h1>
+        <h1 className="page-title">T&C y Firmas</h1>
         <p className="text-sm mt-1" style={{ color:'var(--t3)' }}>
           Administra términos, firmas y documentos de los alumnos.
         </p>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label:'Firmados', value:signed, icon:CheckCircle2, tone:'good' },
-          { label:'Sin firmar', value:pending, icon:Clock, tone:'warn' },
-          { label:'Por revisar', value:porRevisar, icon:AlertTriangle, tone:'warn' },
-          { label:'Acceso activo', value:activos, icon:ShieldCheck, tone:'good' },
-        ].map(kpi => (
-          <KpiCard key={kpi.label} {...kpi}/>
-        ))}
-      </div>
+      <KpiGrid cols={4}>
+        <KpiCard icon={IconExpediente} label="Firmados" value={signed} tone="good"/>
+        <KpiCard icon={Clock} label="Sin firmar" value={pending} tone="warn"/>
+        <KpiCard icon={AlertTriangle} label="Por revisar" value={porRevisar} tone="warn"
+          onClick={() => setFilter('revisar')}/>
+        <KpiCard icon={ShieldCheck} label="Acceso activo" value={activos} tone="good"/>
+      </KpiGrid>
+
+      {loadError && (
+        <div role="alert" className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+          style={{ background:'var(--bad-soft)', borderColor:'var(--bad-line)' }}>
+          <span className="text-sm" style={{ color:'var(--bad)' }}>{loadError}</span>
+          <button onClick={() => { setLoading(true); load() }} className="btn-secondary min-h-11 justify-center">
+            <RefreshCw size={14}/> Reintentar
+          </button>
+        </div>
+      )}
 
       {aviso && (
         <div role="alert" className="flex items-start gap-2 rounded-xl px-3 py-2.5"
           style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
           <AlertTriangle size={14} style={{ color:'var(--bad)', flexShrink:0, marginTop:1 }}/>
           <span className="text-xs flex-1" style={{ color:'var(--bad)' }}>{aviso}</span>
-          <button onClick={() => setAviso('')} style={{ color:'var(--t3)' }}><X size={13}/></button>
+          <button onClick={() => setAviso('')} aria-label="Cerrar aviso"
+            className="w-8 h-8 -my-1 flex items-center justify-center rounded-lg" style={{ color:'var(--t3)' }}><X size={14}/></button>
         </div>
       )}
 
@@ -243,14 +267,14 @@ export default function TermsManager() {
             <button
               disabled={uploadingTerms}
               className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl font-semibold transition-all active:scale-95"
-              style={{ background:'var(--info-soft)', border:'1px solid var(--info-soft)', color:'var(--info)' }}
+              style={{ background:'var(--info-soft)', border:'1px solid var(--info-line)', color:'var(--info)' }}
               onClick={() => termsInputRef.current?.click()}>
               <Upload size={13}/> {uploadingTerms ? 'Subiendo…' : 'Actualizar documento'}
             </button>
           </div>
         </div>
         {termsError && <p className="text-xs mt-3" style={{ color:'var(--bad)' }}>{termsError}</p>}
-        <div className="mt-3 p-3 rounded-xl text-xs" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-soft)', color:'var(--warn-line)' }}>
+        <div className="mt-3 p-3 rounded-xl text-xs" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--warn)' }}>
           <AlertTriangle size={12} className="inline mr-1.5 -mt-0.5"/>
           Actualizar el documento <strong>no invalida automáticamente</strong> las firmas existentes. Si el cambio es sustancial, resetea las firmas de los alumnos afectados para que vuelvan a firmar la versión nueva.
         </div>
@@ -275,159 +299,153 @@ export default function TermsManager() {
         busqueda={{ value: search, onChange: setSearch, placeholder:'Buscar alumno…' }}
         resumen={`${filtered.length} alumno(s)`}/>
 
-      {/* Tabla de alumnos */}
-      <div className="card overflow-hidden">
-        {/* Header */}
-        <div className="hidden md:grid gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest"
-          style={{
-            gridTemplateColumns:'minmax(0,1.4fr) 110px 1fr 1fr 1fr 110px',
-            color:'var(--t3)',
-            background:'var(--header-bg)',
-            borderBottom:'1px solid var(--divider)',
-          }}>
-          <span>Alumno</span>
-          <span>Firma T&C</span>
-          <span>CURP</span>
-          <span>INE tutor</span>
-          <span>Garantía</span>
-          <span>Acceso</span>
-        </div>
-
+      {/* Tabla de alumnos. En pantalla chica las columnas de documentos se
+          pliegan dentro de la celda del alumno: se ocultan como columna, no
+          como acción, así que validar sigue al alcance en el teléfono. */}
+      <DataTable columns={COLUMNS_TC}
+        isEmpty={!loading && !loadError && filtered.length === 0}
+        emptyIcon={<FileText size={36}/>}
+        emptyText="Ningún alumno coincide con el filtro.">
+        {loading ? <SkeletonRows/> : (
         <ProgressiveList items={filtered} sizes={{ mobile:5, tablet:10, desktop:15 }}
-          emptyLabel="Sin resultados">
-        {(s, i) => {
+          emptyLabel="Ningún alumno coincide con el filtro.">
+        {s => {
           const isSigned = s.termsStatus === 'firmado'
           const curp = s.documents?.find(d => d.document_type === 'curp')
           const ine  = s.documents?.find(d => d.document_type === 'ine_tutor')
           const gar  = s.documents?.find(d => d.document_type === 'garantia')
           const tyc  = s.documents?.find(d => d.document_type === 'terminos')
           const accesoActivo = s.accesoEstado === 'activo'
-          return (
-            <div key={s.id}
-              className="grid gap-3 px-4 py-3 md:items-center transition-colors hover:bg-white/[.025]"
-              style={{
-                gridTemplateColumns:'minmax(0,1fr)',
-                borderBottom: i < filtered.length - 1 ? '1px solid var(--divider)' : 'none',
-              }}>
-              <div className="md:grid md:gap-3 md:items-center space-y-2.5 md:space-y-0"
-                style={{ gridTemplateColumns:'minmax(0,1.4fr) 110px 1fr 1fr 1fr 110px' }}>
 
-                {/* Nombre */}
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <AvatarAlumno student={s} size={28}
-                    style={{ background:'var(--soft-bg)', color:'var(--t2)' }}/>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate" style={{ color:'var(--t1)' }}>{s.name}</p>
-                    <p className="text-[10px] truncate" style={{ color:'var(--t3)' }}>
-                      {isSigned ? s.signedAt : 'Sin firmar'}
-                    </p>
+          /* Firma T&C — validarla es verla y, si no procede, resetearla.
+             Quien firmó en papel entrega un PDF: se ofrece igual que la
+             firma digital, porque para administración vale lo mismo. */
+          const firma = (
+            <div className="flex items-center gap-1">
+              <span className="badge text-[10px] px-2 py-1 flex-shrink-0"
+                style={isSigned ? estiloEstado('validado') : tyc ? { background:'var(--info-soft)', color:'var(--info)', border:'1px solid var(--info-line)' } : estiloEstado('entregado')}>
+                {isSigned ? <CheckCircle2 size={10}/> : <Clock size={10}/>}
+                {isSigned ? 'Firmado' : tyc ? 'En papel' : 'Pendiente'}
+              </span>
+              {tyc && (
+                <button title="Ver PDF firmado a mano" aria-label="Ver PDF firmado a mano" onClick={() => verDocumento(tyc)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background:'var(--info-soft)', color:'var(--info)' }}>
+                  <FileText size={12}/>
+                </button>
+              )}
+              {isSigned && (
+                <>
+                  <button title="Ver firma" aria-label="Ver firma" onClick={() => setPreview(s)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
+                    style={{ background:'var(--info-soft)', color:'var(--info)' }}>
+                    <Eye size={12}/>
+                  </button>
+                  <button title="Invalidar firma" aria-label="Invalidar firma" onClick={() => setConfirmReset(s.id)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
+                    style={{ background:'var(--bad-soft)', color:'var(--bad)' }}>
+                    <Trash2 size={12}/>
+                  </button>
+                </>
+              )}
+            </div>
+          )
+
+          /* Garantía — llega por archivo o por firmas dibujadas */
+          const garantia = (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="lg:hidden text-[10px] font-bold uppercase tracking-wider w-20 flex-shrink-0"
+                style={{ color:'var(--t3)' }}>Garantía</span>
+              <span className="text-[11px] font-bold px-2 py-1 rounded-full flex-shrink-0"
+                style={estiloEstado(s.garantiaEstado)}>
+                {s.garantiaEstado === 'validada' ? 'Validada'
+                  : s.garantiaEstado === 'entregada' ? 'Entregada' : '—'}
+              </span>
+              {gar && (
+                <button title="Ver garantía subida" aria-label="Ver garantía subida" onClick={() => verDocumento(gar)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background:'var(--info-soft)', color:'var(--info)' }}>
+                  <Eye size={12}/>
+                </button>
+              )}
+              {(s.garantiaFirmaAlumno || s.garantiaFirmaTutor) && (
+                <button title="Ver firmas de la garantía" aria-label="Ver firmas de la garantía" onClick={() => setGarantiaPreview(s)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
+                  <PenLine size={12}/>
+                </button>
+              )}
+              {s.garantiaEstado === 'entregada' && (
+                <button title="Validar garantía" aria-label="Validar garantía" disabled={ocupado === s.id}
+                  onClick={() => aprobarGarantia(s.id)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                  style={{ background:'var(--good-soft)', color:'var(--good)' }}>
+                  <Check size={12}/>
+                </button>
+              )}
+            </div>
+          )
+
+          const celdaCurp = <CeldaDocumento etiqueta="CURP" doc={curp} onVer={verDocumento}
+            onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
+          const celdaIne = <CeldaDocumento etiqueta="INE tutor" doc={ine} onVer={verDocumento}
+            onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
+
+          return (
+            <DataTableRow key={s.id} cells={[
+              { className: 'flex-grow min-w-[150px]', content: (
+                <div className="min-w-0 py-1">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <AvatarAlumno student={s} size={28}
+                      style={{ background:'var(--soft-bg)', color:'var(--t2)' }}/>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color:'var(--t1)' }}>{s.name}</p>
+                      <p className="text-[10px] truncate" style={{ color:'var(--t3)' }}>
+                        {isSigned ? s.signedAt : 'Sin firmar'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="lg:hidden mt-2 space-y-1.5">
+                    <div className="sm:hidden">{firma}</div>
+                    {celdaCurp}
+                    {celdaIne}
+                    {garantia}
                   </div>
                 </div>
-
-                {/* Firma T&C — validarla es verla y, si no procede, resetearla.
-                    Quien firmó en papel entrega un PDF: se ofrece igual que la
-                    firma digital, porque para administración vale lo mismo. */}
-                <div className="flex items-center gap-1">
-                  <span className={clsx(
-                    'inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold',
-                    isSigned
-                      ? 'bg-emerald-500/12 text-emerald-400 border border-emerald-500/25'
-                      : tyc
-                        ? 'bg-blue-500/12 text-blue-400 border border-blue-500/25'
-                        : 'bg-amber-500/12  text-amber-400  border border-amber-500/25'
-                  )}>
-                    {isSigned ? <CheckCircle2 size={10}/> : <Clock size={10}/>}
-                    {isSigned ? 'Firmado' : tyc ? 'En papel' : 'Pendiente'}
-                  </span>
-                  {tyc && (
-                    <button title="Ver PDF firmado a mano" onClick={() => verDocumento(tyc)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center"
-                      style={{ background:'var(--info-soft)', color:'var(--info)' }}>
-                      <FileText size={12}/>
-                    </button>
-                  )}
-                  {isSigned && (
-                    <>
-                      <button title="Ver firma" onClick={() => setPreview(s)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-all active:scale-90"
-                        style={{ background:'var(--info-soft)', color:'var(--info)' }}>
-                        <Eye size={12}/>
-                      </button>
-                      <button title="Invalidar firma" onClick={() => setConfirmReset(s.id)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-all active:scale-90"
-                        style={{ background:'var(--bad-soft)', color:'var(--bad)' }}>
-                        <Trash2 size={12}/>
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                <CeldaDocumento etiqueta="CURP" doc={curp} onVer={verDocumento}
-                  onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
-                <CeldaDocumento etiqueta="INE tutor" doc={ine} onVer={verDocumento}
-                  onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
-
-                {/* Garantía — llega por archivo o por firmas dibujadas */}
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="md:hidden text-[10px] font-bold uppercase tracking-wider w-20 flex-shrink-0"
-                    style={{ color:'var(--t3)' }}>Garantía</span>
-                  <span className="text-[11px] font-bold px-2 py-1 rounded-full flex-shrink-0"
-                    style={estiloEstado(s.garantiaEstado)}>
-                    {s.garantiaEstado === 'validada' ? 'Validada'
-                      : s.garantiaEstado === 'entregada' ? 'Entregada' : '—'}
-                  </span>
-                  {gar && (
-                    <button title="Ver garantía subida" onClick={() => verDocumento(gar)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background:'var(--info-soft)', color:'var(--info)' }}>
-                      <Eye size={12}/>
-                    </button>
-                  )}
-                  {(s.garantiaFirmaAlumno || s.garantiaFirmaTutor) && (
-                    <button title="Ver firmas de la garantía" onClick={() => setGarantiaPreview(s)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
-                      <PenLine size={12}/>
-                    </button>
-                  )}
-                  {s.garantiaEstado === 'entregada' && (
-                    <button title="Validar garantía" disabled={ocupado === s.id}
-                      onClick={() => aprobarGarantia(s.id)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
-                      style={{ background:'var(--good-soft)', color:'var(--good)' }}>
-                      <Check size={12}/>
-                    </button>
-                  )}
-                </div>
-
-                {/* Acceso — lo decide la BD al validar todo el expediente */}
-                <div className="flex items-center">
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold"
-                    style={accesoActivo
-                      ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
-                      : { background:'var(--soft-bg)', color:'var(--t3)', border:'1px solid var(--divider)' }}>
-                    {accesoActivo ? <ShieldCheck size={10}/> : <Clock size={10}/>}
-                    {accesoActivo ? 'Activo' : 'Pendiente'}
-                  </span>
-                </div>
-              </div>
-            </div>
+              )},
+              { className: 'w-40 hidden sm:flex', content: firma },
+              { className: 'w-52 hidden lg:flex', content: celdaCurp },
+              { className: 'w-52 hidden lg:flex', content: celdaIne },
+              { className: 'w-52 hidden lg:flex', content: garantia },
+              { className: 'w-24 flex', content: (
+                /* Acceso — lo decide la BD al validar todo el expediente */
+                <span className="badge text-[10px] px-2 py-1"
+                  style={accesoActivo
+                    ? { background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }
+                    : { background:'var(--soft-bg)', color:'var(--t3)', border:'1px solid var(--divider)' }}>
+                  {accesoActivo ? <ShieldCheck size={10}/> : <Clock size={10}/>}
+                  {accesoActivo ? 'Activo' : 'Pendiente'}
+                </span>
+              )},
+            ]}/>
           )
         }}
         </ProgressiveList>
-      </div>
+        )}
+      </DataTable>
 
       {/* Modal: ver firma — por portal, si no se posiciona contra el contenedor de página */}
-      {preview && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setPreview(null)}>
-          <div className="w-full max-w-sm rounded-2xl p-5 space-y-4" style={{ background:'var(--panel-bg)', border:'1px solid var(--card-border)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <p className="font-bold text-sm" style={{ color:'var(--t1)' }}>Firma de {preview.name}</p>
-              <button onClick={() => setPreview(null)} className="text-xs" style={{ color:'var(--t3)' }}>✕ Cerrar</button>
-            </div>
+      {preview && (
+        <ModalPortal maxWidth="max-w-sm" onClose={() => setPreview(null)}>
+          <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom:'1px solid var(--divider)' }}>
+            <h2 className="text-sm font-bold" style={{ color:'var(--t1)' }}>Firma de {preview.name}</h2>
+            <button onClick={() => setPreview(null)} aria-label="Cerrar"
+              className="w-11 h-11 flex items-center justify-center rounded-lg" style={{ color:'var(--t3)' }}><X size={15}/></button>
+          </div>
+          <div className="p-5 space-y-4">
             {preview.signatureDataUrl
-              ? <img src={preview.signatureDataUrl} alt="Firma" className="w-full rounded-xl" style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)' }}/>
-              : <div className="h-28 rounded-xl flex items-center justify-center text-xs" style={{ background:'var(--card-bg)', color:'var(--t3)' }}>
+              ? <img src={preview.signatureDataUrl} alt="Firma" className="w-full rounded-xl" style={{ background:'#ffffff', border:'1px solid var(--card-border)' }}/>
+              : <div className="h-28 rounded-xl flex items-center justify-center text-xs" style={{ background:'var(--soft-bg)', border:'1px dashed var(--card-border)', color:'var(--t3)' }}>
                   Firma registrada — preview no disponible en esta sesión
                 </div>
             }
@@ -439,33 +457,33 @@ export default function TermsManager() {
             </div>
             <button
               onClick={() => { setConfirmReset(preview.id); setPreview(null) }}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold transition-all"
-              style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-soft)', color:'var(--bad)' }}>
-              <Trash2 size={13}/> Resetear firma de este alumno
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all"
+              style={DANGER_BTN_STYLE}>
+              <Trash2 size={14}/> Resetear firma de este alumno
             </button>
           </div>
-        </div>,
-        document.body,
+        </ModalPortal>
       )}
 
 
       {/* Modal: firmas de la garantía */}
       {garantiaPreview && (
         <ModalPortal maxWidth="max-w-md" onClose={() => setGarantiaPreview(null)}>
+          <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom:'1px solid var(--divider)' }}>
+            <h2 className="text-sm font-bold" style={{ color:'var(--t1)' }}>Garantía de {garantiaPreview.name}</h2>
+            <button onClick={() => setGarantiaPreview(null)} aria-label="Cerrar"
+              className="w-11 h-11 flex items-center justify-center rounded-lg" style={{ color:'var(--t3)' }}><X size={15}/></button>
+          </div>
           <div className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="font-bold text-sm" style={{ color:'var(--t1)' }}>Garantía de {garantiaPreview.name}</p>
-              <button onClick={() => setGarantiaPreview(null)} style={{ color:'var(--t3)' }}><X size={14}/></button>
-            </div>
             {[['Firma del alumno', garantiaPreview.garantiaFirmaAlumno],
               ['Firma del tutor',  garantiaPreview.garantiaFirmaTutor]].map(([etiqueta, firma]) => (
               <div key={etiqueta}>
                 <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color:'var(--t3)' }}>{etiqueta}</p>
                 {firma
                   ? <img src={firma} alt={etiqueta} className="w-full rounded-xl"
-                      style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)' }}/>
+                      style={{ background:'#ffffff', border:'1px solid var(--card-border)' }}/>
                   : <div className="h-20 rounded-xl flex items-center justify-center text-xs"
-                      style={{ background:'var(--card-bg)', color:'var(--t3)' }}>Sin firma dibujada</div>}
+                      style={{ background:'var(--soft-bg)', border:'1px dashed var(--card-border)', color:'var(--t3)' }}>Sin firma dibujada</div>}
               </div>
             ))}
             {garantiaPreview.garantiaEstado === 'entregada' && (
@@ -498,16 +516,14 @@ export default function TermsManager() {
               onChange={e => setRechazo(r => ({ ...r, motivo: e.target.value }))}
               rows={3} autoFocus
               placeholder="Motivo del rechazo (p. ej. la foto está borrosa)"
-              className="w-full text-sm rounded-xl py-2.5 px-3 outline-none resize-none"
-              style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t1)' }}/>
-            <div className="flex gap-2">
-              <button onClick={() => setRechazo(null)} className="flex-1 py-2.5 rounded-xl text-xs font-semibold"
-                style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
+              className="input-field resize-none"/>
+            <div className="flex gap-3">
+              <button onClick={() => setRechazo(null)} className="btn-secondary flex-1 justify-center">
                 Cancelar
               </button>
               <button onClick={confirmarRechazo} disabled={!rechazo.motivo.trim() || ocupado === rechazo.doc.id}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold disabled:opacity-40"
-                style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold disabled:opacity-40"
+                style={DANGER_BTN_STYLE}>
                 Rechazar
               </button>
             </div>
@@ -516,9 +532,9 @@ export default function TermsManager() {
       )}
 
       {/* Modal: confirmar reset */}
-      {confirmReset && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setConfirmReset(null)}>
-          <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'var(--panel-bg)', border:'1px solid var(--bad-soft)' }} onClick={e => e.stopPropagation()}>
+      {confirmReset && (
+        <ModalPortal maxWidth="max-w-sm" onClose={() => setConfirmReset(null)}>
+          <div className="p-5 space-y-4">
             <div className="flex items-start gap-3">
               <AlertTriangle size={18} style={{ color:'var(--bad)', flexShrink:0, marginTop:2 }}/>
               <div>
@@ -529,17 +545,16 @@ export default function TermsManager() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmReset(null)} className="flex-1 py-2 rounded-xl text-xs font-semibold" style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmReset(null)} className="btn-secondary flex-1 justify-center">
                 Cancelar
               </button>
-              <button onClick={() => resetSignature(confirmReset)} className="flex-1 py-2 rounded-xl text-xs font-bold" style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}>
+              <button onClick={() => resetSignature(confirmReset)} className="flex-1 py-2.5 rounded-xl text-sm font-bold" style={DANGER_BTN_STYLE}>
                 Sí, resetear
               </button>
             </div>
           </div>
-        </div>,
-        document.body,
+        </ModalPortal>
       )}
     </div>
   )

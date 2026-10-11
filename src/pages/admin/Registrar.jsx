@@ -1,12 +1,13 @@
+import { nombreCanal } from '../../lib/realtime'
 import { useState, useMemo, useRef, useEffect, useCallback, createContext, useContext } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import {
-  Plus, Minus, Trash2, Check, ChevronDown, ChevronRight,
-  UserPlus, X, GraduationCap, Maximize2, SlidersHorizontal,
+  Plus, Minus, Check, ChevronDown, ChevronRight,
+  UserPlus, X, Maximize2, SlidersHorizontal,
   ArrowLeft, Calendar, Shield, Users, Clock,
-  Save, AlertTriangle, RotateCw, Download, Pencil, Search, Columns2, Rows3,
+  Save, RotateCw, Download, Pencil, Search, Columns2, Rows3,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
@@ -17,12 +18,13 @@ import {
 } from '../../lib/supabaseData'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
+import ProgressiveList from '../../components/ui/ProgressiveList'
+import ModalPortal from '../../components/ui/ModalPortal'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { useAdminTheme } from '../../context/AdminThemeContext'
 import { folioEX, folioEXD } from '../../lib/folios'
 import { supabase } from '../../lib/supabaseClient'
-import { useSucursales } from '../../hooks/useSucursales'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { fetchDocumentosAlumnos } from '../../lib/expedienteData'
 import { fetchPagosDeAlumnos, estadoPagoExamenes } from '../../lib/pagosData'
@@ -31,6 +33,7 @@ import StudentFormModal from '../../components/admin/StudentFormModal'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import StudentDock from '../../components/ui/StudentDock'
 import BarraFiltros from '../../components/ui/BarraFiltros'
+import { tintaSobre } from '../../lib/color'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -112,9 +115,9 @@ function GroupPicker({ groups, students, loading, onSelect }) {
   const gruposVisibles = gruposSucursal.filter(g => `${g.name} ${g.subject}`.toLowerCase().includes(query.trim().toLowerCase()))
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-5">
       <div>
-        <h1 className="page-title">Registrar</h1>
+        <h1 className="page-title">Calificaciones</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
           Selecciona el grupo para abrir su lista de registro.
         </p>
@@ -152,8 +155,10 @@ function GroupPicker({ groups, students, loading, onSelect }) {
         </div>
       )}
 
-      <div className={`grid gap-4 ${columns===2?'lg:grid-cols-2':'grid-cols-1'}`}>
-        {gruposVisibles.map(g => {
+      <ProgressiveList items={gruposVisibles} className={`grid gap-4 ${columns===2?'lg:grid-cols-2':'grid-cols-1'}`}
+        sizes={{ mobile: 4, tablet: 8, desktop: 12 }}
+        emptyLabel={groups.length ? 'Ningún grupo coincide con la sucursal o la búsqueda.' : ''}>
+        {g => {
           const grpStudents = students.filter(s => s.groupId === g.id)
           const accent      = getAccent(g.id)
 
@@ -171,7 +176,7 @@ function GroupPicker({ groups, students, loading, onSelect }) {
                       grises que no llevaban a ninguna parte. */}
                   <StudentDock students={grpStudents} accent={accent}
                     onOpenStudent={id => navigate(`/admin/alumnos/${id}`)}/>
-                  <button className="btn-secondary text-xs py-1.5 gap-1.5 pointer-events-none">
+                  <button className="btn-secondary text-xs py-2 gap-1.5 pointer-events-none" tabIndex={-1}>
                     Abrir lista <ChevronRight size={13}/>
                   </button>
                 </div>
@@ -192,8 +197,8 @@ function GroupPicker({ groups, students, loading, onSelect }) {
               </div>
             </GroupShaderCard>
           )
-        })}
-      </div>
+        }}
+      </ProgressiveList>
     </div>
   )
 }
@@ -202,7 +207,10 @@ function GroupPicker({ groups, students, loading, onSelect }) {
 // CELDAS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ScoreCell({ value, onChange, compact, bg: cellBg, sc }) {
+/* `celda`: identificador "alumno_columna" para poder llegar a esta celda
+   desde el detalle de una calificación. `foco`: resaltada (se acaba de llegar
+   a ella): borde grueso de acento que parpadea para guiar la vista. */
+function ScoreCell({ value, onChange, compact, bg: cellBg, sc, celda, foco = false }) {
   const hc = useHC()
   const [editing, setEditing] = useState(false)
   const [draft,   setDraft]   = useState('')
@@ -219,7 +227,7 @@ function ScoreCell({ value, onChange, compact, bg: cellBg, sc }) {
   }
 
   if (editing) return (
-    <td style={{ minWidth: compact ? 52 : 64, background: hc ? (sc ? `${sc}12` : '#f8fafc') : (cellBg ?? SOLID_BG), padding:0 }}>
+    <td style={{ minWidth: compact ? 52 : 64, background: hc ? 'var(--card-bg)' : (cellBg ?? SOLID_BG), padding:0 }}>
       <input ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)}
         onBlur={commit} onKeyDown={e => { if (e.key==='Enter') commit(); if (e.key==='Escape') setEditing(false) }}
         style={{ width:'100%', height:'100%', minWidth: compact ? 52 : 64, textAlign:'center', fontSize:12, fontWeight:700,
@@ -235,19 +243,22 @@ function ScoreCell({ value, onChange, compact, bg: cellBg, sc }) {
   const bg  = scoreBg(value)
   const display = (value === undefined || value === null || value === '') ? '—' : String(value)
 
-  const hcBorder   = sc ? `1px solid ${sc}45` : '1px solid rgba(0,0,0,0.08)'
+  const hcBorder   = '1px solid var(--divider)'
   const neonBorder = sc ? `1px solid ${sc}55` : 'none'
   const neonGlow   = (sc && display !== '—') ? `0 0 7px ${sc}35` : 'none'
   return (
-    <td onClick={startEdit} title="Click para editar" style={{
+    <td onClick={startEdit} title="Click para editar" data-celda={celda}
+      className={foco ? 'celda-foco' : undefined}
+      style={{
       minWidth: compact ? 52 : 64, textAlign:'center', fontSize:12, fontWeight:700,
       color: col,
-      background: hc ? (bg ? bg : (sc ? `${sc}06` : '#ffffff')) : (bg || (cellBg ?? 'transparent')),
+      background: hc ? (bg ? bg : 'var(--card-bg)') : (bg || (cellBg ?? 'transparent')),
       border: hc ? hcBorder : neonBorder,
       boxShadow: hc ? 'none' : neonGlow,
       borderRadius: 3,
       padding:'0 2px', cursor:'pointer', userSelect:'none',
       transition:'background .15s',
+      ...(foco ? { outline:'3px solid var(--accent)', outlineOffset:'-3px' } : null),
     }}>{display}</td>
   )
 }
@@ -257,8 +268,8 @@ function CheckCell({ checked, onChange, bg: cellBg, sc }) {
   return (
     <td style={{
       minWidth:52, textAlign:'center',
-      background: hc ? (sc ? `${sc}06` : '#ffffff') : cellBg,
-      border: sc ? `1px solid ${sc}${hc ? '40' : '45'}` : 'none',
+      background: hc ? 'var(--card-bg)' : cellBg,
+      border: hc ? '1px solid var(--divider)' : sc ? `1px solid ${sc}45` : 'none',
       boxShadow: (!hc && sc) ? `0 0 6px ${sc}28` : 'none',
       padding:'0 4px',
     }}>
@@ -324,7 +335,7 @@ function PaymentCell({ value, onChange, tdStyle }) {
           background: hc ? 'white' : 'var(--t4)',
           color: hc ? '#0f172a' : 'white',
           border: overLimit
-            ? '1.5px solid #f87171'
+            ? '1.5px solid var(--bad)'
             : hc ? '1.5px solid #2563eb' : '1.5px solid rgba(255,255,255,.35)',
           borderRadius:7, outline:'none',
         }}
@@ -353,25 +364,34 @@ function PaymentCell({ value, onChange, tdStyle }) {
   )
 }
 
+/* Resumen de asistencia de un alumno sobre TODAS las sesiones capturadas del
+   grupo. La hoja guarda 1 = presente, 2 = retardo, 0 = falta, y cargarHoja
+   rellena con 0 las sesiones en que el alumno no aparece. Antes sólo se
+   contaban las fechas con registro (las faltas no existían) y los retardos
+   se trataban como falta. Regla del centro: el retardo es asistencia. */
+export function resumenAsistencia(att = {}) {
+  const valores = Object.values(att)
+  const total   = valores.length
+  const present = valores.filter(v => v === 1 || v === 2).length
+  return { total, present, pct: total > 0 ? (present / total) * 100 : 0 }
+}
+
 function GuaranteeBadge({ studentId, cells, attendance, simCount, bg: cellBg, sc }) {
   const hc = useHC()
-  const att = attendance[studentId] || {}
-  const total = Object.keys(att).length
-  const present = Object.values(att).filter(v => v===1).length
-  const pct = total > 0 ? (present/total)*100 : 0
+  const { pct } = resumenAsistencia(attendance[studentId])
   const simsOk = Array.from({length:simCount},(_,i)=>i+1)
     .every(n => { const v=cells[`sim_${n}`]; return v!==undefined && v!=='NP' && parseFloat(v)>0 })
   const ok = pct >= 90 && simsOk
   return (
     <td style={{
       minWidth:90,
-      background: hc ? (sc ? `${sc}06` : '#ffffff') : cellBg,
-      border: hc && sc ? `1px solid ${sc}40` : 'none',
+      background: hc ? 'var(--card-bg)' : cellBg,
+      border: hc ? '1px solid var(--divider)' : 'none',
       padding:'0 6px',
     }}>
       <span className={clsx('flex items-center justify-center gap-1 px-2 py-1 rounded-full mx-auto',
         ok ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-           : 'bg-red-500/10 text-red-400 border border-red-500/20')}
+           : 'bg-red-500/15 text-red-400 border border-red-500/30')}
         style={{ fontSize:10, fontWeight:700, maxWidth:80 }}>
         <Shield size={9}/>{ok ? 'Garantía' : 'Sin gar.'}
       </span>
@@ -381,26 +401,25 @@ function GuaranteeBadge({ studentId, cells, attendance, simCount, bg: cellBg, sc
 
 function AttSummaryCell({ studentId, attendance, onClick }) {
   const hc = useHC()
-  const att = attendance[studentId] || {}
-  const total   = Object.values(att).filter(v => v!==undefined).length
-  const present = Object.values(att).filter(v => v===1).length
-  const pct = total > 0 ? Math.round((present/total)*100) : 0
+  const r = resumenAsistencia(attendance[studentId])
+  const { total, present } = r
+  const pct = Math.round(r.pct)
   const col = pct>=90 ? 'var(--good)' : pct>=75 ? 'var(--warn)' : 'var(--bad)'
   return (
     <td style={{
       minWidth:88, padding:'2px 6px',
-      background: hc ? `${HC.att}06` : 'transparent',
-      border: hc ? `1px solid ${HC.att}40` : 'none',
+      background: hc ? 'var(--card-bg)' : 'transparent',
+      border: hc ? '1px solid var(--divider)' : 'none',
     }}>
       <button onClick={onClick}
-        className="w-full flex flex-col items-center py-1 rounded-lg transition-all hover:-translate-y-0.5"
+        className="w-full flex flex-col items-center py-1 rounded-lg transition-all"
         style={{
-          background: hc ? 'rgba(0,0,0,.04)' : 'var(--card-bg)',
-          border: hc ? `1px solid ${HC.att}50` : '1px solid rgba(255,255,255,.08)',
+          background: 'var(--card-bg)',
+          border: '1px solid var(--card-border)',
         }}
         title="Abrir calendario">
         <span style={{ fontSize:13, fontWeight:900, color:col, lineHeight:1.2 }}>{pct}%</span>
-        <span style={{ fontSize:9, color: hc ? '#94a3b8' : 'var(--t4)' }}>{present}/{total}</span>
+        <span style={{ fontSize:9, color: 'var(--t3)' }}>{present}/{total}</span>
       </button>
     </td>
   )
@@ -426,18 +445,16 @@ function AttendanceModal({ studentId, studentName, attendance, onChange, onClose
 
   const att     = attendance[studentId] || {}
   const total   = Object.keys(att).length
-  const present = Object.values(att).filter(v=>v===1).length
-  const pct     = total>0 ? Math.round((present/total)*100) : 0
+  const resumen = resumenAsistencia(att)
+  const present = resumen.present
+  const pct     = Math.round(resumen.pct)
   // Solo lectura: la asistencia se captura en Pasar Lista. Tener dos lugares
   // donde marcarla garantizaba que tarde o temprano dijeran cosas distintas.
   const toggle = () => {}
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl overflow-hidden"
-        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)' }}
-        onClick={e=>e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--card-border)' }}>
+    <ModalPortal maxWidth="max-w-lg" onClose={onClose}>
+        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: '1px solid var(--divider)' }}>
           <div>
             <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
               <Calendar size={13} className="inline mr-1.5 -mt-0.5"/> {studentName}
@@ -447,7 +464,7 @@ function AttendanceModal({ studentId, studentName, attendance, onChange, onClose
               Reflejo de Pasar Lista. Para corregir un día, entra ahí.
             </p>
           </div>
-          <button onClick={onClose} aria-label="Cerrar asistencia" className="w-11 h-11 flex items-center justify-center rounded-lg"><X size={15} style={{ color: 'var(--t3)' }}/></button>
+          <button onClick={onClose} aria-label="Cerrar asistencia" className="w-11 h-11 flex items-center justify-center rounded-lg flex-shrink-0"><X size={15} style={{ color: 'var(--t3)' }}/></button>
         </div>
 
         <div className="flex gap-1 px-5 pt-3 pb-2 overflow-x-auto">
@@ -473,14 +490,14 @@ function AttendanceModal({ studentId, studentName, attendance, onChange, onClose
                 {cells.map((d,ci) => {
                   if(!d) return <div key={ci}/>
                   const k=dateKey(d), val=att[k]
-                  const isP=val===1, isA=val===0
+                  const isP=val===1, isT=val===2, isA=val===0
                   return (
                     <div key={ci}
                       className="rounded-lg text-xs font-bold py-1.5 text-center"
                       style={{
-                        background:isP?'var(--good-soft)':isA?'var(--bad-soft)':'var(--card-bg)',
-                        border:`1px solid ${isP?'var(--good-line)':isA?'var(--bad-line)':'var(--card-border)'}`,
-                        color:isP?'var(--good)':isA?'var(--bad)':'var(--t4)',
+                        background:isP?'var(--good-soft)':isT?'var(--warn-soft)':isA?'var(--bad-soft)':'var(--card-bg)',
+                        border:`1px solid ${isP?'var(--good-line)':isT?'var(--warn-line)':isA?'var(--bad-line)':'var(--card-border)'}`,
+                        color:isP?'var(--good)':isT?'var(--warn)':isA?'var(--bad)':'var(--t4)',
                       }}>
                       {d.getDate()}
                     </div>
@@ -490,8 +507,7 @@ function AttendanceModal({ studentId, studentName, attendance, onChange, onClose
             )
           })}
         </div>
-      </div>
-    </div>
+    </ModalPortal>
   )
 }
 
@@ -502,11 +518,11 @@ function AttendanceModal({ studentId, studentName, attendance, onChange, onClose
 function AddColModal({ subjName, onAdd, onClose }) {
   const [name,setName]=useState(''); const [type,setType]=useState('actividad')
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)' }} onClick={e=>e.stopPropagation()}>
-        <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Añadir columna — {subjName}</p>
+    <ModalPortal maxWidth="max-w-sm" onClose={onClose}>
+      <div className="p-5 space-y-4">
+        <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Añadir columna — {subjName}</h2>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre (ej: TAREA 4)"
-          className="input-dark w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),type)}/>
+          className="input-field w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),type)}/>
         <div className="flex gap-2">
           {['actividad','tarea'].map(t=>(
             <button key={t} onClick={()=>setType(t)} className="flex-1 min-h-11 py-2 rounded-xl text-xs font-bold transition-all"
@@ -515,13 +531,13 @@ function AddColModal({ subjName, onAdd, onClose }) {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 min-h-11 py-2 rounded-xl text-xs font-semibold" style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>Cancelar</button>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn-secondary flex-1 min-h-11 justify-center">Cancelar</button>
           <button onClick={()=>name.trim()&&onAdd(name.trim(),type)} disabled={!name.trim()}
-            className="flex-1 min-h-11 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40" style={{ background:'var(--accent)', color:'var(--accent-contrast)' }}>Añadir</button>
+            className="btn-primary flex-1 min-h-11 justify-center">Añadir</button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }
 
@@ -531,24 +547,24 @@ function AddSubjectModal({ onAdd, onClose }) {
   const COLORS=['#2B5F9E','#5D3E90','#2F6B41','#8A5A12','#A03A32','#90501C','#94356B','#1C6474']
   const [color,setColor]=useState(COLORS[0])
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xs rounded-2xl p-5 space-y-4" style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)' }} onClick={e=>e.stopPropagation()}>
-        <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Nueva sección</p>
+    <ModalPortal maxWidth="max-w-sm" onClose={onClose}>
+      <div className="p-5 space-y-4">
+        <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Nueva sección</h2>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre de la sección"
-          className="input-dark w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),color)} autoFocus/>
+          className="input-field w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),color)} autoFocus/>
         <div className="flex gap-2 flex-wrap">
           {COLORS.map(c=>(
             <button key={c} onClick={()=>setColor(c)} aria-label={`Elegir color ${c}`} className="w-11 h-11 rounded-full transition-all active:scale-90"
               style={{ background:c, outline:color===c?'3px solid var(--accent)':'none', outlineOffset:2 }}/>
           ))}
         </div>
-        <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 min-h-11 py-2 rounded-xl text-xs font-semibold" style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>Cancelar</button>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn-secondary flex-1 min-h-11 justify-center">Cancelar</button>
           <button onClick={()=>name.trim()&&onAdd(name.trim(),color)} disabled={!name.trim()}
-            className="flex-1 min-h-11 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40" style={{ background:'var(--accent)', color:'var(--accent-contrast)' }}>Añadir</button>
+            className="btn-primary flex-1 min-h-11 justify-center">Añadir</button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }
 
@@ -556,7 +572,7 @@ function AddSubjectModal({ onAdd, onClose }) {
 // HEADER DE SECCIÓN (collapse/expand con +/-)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemoveItem, onRename }) {
+function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemoveItem, onRename, nota }) {
   const hc = useHC()
   const c = color ?? (hc ? '#64748b' : 'var(--t2)')
   const [editingLabel, setEditingLabel] = useState(false)
@@ -596,6 +612,10 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
               color:hc?'#0f172a':'#ffffff', background:hc?'#ffffff':'#171724',
               border:'1px solid rgba(255,255,255,.55)', outline:'none' }}/>
         ) : <span style={{ cursor:'default' }}>{label}</span>}
+        {nota && (
+          <span className="normal-case tracking-normal rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap"
+            style={{ background:'var(--panel-bg)', color:'var(--t2)' }}>{nota}</span>
+        )}
 
         {onRename && !editingLabel && (
           <button type="button" onClick={()=>{ setLabelDraft(label); setEditingLabel(true) }}
@@ -638,7 +658,7 @@ function AutoStatusCell({ value, bg }) {
 function AreaCell({ value, onChange, bg, sc }) {
   const hc = useHC()
   return (
-    <td style={{ minWidth:76, textAlign:'center', background: hc ? `${sc}06` : bg,
+    <td style={{ minWidth:76, textAlign:'center', background: hc ? 'var(--card-bg)' : bg,
       border:`1px solid ${sc}${hc ? '45' : '40'}`, padding:'0 2px', verticalAlign:'middle' }}>
       <select
         value={value ?? ''}
@@ -907,7 +927,7 @@ const TituloMenu = ({ children }) => (
     style={{ color:'var(--t3)' }}>{children}</p>
 )
 
-function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
+function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null }) {
   /* Esta hoja es la fuente maestra de calificaciones: columnas, celdas y datos
      administrativos viven en la BD. Antes todo estaba en localStorage, así que
      lo capturado sólo existía en la máquina de quien lo escribió y no llegaba
@@ -930,8 +950,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
   const [students,      setStudents]      = useState(rosterFromDb)
   const [subjects,      setSubjects]      = useState([])
-  const [simCount,      setSimCount]      = useState(0)
-  const [onlineCount,   setOnlineCount]   = useState(0)
+  /* Simulacros (EX) y Exámenes digitales (EXD) están bloqueados: aún no se
+     guardan en la BD, así que no se ofrecen columnas que parezcan funcionar. */
+  const simCount = 0
+  const onlineCount = 0
   const [tableFocus,    setTableFocus]    = useState('all')
   const [activeSim,     setActiveSim]     = useState(1)
   const simNamesKey = `siga_registro_sim_headers_${group.id}`
@@ -968,9 +990,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   const [attModal,      setAttModal]      = useState(null)
   const [addColModal,   setAddColModal]   = useState(null)
   const [addSubjModal,  setAddSubjModal]  = useState(false)
-  const [showLeaveModal,setShowLeaveModal]= useState(false)
   const [saveFlash,     setSaveFlash]     = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState(null) // { id, name } | null
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [lastCred, setLastCred] = useState(null)
   const [studentQuery, setStudentQuery] = useState('')
@@ -1127,9 +1147,14 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       setCells(mapa)
 
       // Asistencia en solo lectura: la captura vive en Pasar Lista.
+      // Cada alumno arranca con FALTA en todas las sesiones capturadas del
+      // grupo; sólo los registros de Pasar Lista lo vuelven presente/retardo.
       const att = {}
+      for (const s of groupStudents) {
+        att[s.id] = Object.fromEntries(asis.fechas.map(fecha => [fecha, 0]))
+      }
       for (const [sid, porFecha] of Object.entries(asis.porAlumno)) {
-        att[sid] = {}
+        att[sid] ??= Object.fromEntries(asis.fechas.map(fecha => [fecha, 0]))
         for (const [fecha, estado] of Object.entries(porFecha)) {
           att[sid][fecha] = estado === 'presente' ? 1 : estado === 'tardanza' ? 2 : 0
         }
@@ -1166,7 +1191,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       timer = setTimeout(cargarHoja, 250)
     }
     const channel = supabase
-      .channel(`registro-grupo-${group.id}`)
+      .channel(nombreCanal(`registro-grupo-${group.id}`))
       .on('postgres_changes', { event:'*', schema:'public', table:'evaluations' }, refresh)
       .on('postgres_changes', { event:'*', schema:'public', table:'attendance_records' }, refresh)
       .on('postgres_changes', { event:'*', schema:'public', table:'attendance_sessions', filter:`group_id=eq.${group.id}` }, refresh)
@@ -1317,6 +1342,32 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
     }
   }
 
+  /* ── Llegar a una asignación concreta ──
+     Desde el detalle de una calificación ("Ver en la hoja") se llega con
+     { columnaId, studentId }: se abre la materia de esa columna, se desplaza
+     la hoja hasta la celda del alumno y se resalta unos segundos. Una sola
+     vez por llegada. */
+  const [celdaFoco, setCeldaFoco] = useState(null)
+  const focoAplicado = useRef(false)
+  useEffect(() => {
+    if (!foco?.columnaId || focoAplicado.current || !subjects.length) return
+    const subj = subjects.find(sj => sj.cols.some(c => c.id === foco.columnaId))
+    if (!subj) return
+    focoAplicado.current = true
+    selectFocus(`subject:${subj.id}`)
+    const clave = `${foco.studentId}_${foco.columnaId}`
+    setCeldaFoco(clave)
+    // Tras pintar la materia desplegada, se lleva la celda al centro. Sin
+    // limpieza: la hoja recarga sus materias en vivo y eso cancelaría el
+    // desplazamiento (el efecto ya no se repite).
+    setTimeout(() => {
+      document.querySelector(`[data-celda="${clave}"]`)?.scrollIntoView({ block:'center', inline:'center', behavior:'smooth' })
+    }, 250)
+    setTimeout(() => setCeldaFoco(null), 6000)
+    // selectFocus es estable en la práctica (solo usa setters)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foco, subjects])
+
   /* En vertical la hoja abría con las materias desplegadas: cuarenta columnas
      que obligaban a un barrido horizontal largo antes de encontrar nada. Fuera
      de escritorio arranca con TODO plegado, y se abre la sección que se va a
@@ -1331,10 +1382,6 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       ...Object.fromEntries(subjects.map(x => [x.id, true])) })
   }, [isDesktop, subjects])
 
-  /* El padrón es el del grupo. Antes se podían agregar alumnos aquí con un id
-     inventado (`r<timestamp>`), y quedaban sólo en la hoja: no tenían cuenta,
-     ni perfil, ni asistencia. Para dar de alta se usa Alumnos o Grupos. */
-  const removeStudent = () => {}
 
   /* Una materia sin columnas no existe en la BD; se materializa al crear su
      primera columna. Mientras tanto vive en el estado para poder nombrarla. */
@@ -1392,10 +1439,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
     const rows = students.map((s, idx) => {
       const sc  = cells[s.id] || {}
-      const att = attendance[s.id] || {}
-      const total   = Object.keys(att).length
-      const present = Object.values(att).filter(v => v === 1).length
-      const pct = total > 0 ? (present / total) * 100 : 0
+      const { pct } = resumenAsistencia(attendance[s.id])
       const simsOk = Array.from({ length: simCount }, (_, i) => i + 1)
         .every(n => { const v = sc[`sim_${n}`]; return v !== undefined && v !== 'NP' && parseFloat(v) > 0 })
 
@@ -1433,14 +1477,12 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
   }
 
   const handleBack = () => onBack()
-  const confirmLeave = () => { setShowLeaveModal(false); onBack() }
 
   // ── Stats ───────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     let conGar=0
     students.forEach(s=>{
-      const att=attendance[s.id]||{}, t=Object.keys(att).length, p=Object.values(att).filter(v=>v===1).length
-      const pct=t>0?(p/t)*100:0
+      const { pct } = resumenAsistencia(attendance[s.id])
       const sc=cells[s.id]||{}
       const simsOk=Array.from({length:simCount},(_,i)=>i+1).every(n=>{const v=sc[`sim_${n}`];return v!==undefined&&v!=='NP'&&parseFloat(v)>0})
       if(pct>=90&&simsOk) conGar++
@@ -1485,12 +1527,12 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
       {/* Group pill */}
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
-        style={{ background: accent, color:'#ffffff' }}>
-        {/* El chip lleva ahora fondo pleno, así que su contenido va en blanco:
-            el nombre seguía pintado con el color del acento y desaparecía. */}
-        <span className="text-xs font-bold" style={{ color:'#ffffff' }}>{group.name}</span>
-        <span className="text-xs" style={{ color:'rgba(255,255,255,.55)' }}>·</span>
-        <span className="text-xs" style={{ color:'rgba(255,255,255,.80)' }}>{group.subject}</span>
+        style={{ background: accent, color: tintaSobre(accent) }}>
+        {/* Fondo pleno con la tinta que más contraste dé: blanco sobre los
+            sólidos institucionales, oscura sobre los acentos luminosos. */}
+        <span className="text-xs font-bold">{group.name}</span>
+        <span className="text-xs opacity-60">·</span>
+        <span className="text-xs opacity-80">{group.subject}</span>
       </div>
 
       {/* Stats. En pantalla completa sobre pantalla chica se retiran: son
@@ -1575,7 +1617,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       {/* Guardar */}
       <button onClick={handleSaveEval}
         className="btn-primary text-xs py-2 gap-1.5 transition-all duration-300"
-        style={saveFlash ? { background:'var(--good)', color:'#000', boxShadow:'0 0 14px var(--good-line)' } : {}}>
+        style={saveFlash ? { background:'var(--good-solid)', color:'#fff' } : {}}>
         <Save size={13}/> {saveFlash ? '¡Guardado!' : 'Guardar'}
       </button>
       {/* En pantalla completa la salida es la "X" de la esquina, siempre a la
@@ -1638,7 +1680,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         overscrollBehaviorX:'contain',
         ...(isFullscreen
           ? { flex:1, minHeight:0 }
-          : { maxHeight:isMobile?'max(320px, calc(100dvh - 300px))':'calc(100vh - 208px)' }) }}>
+          : { maxHeight:isMobile?'max(320px, calc(100dvh - 300px))':'calc(100dvh - 208px)' }) }}>
         <table data-wide-sheet style={{
           borderCollapse:'collapse',
           /* Ocupa el contenedor en vistas pequeñas (Resumen, Documentos o un
@@ -1662,14 +1704,14 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
               {showSummary && <>
                 <EditableColumnHeader locked rowSpan={2} minWidth={W.pago} light={hcMode}
                   value="PAGO"
-                  style={{ background:hcMode?`${HC.pago}14`:solidBg, borderBottom:`3px solid ${HC.pago}` }}/>
+                  style={{ background:hcMode?'var(--soft-bg)':solidBg, borderBottom:`3px solid ${HC.pago}` }}/>
                 <EditableColumnHeader locked rowSpan={2} minWidth={W.gar} light={hcMode}
                   value="GARANTÍA"
-                  style={{ background:hcMode?`${HC.gar}14`:solidBg, borderBottom:`3px solid ${HC.gar}` }}/>
+                  style={{ background:hcMode?'var(--soft-bg)':solidBg, borderBottom:`3px solid ${HC.gar}` }}/>
                 {esUniversidad && (
                   <EditableColumnHeader locked rowSpan={2} minWidth={W.area} light={hcMode}
                     value="ÁREA"
-                    style={{ background:hcMode?`${HC.area}14`:solidBg, borderBottom:`3px solid ${HC.area}` }}/>
+                    style={{ background:hcMode?'var(--soft-bg)':solidBg, borderBottom:`3px solid ${HC.area}` }}/>
                 )}
               </>}
 
@@ -1697,16 +1739,14 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                 cols={collapsed['sims']?1:visibleSims.length*3+1}
                 collapsed={!!collapsed['sims']}
                 onToggle={()=>toggleSection('sims')}
-                onAdd={()=>setSimCount(n=>n+1)}
-                onRemoveItem={()=>setSimCount(n=>Math.max(1,n-1))}
+                nota="Próximamente: aún no se guarda"
               />}
               {showOnline && <SectionHeader label={headerName('section:online','EXÁMENES DIGITALES (EXD)')}
-                onRename={v=>renameHeader('section:online',v)} color="#5D3E90"
+                onRename={v=>renameHeader('section:online',v)} color={HC.online}
                 cols={collapsed['online']?1:onlineCount+1}
                 collapsed={!!collapsed['online']}
                 onToggle={()=>toggleSection('online')}
-                onAdd={()=>setOnlineCount(n=>n+1)}
-                onRemoveItem={()=>setOnlineCount(n=>Math.max(1,n-1))}
+                nota="Próximamente: aún no se guarda"
               />}
               {showAttendance && <SectionHeader label="ASISTENCIAS" color="var(--good)"
                 cols={1} collapsed={false} onToggle={()=>{}}/>}
@@ -1716,7 +1756,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
             <tr style={{ background: solidBg }}>
               {/* Documentos */}
               {showDocs && (collapsed['docs']
-                ? <th style={{ minWidth:52, fontSize:10, color: hcMode ? HC.docs : 'var(--t4)', textAlign:'center', borderRight: hcMode ? `2px solid ${HC.docs}70` : '1px solid rgba(255,255,255,.06)' }}>···</th>
+                ? <th style={{ minWidth:52, fontSize:10, color: hcMode ? HC.docs : 'var(--t4)', textAlign:'center', borderRight: hcMode ? `2px solid ${HC.docs}` : '1px solid rgba(255,255,255,.06)' }}>···</th>
                 : [
                     ['doc_curp','CURP'],
                     ['doc_ine','INE tutor'],
@@ -1726,7 +1766,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                   ].map(([key,fallback]) => (
                     <EditableColumnHeader locked key={key} minWidth={68} light={hcMode}
                       value={fallback}
-                      style={{ background:hcMode?`${HC.docs}0d`:`${HC.docs}0a`,
+                      style={{ background:hcMode?'var(--soft-bg)':`${HC.docs}0a`,
                         borderBottom:`${hcMode?2:1}px solid ${HC.docs}${hcMode?'80':'60'}` }}/>
                   ))
               )}
@@ -1820,18 +1860,12 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
                       <span style={{ fontSize:12, fontWeight:500, color: hcMode ? '#0f172a' : 'rgba(255,255,255,.78)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>
                         {s.name}
                       </span>
-                      <button onClick={() => setDeleteConfirm({ id:s.id, name:s.name })}
-                        style={{ opacity:0, flexShrink:0 }}
-                        className="group-hover:!opacity-100 transition-opacity p-0.5 rounded hover:bg-red-500/20"
-                        title="Eliminar alumno">
-                        <Trash2 size={11} style={{ color:'var(--bad-line)' }}/>
-                      </button>
                     </div>
                   </td>
 
                   {/* Pago — NO sticky */}
                   {showSummary && <PaymentCell value={s.pago} onChange={v=>setPago(s.id,v)}
-                    tdStyle={{ minWidth:W.pago, background: hcMode ? `${HC.pago}06` : rowBg, border: `1px solid ${HC.pago}${hcMode ? '45' : '40'}`, boxShadow: !hcMode ? `0 0 6px ${HC.pago}25` : 'none', verticalAlign:'middle' }}
+                    tdStyle={{ minWidth:W.pago, background: hcMode ? 'var(--card-bg)' : rowBg, border: hcMode ? '1px solid var(--divider)' : `1px solid ${HC.pago}40`, boxShadow: !hcMode ? `0 0 6px ${HC.pago}25` : 'none', verticalAlign:'middle' }}
                   />}
 
                   {/* Garantía — NO sticky */}
@@ -1847,7 +1881,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
                   {/* Documentos */}
                   {showDocs && (collapsed['docs']
-                    ? <td style={{ minWidth:52, background: hcMode ? `${HC.docs}06` : rowBg }}/>
+                    ? <td style={{ minWidth:52, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
                     : <>
                         <AutoStatusCell value={s.curpEstado} bg={rowBg}/>
                         <AutoStatusCell value={s.ineEstado} bg={rowBg}/>
@@ -1859,38 +1893,38 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
 
                   {/* Materias */}
                   {subjects.filter(subj=>showSubject(subj.id)).map(subj => {
-                    if(collapsed[subj.id]) return <td key={subj.id} style={{ minWidth:52, background: hcMode ? `${subj.color}06` : rowBg }}/>
+                    if(collapsed[subj.id]) return <td key={subj.id} style={{ minWidth:52, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
                     return [
                       ...subj.cols.map(col=>(
                         <ScoreCell key={`${subj.id}_${col.id}`}
                           value={sc[`${subj.id}_${col.id}`]}
                           onChange={v=>setCell(s.id,`${subj.id}_${col.id}`,v)}
                           sc={subj.color}
+                          celda={`${s.id}_${col.id}`}
+                          foco={celdaFoco === `${s.id}_${col.id}`}
                         />
                       )),
-                      <td key={`${subj.id}_sp`} style={{ minWidth:26, background: hcMode ? `${subj.color}04` : rowBg }}/>,
+                      <td key={`${subj.id}_sp`} style={{ minWidth:26, background: hcMode ? 'var(--card-bg)' : rowBg }}/>,
                     ]
                   })}
 
                   {/* Simulacros */}
                   {showSims && (collapsed['sims']
-                    ? <td style={{ minWidth:52, background: hcMode ? `${HC.sims}06` : rowBg }}/>
+                    ? <td style={{ minWidth:52, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
                     : [...visibleSims.flatMap(n=>[
-                        <ScoreCell key={`sim_${n}_sc`} compact value={sc[`sim_${n}`]} onChange={v=>setCell(s.id,`sim_${n}`,v)} sc={HC.sims}/>,
-                        <CheckCell key={`sim_${n}_t`} checked={!!sc[`sim_${n}_tarea`]} onChange={()=>setCell(s.id,`sim_${n}_tarea`,!sc[`sim_${n}_tarea`])} bg={rowBg} sc={HC.sims}/>,
-                        <CheckCell key={`sim_${n}_a`} checked={!!sc[`sim_${n}_analisis`]} onChange={()=>setCell(s.id,`sim_${n}_analisis`,!sc[`sim_${n}_analisis`])} bg={rowBg} sc={HC.sims}/>,
+                        <td key={`sim_${n}_sc`} colSpan={3} style={{ minWidth:160, background: rowBg, textAlign:'center', fontSize:10, color:'var(--t3)' }}>Próximamente</td>,
                       ]),
-                      <td key="sims_sp" style={{ minWidth:26, background: hcMode ? `${HC.sims}04` : rowBg }}/>,
+                      <td key="sims_sp" style={{ minWidth:26, background: hcMode ? 'var(--card-bg)' : rowBg }}/>,
                     ]
                   )}
 
                   {/* Online */}
                   {showOnline && (collapsed['online']
-                    ? <td style={{ minWidth:52, background: hcMode ? `${HC.online}06` : rowBg }}/>
+                    ? <td style={{ minWidth:52, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
                     : [...Array.from({length:onlineCount},(_,i)=>i+1).map(n=>(
-                        <ScoreCell key={`on_${n}`} compact value={sc[`on_${n}`]} onChange={v=>setCell(s.id,`on_${n}`,v)} sc={HC.online}/>
+                        <td key={`on_${n}`} style={{ minWidth:64, background: rowBg, textAlign:'center', fontSize:10, color:'var(--t3)' }}>Próximamente</td>
                       )),
-                      <td key="online_sp" style={{ minWidth:26, background: hcMode ? `${HC.online}04` : rowBg }}/>,
+                      <td key="online_sp" style={{ minWidth:26, background: hcMode ? 'var(--card-bg)' : rowBg }}/>,
                     ]
                   )}
 
@@ -1916,95 +1950,6 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
       ))}
       <span style={{ color: 'var(--t4)' }}>· Click en celda para editar · Enter para guardar</span>
     </div>
-  )
-
-  /* ── Delete confirmation modal (before fullscreen early-return) ────────────── */
-  const deleteModal = deleteConfirm && createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}
-      onClick={() => setDeleteConfirm(null)}>
-      <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}
-        onClick={e => e.stopPropagation()}>
-
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
-          style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)' }}>
-          <Trash2 size={20} style={{ color:'var(--bad)' }}/>
-        </div>
-
-        <div className="text-center">
-          <h2 className="text-base font-bold mb-1" style={{ color: 'var(--t1)' }}>
-            ¿Eliminar alumno?
-          </h2>
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--t2)' }}>
-            Se eliminará a{' '}
-            <strong style={{ color: 'var(--t1)' }}>{deleteConfirm.name}</strong>
-            {' '}del registro. Esta acción no se puede deshacer.
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <button onClick={() => setDeleteConfirm(null)}
-            className="flex-1 min-h-11 py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}
-            onMouseEnter={e => e.currentTarget.style.background= 'var(--t4)'}
-            onMouseLeave={e => e.currentTarget.style.background= 'var(--soft-bg)'}>
-            Cancelar
-          </button>
-          <button
-            onClick={() => { removeStudent(deleteConfirm.id); setDeleteConfirm(null) }}
-            className="flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-all"
-            style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}
-            onMouseEnter={e => e.currentTarget.style.background='var(--bad-line)'}
-            onMouseLeave={e => e.currentTarget.style.background='var(--bad-soft)'}>
-            Sí, eliminar
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  )
-
-  /* ── Restore banner (must be defined BEFORE the fullscreen early-return) ──── */
-  const leaveModal = showLeaveModal && createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background:'rgba(0,0,0,.65)', backdropFilter:'blur(6px)' }}>
-      <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 animate-scale-in"
-        style={{ background:'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow:'0 24px 72px rgba(0,0,0,.70)' }}>
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
-          style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
-          <AlertTriangle size={20} style={{ color:'var(--warn)' }}/>
-        </div>
-        <div className="text-center">
-          <h2 className="text-base font-bold mb-1" style={{ color: 'var(--t1)' }}>
-            ¿Salir del registro?
-          </h2>
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--t3)' }}>
-            Tienes calificaciones y cambios sin finalizar. Puedes guardar un borrador para continuar después.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <button onClick={() => confirmLeave(true)}
-            className="w-full min-h-11 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all"
-            style={{ background:'var(--accent)', color:'var(--accent-contrast)' }}>
-            <Save size={13}/> Guardar borrador y salir
-          </button>
-          <button onClick={() => confirmLeave(false)}
-            className="w-full min-h-11 py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background:'var(--bad-soft)', border:'1px solid var(--bad-line)', color:'var(--bad)' }}
-            onMouseEnter={e => e.currentTarget.style.background='var(--bad-line)'}
-            onMouseLeave={e => e.currentTarget.style.background='var(--bad-soft)'}>
-            Descartar cambios y salir
-          </button>
-          <button onClick={() => setShowLeaveModal(false)}
-            className="w-full min-h-11 py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background: 'var(--soft-bg)', color: 'var(--t2)' }}>
-            Seguir editando
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
   )
 
   // ── Fullscreen wrapper (portal → fuera del árbol DOM del layout) ────────────
@@ -2054,8 +1999,6 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         {showAddStudent && <StudentFormModal groups={[group]} defaultGroupId={group.id}
           onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
-        {deleteModal}
-        {leaveModal}
       </div>
     </HCCtx.Provider>,
     document.body
@@ -2076,8 +2019,6 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange }) {
         {showAddStudent && <StudentFormModal groups={[group]} defaultGroupId={group.id}
           onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
-        {deleteModal}
-        {leaveModal}
       </div>
     </HCCtx.Provider>
   )
@@ -2103,6 +2044,18 @@ export default function Registrar() {
 
   useEffect(() => { cargar() }, [cargar])
 
+  // Desde el detalle de una calificación ("Abrir en la hoja") se llega con
+  // el grupo ya elegido: se abre su hoja directamente.
+  // Se aplica una sola vez: si luego vuelve al selector y la lista de grupos
+  // se recarga, no debe reabrirse sola.
+  const { state: navState } = useLocation()
+  const grupoInicialAplicado = useRef(false)
+  useEffect(() => {
+    if (grupoInicialAplicado.current || !navState?.groupId || !groups.length) return
+    const g = groups.find(x => x.id === navState.groupId)
+    if (g) { setSelectedGroup(g); grupoInicialAplicado.current = true }
+  }, [navState, groups])
+
   const selectedStudents = useMemo(
     () => selectedGroup ? students.filter(s => s.groupId === selectedGroup.id) : [],
     [students, selectedGroup],
@@ -2117,6 +2070,8 @@ export default function Registrar() {
       groupStudents={selectedStudents}
       onBack={() => setSelectedGroup(null)}
       onDataChange={cargar}
+      foco={navState?.columnaId && navState?.groupId === selectedGroup.id
+        ? { columnaId: navState.columnaId, studentId: navState.studentId } : null}
     />
   )
 }

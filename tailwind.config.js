@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // Los hover: de Tailwind solo con ratón: en táctil un toque dejaba el
+  // botón "pegado" en su estado de hover hasta tocar otra cosa.
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
       colors: {

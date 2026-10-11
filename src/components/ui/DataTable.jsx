@@ -12,7 +12,7 @@
  *   />
  */
 import { forwardRef } from 'react'
-import { useAdminTheme } from '../../context/AdminThemeContext'
+import { tintaSobre } from '../../lib/color'
 
 /**
  * Las columnas de ancho fijo no deben encogerse, pero la columna flexible SÍ:
@@ -69,7 +69,7 @@ export const DataTable = forwardRef(function DataTable(
             }}>
             {columns.map(col => (
               <div key={col.key}
-                className={`text-[9px] sm:text-[11px] font-bold uppercase tracking-normal sm:tracking-wider select-none items-center ${cellClass(col.className)}`}
+                className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-normal sm:tracking-wider select-none items-center ${cellClass(col.className)}`}
                 style={{ color:'var(--t2)' }}>
                 {col.label}
               </div>
@@ -97,10 +97,6 @@ export const DataTable = forwardRef(function DataTable(
 
 /* ── Single row ────────────────────────────────────────────── */
 export function DataTableRow({ cells = [], onClick, className = '', style: rowStyle = {} }) {
-  const { t } = useAdminTheme()
-  // brightness() aclara la fila hasta el blanco sobre fondo claro; ahí el
-  // realce se hace con el fondo suave del tema.
-  const claro = !!t?.light
   return (
     <div
       role={onClick ? 'button' : undefined}
@@ -110,11 +106,10 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
       data-fila=""
       className={`flex items-center gap-1 md:gap-3 px-2.5 md:px-5 py-2 md:py-2.5 min-h-[44px] md:min-h-[46px] transition-colors duration-150 cursor-default ${onClick ? 'cursor-pointer' : ''} ${className}`}
       style={{ borderBottom:'1px solid var(--divider)', background:'color-mix(in srgb, var(--card-bg) 96%, var(--soft-bg))', ...rowStyle }}
-      /* `filter: brightness()` está prohibido por la regla de color: sobre
-         fondo claro aclara la fila hasta el blanco. El realce es el fondo
-         suave del tema, que funciona igual en las tres identidades. */
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-bg)' }}
-      onMouseLeave={e => { e.currentTarget.style.background = '' }}>
+      /* El realce al pasar el ratón lo pone index.css
+         ([data-datatable] [data-fila]:hover → var(--soft-bg)). Un
+         onMouseLeave que vaciaba style.background borraba también el fondo
+         base de la fila y no lo volvía a pintar. */>
       {cells.map((cell, i) => (
         <div key={i} data-table-cell className={`${cellClass(cell.className)} [&_svg]:max-w-[14px] [&_svg]:max-h-[14px] sm:[&_svg]:max-w-none sm:[&_svg]:max-h-none`}>
           {cell.content}
@@ -139,7 +134,9 @@ export function DataTableAvatar({ initials, statusColor, name, sub, accentColor,
         ) : (
         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[9px] sm:text-[11px] font-bold transition-all duration-300"
           style={accentColor
-            ? { background:`${accentColor}30`, color: accentColor, border:`1px solid ${accentColor}60`, boxShadow:`0 0 10px ${accentColor}30` }
+            /* Color de grupo pleno con inicial blanca: el alfa sobre página
+               blanca se leía como "transparente" (regla 2-bis). */
+            ? { background: accentColor, color: tintaSobre(accentColor), border:'1px solid var(--card-border)' }
             : { background:'var(--soft-bg)', color:'var(--t1)', border:'1px solid var(--card-border)' }
           }>
           {initials}
@@ -153,7 +150,7 @@ export function DataTableAvatar({ initials, statusColor, name, sub, accentColor,
       {/* Name + sub */}
       <div className="min-w-0">
         <p className="text-xs sm:text-sm font-semibold truncate" style={{ color:'var(--t1)' }}>{name}</p>
-        {sub && <p className="text-[9px] sm:text-[11px] truncate" style={{ color:'var(--t3)' }}>{sub}</p>}
+        {sub && <p className="text-[10px] sm:text-[11px] truncate" style={{ color:'var(--t3)' }}>{sub}</p>}
       </div>
     </div>
   )
@@ -162,7 +159,7 @@ export function DataTableAvatar({ initials, statusColor, name, sub, accentColor,
 /* ── Badge cell helper ─────────────────────────────────────── */
 export function DataTableBadge({ label, dot, bg, color, border }) {
   return (
-    <span className={`badge text-[9px] sm:text-xs px-1.5 sm:px-2 ${bg} ${color} border ${border}`}>
+    <span className={`badge text-[10px] sm:text-xs px-1.5 sm:px-2 ${bg} ${color} border ${border}`}>
       {dot && <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />}
       {label}
     </span>
@@ -184,6 +181,33 @@ export function DataTableBar({ value, max = 100, color, label }) {
       <span className="text-[10px] sm:text-xs font-semibold flex-shrink-0" style={{ color:'var(--t2)' }}>
         {label}
       </span>
+    </div>
+  )
+}
+
+/* ── Esqueletos de carga ───────────────────────────────────────
+   Bloque y filas con el fondo suave del tema: sirven en las tres
+   identidades (la clase global `.skeleton` usa grises fijos de modo
+   claro y se veía como un parche blanco sobre el tema oscuro). */
+export function SkeletonBlock({ className = '' }) {
+  return (
+    <div aria-hidden="true"
+      className={`animate-pulse rounded-2xl motion-reduce:animate-none ${className}`}
+      style={{ background:'var(--soft-bg)', border:'1px solid var(--divider)' }}/>
+  )
+}
+
+export function SkeletonRows({ rows = 6 }) {
+  return (
+    <div role="status" aria-label="Cargando">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-3 px-2.5 md:px-5 py-2.5 min-h-[46px]"
+          style={{ borderBottom:'1px solid var(--divider)' }}>
+          <div className="w-8 h-8 rounded-full animate-pulse motion-reduce:animate-none" style={{ background:'var(--soft-bg)' }}/>
+          <div className="flex-1 h-3 rounded animate-pulse motion-reduce:animate-none" style={{ background:'var(--soft-bg)' }}/>
+          <div className="w-16 h-3 rounded animate-pulse motion-reduce:animate-none" style={{ background:'var(--soft-bg)' }}/>
+        </div>
+      ))}
     </div>
   )
 }

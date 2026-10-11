@@ -33,6 +33,9 @@ export const TOKENS = {
        blanco sobre ellos no llega al contraste mínimo. */
     goodSolid: '#18795F', infoSolid: '#2F6BB0',
     warnSolid: '#9C6210',  badSolid: '#B23A33',
+    neutralSolid: '#3D4A66',
+    // Avisos sobre las barras, que son oscuras en las tres identidades.
+    sideBad: '#ef4444', sideWarn: '#E6B33D', sideGood: '#34d399', brandSoft: '#c95f72',
     ddBg: 'rgba(255,255,255,.07)', ddPanel: '#12121e',
     panelBg: 'rgba(8,8,15,.96)', headerBg: 'rgba(5,5,10,.70)',
   },
@@ -43,10 +46,10 @@ export const TOKENS = {
     topBg: '#881126', bottomBg: '#881126',
     navActive: '#ffffff',
     sideT1: 'rgba(255,255,255,.95)', sideT2: 'rgba(255,255,255,.70)', sideT3: 'rgba(255,255,255,.45)',
-    t1: '#1a0b10', t2: '#423338', t3: '#6f5d63', t4: '#a89a9e',
+    t1: '#1a0b10', t2: '#423338', t3: '#6f5d63', t4: '#7d7076',
     cardBg: '#ffffff', cardBorder: 'rgba(136,17,38,.26)',
     softBg: 'rgba(136,17,38,.055)', divider: 'rgba(136,17,38,.16)',
-    grid: 'rgba(0,0,0,.07)', axis: '#a5979b',
+    grid: 'rgba(0,0,0,.07)', axis: '#7d7076',
     tooltipBg: '#ffffff', tooltipBorder: 'rgba(136,17,38,.20)', tooltipText: '#3f3237',
     accent: '#881126', good: '#1f6b55', info: '#2b5f9e', warn: '#9a5a0d', bad: '#a52f2a',
     goodSoft: '#e2f1ea', infoSoft: '#e4ecf8', warnSoft: '#fbeedb', badSoft: '#fae7e5',
@@ -55,6 +58,8 @@ export const TOKENS = {
        que ya es sólido y profundo. */
     goodSolid: '#1F6B55', infoSolid: '#2B5F9E',
     warnSolid: '#9A5A0D',  badSolid: '#A52F2A',
+    neutralSolid: '#12345A',
+    sideBad: '#ef4444', sideWarn: '#E6B33D', sideGood: '#34d399', brandSoft: '#f3c9d1',
     ddBg: '#ffffff', ddPanel: '#ffffff',
     panelBg: '#ffffff', headerBg: '#f4ecee',
   },
@@ -66,10 +71,10 @@ export const TOKENS = {
     topBg: '#003366', bottomBg: '#003366',
     navActive: '#CC9933',
     sideT1: 'rgba(255,255,255,.95)', sideT2: 'rgba(255,255,255,.72)', sideT3: 'rgba(255,255,255,.48)',
-    t1: '#08192e', t2: '#2b4260', t3: '#5a7189', t4: '#9aabbe',
+    t1: '#08192e', t2: '#2b4260', t3: '#5a7189', t4: '#61778d',
     cardBg: '#ffffff', cardBorder: 'rgba(0,51,102,.24)',
     softBg: 'rgba(0,51,102,.055)', divider: 'rgba(0,51,102,.14)',
-    grid: 'rgba(0,51,102,.08)', axis: '#8ba0b8',
+    grid: 'rgba(0,51,102,.08)', axis: '#61778d',
     tooltipBg: '#ffffff', tooltipBorder: 'rgba(0,51,102,.18)', tooltipText: '#0f2440',
     accent: '#003366', good: '#1f6b55', info: '#2b5f9e', warn: '#8c6417', bad: '#a52f2a',
     goodSoft: '#e2f1ea', infoSoft: '#e4ecf8', warnSoft: '#f8eeda', badSoft: '#fae7e5',
@@ -78,6 +83,8 @@ export const TOKENS = {
        que ya es sólido y profundo. */
     goodSolid: '#1F6B55', infoSolid: '#2B5F9E',
     warnSolid: '#8C6417',  badSolid: '#A52F2A',
+    neutralSolid: '#12345A',
+    sideBad: '#ef4444', sideWarn: '#E6B33D', sideGood: '#34d399', brandSoft: '#CC9933',
     gold: '#CC9933',
     ddBg: '#ffffff', ddPanel: '#ffffff',
     panelBg: '#ffffff', headerBg: '#eef3f9',
@@ -90,9 +97,9 @@ export const TOKENS = {
    en ese caso `cardColor` guarda el hex y no un id. */
 export const CARD_COLORS = [
   /* ── Institucional ── */
-  { id: 'siga',      label: 'SIGA Navy',  grupo: 'Institucional', grad: 'linear-gradient(135deg, rgba(30,58,110,.95) 0%, rgba(24,46,87,.85) 70%, rgba(161,28,51,.45) 100%)' },
+  { id: 'siga',      label: 'SIGA Navy',  grupo: 'Institucional', grad: 'linear-gradient(135deg, #1E3A6E 0%, #182E57 70%, #7A1626 100%)' },
   { id: 'guinda',    label: 'Guinda IPN', grupo: 'Institucional', grad: 'linear-gradient(135deg, #881126 0%, #5a0b19 100%)' },
-  { id: 'unam',      label: 'Azul UNAM',  grupo: 'Institucional', grad: 'linear-gradient(135deg, #003366 0%, #00284f 72%, rgba(204,153,51,.55) 100%)' },
+  { id: 'unam',      label: 'Azul UNAM',  grupo: 'Institucional', grad: 'linear-gradient(135deg, #003366 0%, #00284f 72%, #8A6A1F 100%)' },
 
   /* ── Oscuros ── */
   { id: 'guinda-solido', label: 'Guinda',    grupo: 'Oscuros', grad: '#4D0B1D' },

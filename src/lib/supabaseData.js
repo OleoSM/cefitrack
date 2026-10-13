@@ -140,6 +140,7 @@ export async function fetchStudents() {
     examenGeneral: s.examen_general,
     avatar: s.avatar,
     avatarSrc: s.avatar_catalogo?.src ?? null,
+    fotoPath: s.foto_path ?? null,
   }))
 }
 
@@ -180,6 +181,7 @@ export async function fetchStudentById(id) {
     examenGeneral: data.examen_general,
     avatar: data.avatar,
     avatarSrc: data.avatar_catalogo?.src ?? null,
+    fotoPath: data.foto_path ?? null,
   }
 }
 
@@ -691,6 +693,58 @@ export async function reactivarSubAdmin(perfilId) {
   return { ok: true, email: row?.email ?? null }
 }
 
+/* ── Apartados del panel por sub-admin ─────────────────────────────────────
+   Qué secciones ve cada sub-admin. Lo decide un admin; Pagos y Correos se
+   bloquean también en el servidor. */
+const MENSAJES_APARTADOS = {
+  solo_admin:          'Solo un administrador puede decidir los apartados.',
+  solo_sub_admin:      'Los apartados solo se eligen para sub-admins: un administrador ve todo.',
+  apartado_invalido:   'Uno de los apartados no existe.',
+  cuenta_no_encontrada:'No se encontró la cuenta.',
+}
+
+/** Apartados que puede abrir quien tiene la sesión (admin: todos). */
+export async function fetchMisApartados() {
+  const { data, error } = await supabase.rpc('mis_apartados')
+  if (error) throw error
+  return data ?? []
+}
+
+/** { [userId]: { apartados, personalizado } } de todos los sub-admins (solo admin). */
+export async function fetchApartadosPersonal() {
+  const { data, error } = await supabase.rpc('list_apartados_personal')
+  if (error) throw error
+  return Object.fromEntries((data ?? []).map(r => [r.user_id, { apartados: r.apartados ?? [], personalizado: r.personalizado }]))
+}
+
+export async function setApartadosPersonal(userId, apartados) {
+  const { data, error } = await supabase.rpc('admin_set_apartados', { p_user: userId, p_apartados: apartados })
+  if (error) {
+    const clave = Object.keys(MENSAJES_APARTADOS).find(k => (error.message ?? '').includes(k))
+    throw new Error(clave ? MENSAJES_APARTADOS[clave] : 'No se pudieron guardar los apartados.')
+  }
+  return data ?? []
+}
+
+/** Alta de admin o sub-admin (este con sus apartados) en un solo paso. */
+export async function crearPersonal({ name, email, password, role, apartados }) {
+  const { data, error } = await supabase.rpc('crear_personal', {
+    p_name: name, p_email: email, p_password: password, p_role: role,
+    p_apartados: role === 'sub_admin' ? apartados : null,
+  })
+  if (error) {
+    const msg = error.message ?? ''
+    const clave = Object.keys(MENSAJES_ALTA).find(k => msg.includes(k))
+    if (clave) return { ok: false, message: MENSAJES_ALTA[clave] }
+    if (msg.includes('contrasena_corta')) return { ok: false, message: 'La contraseña debe tener al menos 6 caracteres.' }
+    if (msg.includes('nombre_vacio')) return { ok: false, message: 'Escribe el nombre de la persona.' }
+    return { ok: false, message: 'No se pudo crear la cuenta.' }
+  }
+  const row = data?.[0]
+  if (!row) return { ok: false, message: 'No se pudo crear la cuenta.' }
+  return { ok: true, user: { id: row.id, name: row.name, email: row.email, role: row.role } }
+}
+
 export async function fetchSubAdminAccess(userId) {
   const { data, error } = await supabase.from('sub_admin_access').select('*').eq('user_id', userId)
   if (error) throw error
@@ -732,7 +786,92 @@ export async function fetchColumnasRegistro(groupId) {
     id: c.id, materia: c.materia, materiaOrden: c.materia_orden,
     materiaColor: c.materia_color, nombre: c.nombre, tipo: c.tipo,
     calMax: Number(c.cal_max), orden: c.orden, bloque:c.bloque, esFija:!!c.es_fija,
+    // Formato: calificacion (número 0..calMax) | check (hecho/no) | valor (libre u opciones).
+    formato: c.formato ?? 'calificacion', cuenta: c.cuenta_en_promedio !== false,
+    opciones: Array.isArray(c.opciones) ? c.opciones : null, descripcion: c.descripcion ?? '',
+    // Prerrequisito (otra columna del grupo) y si cuenta para la garantía.
+    requisitoId: c.requisito_id ?? null,
+    requisitoMin: c.requisito_min == null ? null : Number(c.requisito_min),
+    cuentaGarantia: c.cuenta_garantia !== false,
   }))
+}
+
+const MENSAJES_REQUISITO = {
+  requisito_propio: 'Una columna no puede ser requisito de sí misma.',
+  requisito_ajeno:  'El requisito debe ser una columna de este mismo grupo.',
+  requisito_ciclo:  'Ese requisito haría un círculo (A pide B y B pide A).',
+  requisito_min_invalido: 'El mínimo no puede ser negativo.',
+  forbidden:        'No tienes permiso sobre este grupo.',
+}
+
+/** Prerrequisito y "cuenta para la garantía" de una columna. */
+export async function configurarRequisitoColumna({ id, requisitoId = null, requisitoMin = null, cuentaGarantia = true }) {
+  const { error } = await supabase.rpc('configurar_requisito_columna', {
+    p_columna_id: id, p_requisito_id: requisitoId, p_requisito_min: requisitoMin, p_cuenta_garantia: cuentaGarantia,
+  })
+  if (error) {
+    const clave = Object.keys(MENSAJES_REQUISITO).find(k => (error.message ?? '').includes(k))
+    return { ok: false, message: clave ? MENSAJES_REQUISITO[clave] : 'No se pudo guardar el requisito.' }
+  }
+  return { ok: true }
+}
+
+/** Añade un bloque Guía de estudio → Examen → Análisis de resultados. */
+export async function agregarBloqueExamen(groupId) {
+  const { data, error } = await supabase.rpc('agregar_bloque_examen', { p_group_id: groupId })
+  if (error) throw error
+  return data
+}
+
+/** Orden de los bloques de la hoja (también los fijos) o null si nunca se movió. */
+export async function fetchOrdenBloques(groupId) {
+  const { data, error } = await supabase.from('registro_orden_bloques').select('orden').eq('group_id', groupId).maybeSingle()
+  if (error) throw error
+  return data?.orden ?? null
+}
+
+export async function guardarOrdenBloques(groupId, orden) {
+  const { error } = await supabase.rpc('guardar_orden_bloques', { p_group_id: groupId, p_orden: orden })
+  if (error) throw error
+}
+
+const MENSAJES_COLUMNA = {
+  nombre_vacio:        'Escribe un nombre para la columna.',
+  nombre_repetido:     'Ya hay otra columna con ese nombre en esta materia.',
+  cal_max_invalido:    'La calificación máxima debe ser mayor que 0.',
+  opciones_invalidas:  'Revisa las opciones (máximo 20).',
+  columna_fija:        'Esta columna es parte de la plantilla y no se puede modificar.',
+  forbidden:           'No tienes permiso para modificar columnas de este grupo.',
+}
+
+/**
+ * Configura una columna de la hoja: nombre, tipo, formato (calificacion |
+ * check | valor), máximo, si cuenta para el promedio, opciones y descripción.
+ * Devuelve { ok } o { ok:false, message, conValores?, fueraDeRango? }.
+ * `conValores`: cambiar el formato borraría N valores ya capturados; se
+ * vuelve a llamar con limpiar=true tras confirmarlo.
+ */
+export async function configurarColumnaRegistro({ id, nombre, tipo, calMax, formato, cuenta, opciones, descripcion, limpiar = false }) {
+  const { error } = await supabase.rpc('configurar_columna_registro', {
+    p_columna_id: id, p_nombre: nombre, p_tipo: tipo, p_cal_max: calMax,
+    p_formato: formato, p_cuenta: cuenta, p_opciones: opciones?.length ? opciones : null,
+    p_descripcion: descripcion ?? null, p_limpiar: limpiar,
+  })
+  if (!error) return { ok: true }
+  const msg = error.message ?? ''
+  const conValores = msg.match(/tiene_valores:(\d+)/)
+  if (conValores) return { ok: false, conValores: Number(conValores[1]), message: '' }
+  const fuera = msg.match(/valores_fuera_de_rango:([\d.]+)/)
+  if (fuera) return { ok: false, message: `Hay calificaciones de hasta ${Number(fuera[1])}: el máximo no puede ser menor.` }
+  const clave = Object.keys(MENSAJES_COLUMNA).find(k => msg.includes(k))
+  return { ok: false, message: clave ? MENSAJES_COLUMNA[clave] : 'No se pudo guardar la configuración de la columna.' }
+}
+
+/** Guarda el orden de materias y columnas de la hoja.
+ *  orden: [{ materia, columnas: [columnaId, ...] }, ...] en el orden deseado. */
+export async function reordenarRegistro(groupId, orden) {
+  const { error } = await supabase.rpc('reordenar_registro', { p_group_id: groupId, p_orden: orden })
+  if (error) throw error
 }
 
 /** Calificaciones de la hoja: { [studentId]: { [columnaId]: calificacion } } */
@@ -839,6 +978,42 @@ export async function fetchAvatares() {
  * sólo la suya. Si no hay permiso, devuelve null en vez de un error, porque
  * tampoco debe revelarse si la cuenta existe.
  */
+const MENSAJES_ACCESO = {
+  solo_admin:           'Solo un administrador puede editar accesos.',
+  no_editar_otro_admin: 'No se puede cambiar el acceso de otro administrador.',
+  cuenta_retirada:      'La cuenta está retirada: reincorpórala primero.',
+  cuenta_no_encontrada: 'No se encontró la cuenta.',
+  correo_invalido:      'Ese correo no es válido.',
+  correo_repetido:      'Ese correo ya lo usa otra cuenta.',
+  contrasena_corta:     'La contraseña debe tener al menos 6 caracteres.',
+  sin_cambios:          'No cambiaste nada.',
+}
+
+/**
+ * Cambia el usuario (correo) y/o la contraseña de una cuenta (solo admin).
+ * `cuenta`: id de perfil o id de alumno. Vacíos = sin cambio.
+ * Cierra las sesiones abiertas de esa persona.
+ */
+export async function adminActualizarAcceso({ cuenta, email = '', password = '' }) {
+  const { data, error } = await supabase.rpc('admin_actualizar_acceso', {
+    p_cuenta: cuenta, p_email: email || null, p_password: password || null,
+  })
+  if (error) {
+    const clave = Object.keys(MENSAJES_ACCESO).find(k => (error.message ?? '').includes(k))
+    return { ok: false, message: clave ? MENSAJES_ACCESO[clave] : 'No se pudo guardar el acceso.' }
+  }
+  return { ok: true, email: data?.[0]?.email ?? email }
+}
+
+/** Credenciales vigentes de una cuenta de personal (sub-admin) por su id de
+ *  perfil. La RPC solo las entrega al admin (o a la propia persona). */
+export async function fetchCredencialesPerfil(perfilId) {
+  const { data, error } = await supabase.rpc('ver_credenciales', { p_perfil_id: perfilId })
+  if (error) throw error
+  const row = data?.[0]
+  return row ? { email: row.email, password: row.password } : null
+}
+
 export async function fetchCredencialesAlumno(studentId) {
   const { data, error } = await supabase.rpc('ver_credenciales_alumno', {
     p_student_id: studentId,

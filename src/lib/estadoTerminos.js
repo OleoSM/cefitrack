@@ -23,13 +23,16 @@ const ok = e => e === 'entregado' || e === 'validado'
  *    administración) | 'alerta' (le falta entregar algo)
  *  - pasos: [{ id, estado: 'hecho'|'rechazado'|'pendiente', motivo? }] en el
  *    orden del asistente
- *  - docs: { curp, ine, garantia, terminos } con el registro de cada uno
+ *  - docs: { curp, ine, garantia, terminos, ecoems } con el registro de cada uno
+ *    (`ecoems` = comprobante de inscripción: opcional, no cuenta en los pasos)
  */
 export function estadoExpediente(student, documentos = [], lectura = {}) {
   if (!student) return { estado: 'alerta', pasos: [], docs: {}, hechos: 0, total: 5 }
   const doc = tipo => documentos.find(d => d.document_type === tipo) ?? null
   const docs = { curp: doc('curp'), ine: doc('ine_tutor'), garantia: doc('garantia'), terminos: doc('terminos') }
   const e = Object.fromEntries(Object.entries(docs).map(([k, d]) => [k, estadoDoc(d)]))
+  // Se añade DESPUÉS de calcular `e`: es opcional y no debe pesar en ningún paso.
+  docs.ecoems = doc('comprobante_ecoems')
 
   const firmado = student.termsStatus === 'firmado'
   // Firmar a mano y subir el PDF también cuenta como firma entregada.

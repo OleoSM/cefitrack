@@ -22,6 +22,8 @@ const StudentDashboard = lazy(() => import('./pages/student/Dashboard'))
 const MyGrades         = lazy(() => import('./pages/student/MyGrades'))
 const MyAttendance     = lazy(() => import('./pages/student/MyAttendance'))
 const MyQR             = lazy(() => import('./pages/student/MyQR'))
+const MisMateriales    = lazy(() => import('./pages/student/MisMateriales'))
+const Materiales       = lazy(() => import('./pages/admin/Materiales'))
 const Terms            = lazy(() => import('./pages/student/Terms'))
 const StudentSettings  = lazy(() => import('./pages/student/Settings'))
 const TermsManager     = lazy(() => import('./pages/admin/TermsManager'))
@@ -39,6 +41,13 @@ function ProtectedAdmin({ children }) {
   if (!currentUser) return <Navigate to="/login" replace />
   if (!ADMIN_ROLES.includes(currentUser.role)) return <Navigate to="/student" replace />
   return children
+}
+
+/* Apartados que un admin abre o cierra a cada sub-admin. Entrar por URL a uno
+   cerrado devuelve al Dashboard, que avisa de por qué. */
+function Apartado({ clave, children }) {
+  const { puedeVer } = useAuth()
+  return puedeVer(clave) ? children : <Navigate to="/admin" replace state={{ apartadoBloqueado: clave }} />
 }
 
 function ProtectedStudent({ children }) {
@@ -74,18 +83,19 @@ export default function App() {
               <ProtectedAdmin><AdminLayout /></ProtectedAdmin>
             }>
               <Route index                        element={<Dashboard />} />
-              <Route path="asistencias"           element={<Attendance />} />
-              <Route path="grupos"                element={<Groups />} />
-              <Route path="grupos/:groupId"       element={<GroupDetail />} />
-              <Route path="alumnos"               element={<Students />} />
-              <Route path="alumnos/:studentId"    element={<StudentProfile />} />
-              <Route path="evaluaciones"          element={<Evaluations />} />
-              <Route path="rankings"              element={<Rankings />} />
-              <Route path="terminos"              element={<TermsManager />} />
-              <Route path="registrar"             element={<Registrar />} />
-              <Route path="pagos"                 element={<Pagos />} />
-              <Route path="correos"                element={<EnviarCorreos />} />
-              <Route path="configuracion"         element={<Settings />} />
+              <Route path="asistencias"           element={<Apartado clave="asistencias"><Attendance /></Apartado>} />
+              <Route path="grupos"                element={<Apartado clave="grupos"><Groups /></Apartado>} />
+              <Route path="grupos/:groupId"       element={<Apartado clave="grupos"><GroupDetail /></Apartado>} />
+              <Route path="alumnos"               element={<Apartado clave="alumnos"><Students /></Apartado>} />
+              <Route path="alumnos/:studentId"    element={<Apartado clave="alumnos"><StudentProfile /></Apartado>} />
+              <Route path="evaluaciones"          element={<Apartado clave="evaluaciones"><Evaluations /></Apartado>} />
+              <Route path="materiales"            element={<Apartado clave="materiales"><Materiales /></Apartado>} />
+              <Route path="rankings"              element={<Apartado clave="rankings"><Rankings /></Apartado>} />
+              <Route path="terminos"              element={<Apartado clave="terminos"><TermsManager /></Apartado>} />
+              <Route path="registrar"             element={<Apartado clave="calificaciones"><Registrar /></Apartado>} />
+              <Route path="pagos"                 element={<Apartado clave="pagos"><Pagos /></Apartado>} />
+              <Route path="correos"               element={<Apartado clave="correos"><EnviarCorreos /></Apartado>} />
+              <Route path="configuracion"         element={<Apartado clave="configuracion"><Settings /></Apartado>} />
               <Route path="configuracion/acceso"  element={<AccesoDisposicion />} />
             </Route>
 
@@ -97,6 +107,7 @@ export default function App() {
               <Route path="calificaciones"          element={<MyGrades />} />
               <Route path="asistencias"             element={<MyAttendance />} />
               <Route path="mi-qr"                   element={<MyQR />} />
+              <Route path="materiales"              element={<MisMateriales />} />
               <Route path="terminos"               element={<Terms />} />
               <Route path="configuracion"          element={<StudentSettings />} />
             </Route>

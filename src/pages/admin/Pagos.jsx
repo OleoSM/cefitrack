@@ -91,8 +91,10 @@ function MetodoBadge({ metodo, compacto = false }) {
 
 export default function Pagos() {
   const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
-  const { currentUser } = useAuth()
-  const isAdmin = currentUser?.role === 'admin'
+  const { puedeVer } = useAuth()
+  // Admin, o sub-admin al que un admin le abrió el apartado (el servidor
+  // además lo limita a los alumnos de sus grupos).
+  const isAdmin = puedeVer('pagos')
 
   const [filas, setFilas]       = useState([])
   const [pagos, setPagos]       = useState([])

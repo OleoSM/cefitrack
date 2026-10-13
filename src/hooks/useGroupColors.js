@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useAdminTheme } from '../context/AdminThemeContext'
 import { supabase } from '../lib/supabaseClient'
+import { aRgb, tintaSobre, contraste } from '../lib/color'
+import { nombreCanal } from '../lib/realtime'
 
 /*
  * Cada paleta tiene:
@@ -122,6 +124,37 @@ export const GRADIENT_PALETTES = COLOR_PALETTES.filter(p => p.type === 'gradient
 /* Las mate son sólidas, pero van en su propia sección del selector. */
 export const SOLID_PALETTES    = COLOR_PALETTES.filter(p => p.type === 'solid' && !p.mate)
 
+/* ── Color de letra de la tarjeta ─────────────────────────────────────────
+   Con algunos fondos el blanco fijo no se leía. "Automático" elige blanco u
+   oscuro por contraste; el resto lo fija quien personaliza el grupo. */
+export const TINTAS = [
+  { id:'auto',     name:'Automático' },
+  { id:'blanco',   name:'Blanco',   hex:'#FFFFFF' },
+  { id:'hueso',    name:'Hueso',    hex:'#F4ECDD' },
+  { id:'amarillo', name:'Amarillo', hex:'#FFE7A0' },
+  { id:'celeste',  name:'Celeste',  hex:'#CDEBFF' },
+  { id:'negro',    name:'Negro',    hex:'#0B0B10', oscura:true },
+  { id:'grafito',  name:'Grafito',  hex:'#262B36', oscura:true },
+]
+
+/* Variables de texto y bordes que hereda todo lo que va dentro de la tarjeta.
+   Los niveles secundarios son la misma tinta más tenue; los bordes y rellenos
+   suaves van en blanco o negro translúcido según la tinta sea clara u oscura. */
+function variablesDeTinta(hex, oscura) {
+  const [r, g, b] = aRgb(hex)
+  const base = oscura ? '0,0,0' : '255,255,255'
+  return {
+    '--t1': hex,
+    '--t2': `rgba(${r},${g},${b},.84)`,
+    '--t3': `rgba(${r},${g},${b},.68)`,
+    '--t4': `rgba(${r},${g},${b},.5)`,
+    '--divider': `rgba(${base},.20)`,
+    '--card-border': `rgba(${base},.24)`,
+    '--soft-bg': `rgba(${base},.10)`,
+    '--card-bg': `rgba(${base},.08)`,
+  }
+}
+
 /* Config base del Warp shader */
 export const SHADER_CONFIG = {
   proportion:       0.38,
@@ -149,11 +182,12 @@ const SEMBRADO_KEY = 'siga_paletas_migradas'
    instancia del hook— por grupo, y no tendría sentido que cada una pidiera la
    lista entera. Se carga una vez y todas escuchan los cambios. */
 let paletas = {}
+let tintas = {}
 let carga = null
 const oyentes = new Set()
 let canal = null
 
-function avisar() { oyentes.forEach(fn => fn(paletas)) }
+function avisar() { oyentes.forEach(fn => fn({ paletas, tintas })) }
 
 function leerLocalesAntiguas() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} }
@@ -177,9 +211,10 @@ async function sembrarDesdeLocal(enBd) {
 }
 
 function cargarPaletas() {
-  carga ??= supabase.from('groups').select('id, paleta').then(({ data, error }) => {
+  carga ??= supabase.from('groups').select('id, paleta, tinta').then(({ data, error }) => {
     if (error) { carga = null; return paletas }
     paletas = Object.fromEntries(data.filter(g => g.paleta).map(g => [g.id, g.paleta]))
+    tintas  = Object.fromEntries(data.filter(g => g.tinta).map(g => [g.id, g.tinta]))
     avisar()
     sembrarDesdeLocal(paletas)
     return paletas
@@ -191,22 +226,27 @@ function cargarPaletas() {
    Es el mismo canal para toda la aplicación. */
 function escucharCambios() {
   if (canal) return
-  canal = supabase.channel('paletas-de-grupo')
+  /* Nombre único: `supabase.channel()` devuelve el canal existente si el nombre
+     se repite, y tras una recarga en caliente (o un segundo montaje) ese canal
+     ya está suscrito y añadirle `.on()` lanza un error que tumba la página. */
+  canal = supabase.channel(nombreCanal('paletas-de-grupo'))
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'groups' }, ({ new: fila }) => {
       if (!fila?.id) return
-      const actual = paletas[fila.id]
       const nueva  = fila.paleta || undefined
-      if (actual === nueva) return
+      const nuevaT = fila.tinta || undefined
+      if (paletas[fila.id] === nueva && tintas[fila.id] === nuevaT) return
       const copia = { ...paletas }
       if (nueva) copia[fila.id] = nueva; else delete copia[fila.id]
-      paletas = copia
+      const copiaT = { ...tintas }
+      if (nuevaT) copiaT[fila.id] = nuevaT; else delete copiaT[fila.id]
+      paletas = copia; tintas = copiaT
       avisar()
     })
     .subscribe()
 }
 
 export function useGroupColors() {
-  const [saved, setSaved] = useState(paletas)
+  const [{ paletas: saved, tintas: savedT }, setSaved] = useState({ paletas, tintas })
   const { t } = useAdminTheme()
   const claro = !!t?.light          // IPN o UNAM
 
@@ -215,7 +255,9 @@ export function useGroupColors() {
      tarjetas ya montadas hasta recargar la página. */
   useEffect(() => {
     cargarPaletas()
-    escucharCambios()
+    /* El tiempo real es un extra: si falla, los colores siguen cargándose y
+       la pantalla no debe caerse por ello. */
+    try { escucharCambios() } catch { canal = null }
     const sync = next => setSaved(next)
     oyentes.add(sync)
     return () => { oyentes.delete(sync) }
@@ -254,6 +296,41 @@ export function useGroupColors() {
     return p.type === 'solid' ? p.bg : '#08080f'
   }, [getPalette, claro])
 
+  /* Color sobre el que realmente se lee el texto: en claro la superficie
+     sólida; en oscuro, el degradado bajo su velo negro o el sólido del grupo. */
+  const fondoDeLectura = useCallback((groupId, paletteId) => {
+    const p = (paletteId && COLOR_PALETTES.find(x => x.id === paletteId)) || getPalette(groupId)
+    if (claro && p.light) return p.light.bg
+    return p.type === 'gradient' ? '#121218' : p.bg
+  }, [getPalette, claro])
+
+  const getTintaId = useCallback(groupId => savedT[groupId] ?? 'auto', [savedT])
+
+  /** { id, hex, oscura, contraste, vars } de la tinta del grupo, ya resuelta.
+   *  `id` y `paletteId` permiten previsualizar una combinación sin guardar. */
+  const resolverTinta = useCallback((groupId, id = getTintaId(groupId), paletteId) => {
+    const fondo = fondoDeLectura(groupId, paletteId)
+    let t = TINTAS.find(x => x.id === id && x.hex)
+    if (!t) {
+      // Automático: blanco u oscuro según el fondo de lectura.
+      const hex = tintaSobre(fondo) === '#ffffff' ? '#FFFFFF' : '#0B0B10'
+      t = { id:'auto', hex, oscura: hex !== '#FFFFFF' }
+    }
+    /* En el tema oscuro una letra oscura no va sobre el velo negro: la tarjeta
+       cambia a un velo claro (ver GroupShaderCard) y se mide contra él. */
+    const fondoReal = (!claro && t.oscura) ? '#E8E8EE' : fondo
+    return { ...t, id, velaClara: !claro && !!t.oscura, contraste: contraste(t.hex, fondoReal),
+      vars: variablesDeTinta(t.hex, !!t.oscura) }
+  }, [getTintaId, fondoDeLectura, claro])
+
+  const setGroupTinta = useCallback(async (groupId, tintaId) => {
+    tintas = { ...tintas }
+    if (tintaId === 'auto') delete tintas[groupId]; else tintas[groupId] = tintaId
+    avisar()
+    const { error } = await supabase.rpc('set_tinta_grupo', { p_group_id: groupId, p_tinta: tintaId })
+    if (error) { carga = null; cargarPaletas() }
+  }, [])
+
   /** True si la identidad activa es clara — lo usan las tarjetas con shader. */
   const isLight = claro
 
@@ -269,5 +346,6 @@ export function useGroupColors() {
     if (error) { carga = null; cargarPaletas() }
   }, [])
 
-  return { getColors, getAccent, getSurface, isLight, getPaletteId, getPalette, setGroupPalette }
+  return { getColors, getAccent, getSurface, isLight, getPaletteId, getPalette, setGroupPalette,
+    getTintaId, resolverTinta, setGroupTinta, fondoDeLectura }
 }

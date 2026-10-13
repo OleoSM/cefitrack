@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Send, Users, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Send, Users, AlertTriangle, CheckCircle2, Mail, History, XCircle, MinusCircle } from 'lucide-react'
 import { fetchStudents, fetchGroups } from '../../lib/supabaseData'
-import { crearNotificaciones, guardarBorradorCorreo } from '../../lib/comunicacionesData'
+import { crearNotificaciones, guardarBorradorCorreo, enviarCorreo, fetchCupoCorreos, fetchEnviosRecientes } from '../../lib/comunicacionesData'
 import { useAuth } from '../../context/AuthContext'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import BarraFiltros from '../../components/ui/BarraFiltros'
@@ -11,8 +11,9 @@ import { useSucursales } from '../../hooks/useSucursales'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
 export default function EnviarCorreos() {
-  const { currentUser } = useAuth()
-  const isAdmin = currentUser?.role === 'admin'
+  const { puedeVer } = useAuth()
+  // Admin, o sub-admin con el apartado: solo escribe a alumnos de sus grupos.
+  const isAdmin = puedeVer('correos')
   const { nombreDe } = useSucursales()
   const { sucursal, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [groups, setGroups] = useState([])
@@ -27,12 +28,27 @@ export default function EnviarCorreos() {
   const [includeTutor, setIncludeTutor] = useState(true)
   const [status, setStatus] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [cupo, setCupo] = useState(null)          // { enviados, limite } de hoy
+  const [envios, setEnvios] = useState([])        // historial reciente
 
+  const refrescarEnvios = () => {
+    fetchCupoCorreos().then(setCupo).catch(() => {})
+    fetchEnviosRecientes().then(setEnvios).catch(() => {})
+  }
   useEffect(() => {
     Promise.all([fetchStudents(), fetchGroups()])
       .then(([sts, grs]) => { setStudents(sts); setGroups(grs) })
       .catch(() => setStatus({ bad:true, text:'No se cargaron los alumnos.' }))
+    refrescarEnvios()
   }, [])
+
+  /* Cuántos correos saldrían realmente: el del alumno es su correo PERSONAL
+     (el de acceso @siga.mx no es un buzón) y el del tutor, el que registró. */
+  const elegidos = students.filter(s => selected.includes(s.id))
+  const conCorreoAlumno = elegidos.filter(s => s.personalEmail).length
+  const conCorreoTutor  = elegidos.filter(s => s.tutor?.email).length
+  const correosPrevistos = (includeStudent ? conCorreoAlumno : 0) + (includeTutor ? conCorreoTutor : 0)
+  const restante = cupo ? Math.max(0, cupo.limite - cupo.enviados) : null
 
   const gruposEnSucursal = sucursal === TODAS ? groups : groups.filter(g => g.sucursal === sucursal)
   const visibles = useMemo(() => {
@@ -54,13 +70,24 @@ export default function EnviarCorreos() {
   const submit = async e => {
     e.preventDefault(); setStatus(null)
     if (!selected.length || !subject.trim() || !body.trim()) return setStatus({ bad:true, text:'Selecciona destinatarios, asunto y mensaje.' })
+    if (!includeStudent && !includeTutor) return setStatus({ bad:true, text:'Marca al menos "Alumno" o "Tutor".' })
     setSaving(true)
     try {
       const targets = students.filter(s => selected.includes(s.id))
-      await guardarBorradorCorreo({ subject, body, studentIds:selected, includeStudent, includeTutor })
+      const draft = await guardarBorradorCorreo({ subject, body, studentIds:selected, includeStudent, includeTutor })
+      // La notificación dentro de SIGA llega siempre, haya correo o no.
       await crearNotificaciones({ students:targets, title:subject, body })
-      setStatus({ text:'Notificación enviada. El correo quedó pendiente hasta configurar Resend.' })
-      setSubject(''); setBody(''); setSelected([])
+      const r = await enviarCorreo(draft.id)
+      if (!r.ok) {
+        setStatus({ bad:true, text:`Se envió la notificación dentro de SIGA, pero no el correo: ${r.message}` })
+      } else {
+        const partes = [`${r.enviados} correo(s) enviado(s)`]
+        if (r.omitidos) partes.push(`${r.omitidos} sin enviar (sin correo o sin cupo)`)
+        if (r.fallidos) partes.push(`${r.fallidos} con error${r.motivoFallo ? `: ${r.motivoFallo}` : ''}`)
+        setStatus({ bad: r.enviados === 0, text: `${partes.join(' · ')}. Notificación entregada dentro de SIGA.` })
+        if (r.enviados > 0) { setSubject(''); setBody(''); setSelected([]) }
+      }
+      refrescarEnvios()
     } catch (err) { setStatus({ bad:true, text:err?.message ?? 'No se pudo guardar el envío.' }) }
     setSaving(false)
   }
@@ -72,9 +99,26 @@ export default function EnviarCorreos() {
       <div>
         <h1 className="page-title">Enviar correos</h1>
         <p className="text-sm mt-1" style={{ color:'var(--t3)' }}>
-          El administrador confirma cada envío. Mientras Resend está pendiente, se entrega la notificación interna y se conserva el correo en cola.
+          Cada envío llega como notificación dentro de SIGA y por correo al alumno (su correo personal) y a su tutor.
         </p>
       </div>
+
+      {/* Cupo del día: la capa gratis de Resend permite un número fijo al día. */}
+      {cupo && (
+        <div className="card p-3 sm:p-4 flex items-center gap-3">
+          <Mail size={18} style={{ color:'var(--accent)' }} className="flex-shrink-0"/>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="font-semibold" style={{ color:'var(--t1)' }}>Correos de hoy</span>
+              <span className="tabular-nums" style={{ color: restante === 0 ? 'var(--bad)' : 'var(--t2)' }}>{cupo.enviados} de {cupo.limite}</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background:'var(--soft-bg)' }}>
+              <div className="h-full rounded-full" style={{ width:`${Math.min(100, (cupo.enviados / Math.max(1, cupo.limite)) * 100)}%`,
+                background: restante === 0 ? 'var(--bad)' : cupo.enviados / cupo.limite > .8 ? 'var(--warn)' : 'var(--good)' }}/>
+            </div>
+          </div>
+        </div>
+      )}
 
       {status && (
         <div role={status.bad ? 'alert' : 'status'} className="flex gap-2 rounded-xl p-3"
@@ -131,9 +175,46 @@ export default function EnviarCorreos() {
             <label htmlFor="correo-mensaje" className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Mensaje</label>
             <textarea id="correo-mensaje" className="input-field min-h-56 resize-y" value={body} onChange={e => setBody(e.target.value)}/>
           </div>
-          <button className="btn-primary" disabled={saving}><Send size={14}/>{saving ? 'Guardando…' : 'Confirmar envío'}</button>
+          {selected.length > 0 && (
+            <p className="text-xs" style={{ color:'var(--t2)' }}>
+              Saldrán <b>{correosPrevistos}</b> correo(s):
+              {includeStudent && <> {conCorreoAlumno} de {elegidos.length} alumnos tienen correo personal</>}
+              {includeStudent && includeTutor && ' ·'}
+              {includeTutor && <> {conCorreoTutor} de {elegidos.length} tutores tienen correo</>}.
+              {restante !== null && correosPrevistos > restante && (
+                <b style={{ color:'var(--bad)' }}> Solo quedan {restante} hoy: el resto no se enviará.</b>
+              )}
+            </p>
+          )}
+          <button className="btn-primary" disabled={saving}><Send size={14}/>{saving ? 'Enviando…' : 'Confirmar envío'}</button>
         </section>
       </form>
+
+      {/* Historial reciente */}
+      <section className="card p-5 space-y-3">
+        <h2 className="section-title flex items-center gap-2"><History size={16}/> Últimos envíos</h2>
+        <ProgressiveList items={envios} className="space-y-1.5" sizes={{ mobile:5, tablet:10, desktop:15 }}
+          emptyLabel="Todavía no se ha enviado ningún correo.">
+          {e => {
+            const Icono = e.estado === 'enviado' ? CheckCircle2 : e.estado === 'fallido' ? XCircle : MinusCircle
+            const color = e.estado === 'enviado' ? 'var(--good)' : e.estado === 'fallido' ? 'var(--bad)' : 'var(--t3)'
+            return (
+              <div key={e.id} className="flex items-center gap-2.5 rounded-xl px-3 py-2" style={{ border:'1px solid var(--divider)' }}>
+                <Icono size={15} className="flex-shrink-0" style={{ color }}/>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm truncate" style={{ color:'var(--t1)' }}>{e.asunto || '(sin asunto)'}</p>
+                  <p className="text-[11px] truncate" style={{ color:'var(--t3)' }}>
+                    {e.tipo === 'tutor' ? 'Tutor' : 'Alumno'} · {e.destinatario}{e.motivo ? ` · ${e.motivo}` : ''}
+                  </p>
+                </div>
+                <span className="text-[10px] tabular-nums flex-shrink-0" style={{ color:'var(--t3)' }}>
+                  {new Date(e.fecha).toLocaleString('es-MX', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
+                </span>
+              </div>
+            )
+          }}
+        </ProgressiveList>
+      </section>
     </div>
   )
 }

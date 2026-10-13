@@ -315,6 +315,7 @@ export default function TermsManager() {
           const ine  = s.documents?.find(d => d.document_type === 'ine_tutor')
           const gar  = s.documents?.find(d => d.document_type === 'garantia')
           const tyc  = s.documents?.find(d => d.document_type === 'terminos')
+          const ecoems = s.documents?.find(d => d.document_type === 'comprobante_ecoems')
           const accesoActivo = s.accesoEstado === 'activo'
 
           /* Firma T&C — validarla es verla y, si no procede, resetearla.
@@ -390,6 +391,9 @@ export default function TermsManager() {
             onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
           const celdaIne = <CeldaDocumento etiqueta="INE tutor" doc={ine} onVer={verDocumento}
             onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
+          /* Comprobante ECOEMS: opcional, solo aparece cuando el alumno lo subió. */
+          const celdaEcoems = ecoems && <CeldaDocumento etiqueta="Comprobante ECOEMS" doc={ecoems} onVer={verDocumento}
+            onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
 
           return (
             <DataTableRow key={s.id} cells={[
@@ -409,13 +413,15 @@ export default function TermsManager() {
                     <div className="sm:hidden">{firma}</div>
                     {celdaCurp}
                     {celdaIne}
+                    {celdaEcoems}
                     {garantia}
                   </div>
                 </div>
               )},
               { className: 'w-40 hidden sm:flex', content: firma },
               { className: 'w-52 hidden lg:flex', content: celdaCurp },
-              { className: 'w-52 hidden lg:flex', content: celdaIne },
+              { className: 'w-52 hidden lg:flex', content: celdaEcoems
+                ? <div className="space-y-1.5 w-full">{celdaIne}{celdaEcoems}</div> : celdaIne },
               { className: 'w-52 hidden lg:flex', content: garantia },
               { className: 'w-24 flex', content: (
                 /* Acceso — lo decide la BD al validar todo el expediente */

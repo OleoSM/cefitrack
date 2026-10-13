@@ -1,4 +1,5 @@
 import { tintaSobre } from '../../lib/color'
+import { useFotoUrl } from '../../lib/fotosPerfil'
 
 /**
  * El avatar de un alumno, tal como él mismo lo eligió.
@@ -13,6 +14,9 @@ import { tintaSobre } from '../../lib/color'
  * clases (por ejemplo un podio que encoge en móvil), o el estilo en línea
  * ganaría siempre. `redondez` permite el círculo de las tablas o el cuadrado
  * redondeado de las fichas.
+ *
+ * Orden: la FOTO que el alumno se tomó en "Mi QR" (bucket privado, URL firmada)
+ * → el avatar que eligió → sus iniciales.
  */
 export default function AvatarAlumno({
   student, size = 32, accent, redondez = 'rounded-full', className = '', style = {},
@@ -21,6 +25,17 @@ export default function AvatarAlumno({
     .split(' ').slice(0, 2).map(n => n[0]).join('') || '?'
 
   const lado = size == null ? {} : { width: size, height: size }
+  const foto = useFotoUrl(student?.fotoPath)
+
+  if (foto) {
+    return (
+      <img
+        src={foto} alt="" loading="lazy"
+        className={`${redondez} object-cover flex-shrink-0 ${className}`}
+        style={{ ...lado, border: '1px solid var(--card-border)', ...style }}
+      />
+    )
+  }
 
   if (student?.avatarSrc) {
     return (

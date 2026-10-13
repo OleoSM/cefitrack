@@ -2,7 +2,7 @@ import { nombreCanal } from '../../lib/realtime'
 import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../../context/AuthContext'
-import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, LogOut, Menu, X, ChevronRight, ChevronDown, ScrollText, Settings, Bell, Brush, UserRound, AlertTriangle, Minus, Check, Clock } from 'lucide-react'
+import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, FolderOpen, LogOut, Menu, X, ChevronRight, ChevronDown, ScrollText, Settings, Bell, Brush, UserRound, AlertTriangle, Minus, Check, Clock } from 'lucide-react'
 import { useStudentData } from '../../hooks/useStudentData'
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import clsx from 'clsx'
@@ -24,6 +24,7 @@ const STUDENT_SECTIONS = [
     { to:'/student/calificaciones', label:'Calificaciones', icon:BookOpen },
     { to:'/student/asistencias', label:'Asistencias', icon:CalendarCheck },
     { to:'/student/mi-qr', label:'Mi QR', icon:QrCode },
+    { to:'/student/materiales', label:'Materiales', icon:FolderOpen },
   ]},
   { title:'Administración', sectionIcon:Settings, items:[
     { to:'/student/terminos', label:'T&C / Firma', icon:ScrollText, badge:'terms' },
@@ -39,6 +40,7 @@ const PAGE_TITLES = {
   '/student/calificaciones': 'Calificaciones',
   '/student/asistencias':    'Asistencias',
   '/student/mi-qr':          'Mi QR',
+  '/student/materiales':     'Mis materiales',
   '/student/terminos':       'T&C / Firma',
   '/student/configuracion':  'Configuración',
   '/student':                'Mi Panel',
@@ -97,7 +99,7 @@ function LayoutInner() {
   const [notifPosition, setNotifPosition] = useState(null)
   const { pathname } = useLocation()
   const [openSections, setOpenSections] = useState(() => ({
-    'Operación académica': ['/student/calificaciones','/student/asistencias','/student/mi-qr'].some(route => pathname.startsWith(route)),
+    'Operación académica': ['/student/calificaciones','/student/asistencias','/student/mi-qr','/student/materiales'].some(route => pathname.startsWith(route)),
     'Administración': ['/student/terminos','/student/configuracion'].some(route => pathname.startsWith(route)),
   }))
   const { currentUser, logout } = useAuth()
@@ -495,7 +497,7 @@ function LayoutInner() {
             borderTop: `1px solid ${t.sideBorder}`,
             paddingBottom: 'env(safe-area-inset-bottom)',
           }}>
-          {nav.filter(n => n.to !== '/student/configuracion').map(({ to, label, icon: Icon, exact, badge }) => (
+          {nav.filter(n => n.to !== '/student/configuracion' && n.to !== '/student/materiales').map(({ to, label, icon: Icon, exact, badge }) => (
             <NavLink key={to} to={to} end={exact}
               className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors text-[10px] font-medium relative">
               {({ isActive }) => (

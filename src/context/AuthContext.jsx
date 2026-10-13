@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import {
-  loginWithDb, loginConAuth, sesionActual, cerrarSesion, fetchSubAdminAccess,
+  loginWithDb, loginConAuth, sesionActual, cerrarSesion, fetchSubAdminAccess, fetchMisApartados,
 } from '../lib/supabaseData'
+import { TODOS_LOS_APARTADOS, APARTADOS_POR_DEFECTO } from '../lib/apartados'
 
 const AuthContext = createContext(null)
 
@@ -25,6 +26,10 @@ const SESSION_KEY = 'edutrack_session'
  * Cuando la migración se dé por asentada, esto y `loginWithDb` se retiran.
  */
 const USAR_LEGACY = import.meta.env.VITE_AUTH_LEGACY === '1'
+
+/* Si la consulta de apartados falla, el sub-admin no debe quedarse sin panel:
+   recibe los de siempre. El servidor sigue protegiendo Pagos y Correos. */
+const apartadosSeguros = () => fetchMisApartados().catch(() => APARTADOS_POR_DEFECTO)
 
 function readStoredSession() {
   try {
@@ -75,8 +80,8 @@ export function AuthProvider({ children }) {
         if (!user) { persist(null); return }
         syncSettings().catch(() => {})
         if (user.role === 'sub_admin') {
-          const access = await fetchSubAdminAccess(user.id)
-          if (vivo) persist({ ...user, access })
+          const [access, apartados] = await Promise.all([fetchSubAdminAccess(user.id), apartadosSeguros()])
+          if (vivo) persist({ ...user, access, apartados })
         } else {
           persist(user)
         }
@@ -96,6 +101,25 @@ export function AuthProvider({ children }) {
     return () => data?.subscription?.unsubscribe()
   }, [])
 
+  /* Un admin puede cambiar los apartados de un sub-admin mientras este trabaja:
+     se vuelven a pedir al regresar a la pestaña, sin obligarle a salir y entrar. */
+  useEffect(() => {
+    if (currentUser?.role !== 'sub_admin') return undefined
+    const alVolver = () => {
+      if (document.visibilityState !== 'visible') return
+      fetchMisApartados()
+        .then(apartados => setCurrentUser(u => {
+          if (!u || u.role !== 'sub_admin' || u.apartados?.join() === apartados.join()) return u
+          const nuevo = { ...u, apartados }
+          try { localStorage.setItem(SESSION_KEY, JSON.stringify(nuevo)) } catch { /* sin storage */ }
+          return nuevo
+        }))
+        .catch(() => {})
+    }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => document.removeEventListener('visibilitychange', alVolver)
+  }, [currentUser?.role])
+
   const login = async (email, password) => {
     const res = USAR_LEGACY
       ? await loginWithDb(email, password)
@@ -105,8 +129,8 @@ export function AuthProvider({ children }) {
     let user = res.user
     syncSettings().catch(() => {})
     if (user.role === 'sub_admin') {
-      const access = await fetchSubAdminAccess(user.id)
-      user = { ...user, access }
+      const [access, apartados] = await Promise.all([fetchSubAdminAccess(user.id), apartadosSeguros()])
+      user = { ...user, access, apartados }
     }
     persist(user)
     return { ok: true, role: user.role }
@@ -136,8 +160,15 @@ export function AuthProvider({ children }) {
     )
   }
 
+  /* Apartados del panel: el admin los tiene todos; el sub-admin, los que le
+     concedieron (si la consulta falló, los de siempre). */
+  const apartados = currentUser?.role === 'admin'
+    ? TODOS_LOS_APARTADOS
+    : currentUser?.role === 'sub_admin' ? (currentUser.apartados ?? APARTADOS_POR_DEFECTO) : []
+  const puedeVer = clave => clave == null || apartados.includes(clave)
+
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, allowedSucursales, canAccess }}>
+    <AuthContext.Provider value={{ currentUser, login, logout, allowedSucursales, canAccess, apartados, puedeVer }}>
       {children}
     </AuthContext.Provider>
   )

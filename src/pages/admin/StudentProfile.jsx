@@ -24,8 +24,10 @@ import {
   IconPromedio, IconAsistencia, IconRetardos, IconFaltas, IconRanking,
 } from '../../components/ui/SigaKpiIcons'
 import { useGroupColors } from '../../hooks/useGroupColors'
-import { tintaSobre } from '../../lib/color'
 import ResetPasswordModal from '../../components/admin/ResetPasswordModal'
+import AvatarAlumno from '../../components/ui/AvatarAlumno'
+import ConfirmDialog from '../../components/admin/ConfirmDialog'
+import { quitarFoto } from '../../lib/fotosPerfil'
 import { IconResumen, IconHojaCalificaciones, IconPasarLista, IconReporte, IconQrAlumno, IconCuenta } from '../../components/ui/SigaAdminIcons'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
 
@@ -120,6 +122,8 @@ export default function StudentProfile() {
   // columnas de la hoja ("Tarea 3") para titular cada fila.
   const [detalle, setDetalle] = useState(null)
   const [nombresColumnas, setNombresColumnas] = useState({})
+  // Quitar la foto de perfil si no es adecuada (son fotos de menores).
+  const [quitarFotoOpen, setQuitarFotoOpen] = useState(false)
   const navigate = useNavigate()
   const { t: tAdmin } = useAdminTheme()
   useEffect(() => {
@@ -245,18 +249,18 @@ export default function StudentProfile() {
 
           {/* Identidad */}
           <div className="flex gap-4 flex-1 min-w-0">
-            {/* Avatar: el que el alumno eligió en su portal, o sus iniciales
-                sobre el color del grupo si aún no ha elegido ninguno. */}
-            {s.avatarSrc ? (
-              <img src={s.avatarSrc} alt=""
-                className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl object-cover flex-shrink-0"
-                style={{ border:'1px solid var(--card-border)' }}/>
-            ) : (
-              <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl flex items-center justify-center text-xl font-bold flex-shrink-0"
-                style={{ background: accent, color: tintaSobre(accent), boxShadow:'0 1px 3px rgba(15,23,42,.22)' }}>
-                {s.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
-              </div>
-            )}
+            {/* Foto que se tomó en Mi QR, o su avatar, o sus iniciales sobre el
+                color del grupo. Si la foto no es adecuada, se puede quitar. */}
+            <div className="flex flex-col items-center gap-1 flex-shrink-0">
+              <AvatarAlumno student={s} size={null} accent={accent} redondez="rounded-2xl"
+                className="w-16 h-16 sm:w-[72px] sm:h-[72px] text-xl"/>
+              {s.fotoPath && (
+                <button type="button" onClick={() => setQuitarFotoOpen(true)}
+                  className="text-[10px] font-semibold min-h-8 px-1.5 rounded-lg" style={{ color:'var(--bad)' }}>
+                  Quitar foto
+                </button>
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-start gap-2 flex-wrap">
                 <h1 className="text-xl font-bold tracking-tight min-w-0" style={{ color:'var(--t1)' }}>
@@ -610,6 +614,14 @@ export default function StudentProfile() {
           onDone={cred => { setCuentaAbierta(false); setCredNueva(cred) }}/>
       )}
       {credNueva && <CredentialsPanel cred={credNueva} onClose={() => setCredNueva(null)}/>}
+      {quitarFotoOpen && (
+        <ConfirmDialog
+          title="¿Quitar la foto de este alumno?"
+          message={`Se borra la foto de perfil de ${s.name}. Volverá a aparecer con su avatar o sus iniciales y podrá tomarse otra desde Mi QR.`}
+          confirmLabel="Sí, quitar foto" busyLabel="Quitando…"
+          onConfirm={async () => { await quitarFoto(s.id); setS(x => x && ({ ...x, fotoPath: null })) }}
+          onClose={() => setQuitarFotoOpen(false)}/>
+      )}
       {detalle && (
         <DetalleEvaluacion evaluacion={detalle} grupo={grp?.name} light={tAdmin.light}
           onClose={() => setDetalle(null)}

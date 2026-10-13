@@ -82,10 +82,15 @@ export default function AccesoDisposicion() {
     const q = busqueda.trim().toLowerCase()
     const porRol = rolFiltro === 'todos'
       || (rolFiltro === 'retiradas' ? a.activo === false : a.role === rolFiltro)
+    /* Quien no pertenece a una sucursal no debe desaparecer al filtrar por una:
+       el admin las abarca todas, y un sub-admin sin accesos (recién creado o
+       retirado) es justo al que hay que encontrar para asignárselos. */
+    const sinSucursal = a.role === 'admin'
+      || (a.role === 'sub_admin' && (accessByUser[a.id] ?? []).length === 0)
     return porRol
-      && (sucursalFiltro === TODAS || a.sucursal === sucursalFiltro
+      && (sucursalFiltro === TODAS || sinSucursal || a.sucursal === sucursalFiltro
           || (a.role === 'sub_admin' && (accessByUser[a.id] ?? []).some(x => x.sucursal === sucursalFiltro)))
-      && (grupoFiltro === 'todos' || a.grupoId === grupoFiltro
+      && (grupoFiltro === 'todos' || sinSucursal || a.grupoId === grupoFiltro
           || (a.role === 'sub_admin' && (accessByUser[a.id] ?? []).some(x => x.groupId === grupoFiltro)))
       && (q === '' || a.name.toLowerCase().includes(q) || (a.email ?? '').toLowerCase().includes(q))
   })

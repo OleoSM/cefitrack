@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, Star, Columns2, Rows3, Check, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { Users, Clock, MapPin, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, Star, Columns2, Rows3, Check, ChevronDown, ChevronUp, RefreshCw, QrCode, FileSpreadsheet } from 'lucide-react'
+import DescargarQRModal from '../../components/admin/DescargarQRModal'
+import AltaMasivaModal from '../../components/admin/AltaMasivaModal'
 import {
   fetchGroups, fetchStudents, fetchAttendanceStats,
   computeGroupStats, createGroup, updateGroup, deleteGroup,
@@ -17,6 +19,8 @@ import { useGroupColors, COLOR_PALETTES, GRADIENT_PALETTES, SOLID_PALETTES, MATE
 import { logoInstitucion, INSTITUCIONES } from '../../lib/instituciones'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import IconoCurso from '../../components/ui/IconoCurso'
+import EmblemaUniversidad from '../../components/ui/EmblemaUniversidad'
+import SelectorTinta from '../../components/ui/SelectorTinta'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import StudentDock from '../../components/ui/StudentDock'
 import { filtrarGrupos } from '../../components/ui/BuscadorGrupo'
@@ -45,14 +49,14 @@ function MetricBar({ value, max, suffix = '', thresholds }) {
 // Valores literales a propósito: se guardan en la BD (groups.color).
 const ICONOS_GRUPO = [
   ...INSTITUCIONES,
-  { id:'universidad', alt:'Universidad', src:'/logos/universidad-informe-transparente.png' },
+  { id:'universidad', alt:'Universidad' },
 ]
 // Corrección óptica: los archivos traen cantidades distintas de margen interno.
 // La escala compensa ese margen para que los emblemas pesen igual a la vista.
-const ESCALA_ICONO = { ecoems:1.08, unam:1.04, ipn:.9, uam:1.16, universidad:1.52 }
+const ESCALA_ICONO = { ecoems:1.08, unam:1.04, ipn:.9, uam:1.16 }
 
 
-function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved }) {
+function GroupFormModal({ group = null, sucursales, paletteId, tintaId = 'auto', onClose, onSaved }) {
   const { sucursales: catalogoSucursales } = useSucursales()
   // En IPN/UNAM la tarjeta del grupo se pinta con la variante sólida `p.light`:
   // la muestra debe enseñar ESA, no el neón del tema oscuro.
@@ -75,6 +79,7 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
   const [selectedPalette, setSelectedPalette] = useState(paletteId ?? 'ocean')
+  const [selectedTinta, setSelectedTinta] = useState(tintaId)
   const [showMoreColors, setShowMoreColors] = useState(false)
   const set = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
@@ -107,7 +112,7 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
       : await createGroup(payload)
     setSaving(false)
     if (!res.ok) { setError(res.message); return }
-    onSaved({ groupId:group?.id ?? res.group?.id, paletteId:selectedPalette })
+    onSaved({ groupId:group?.id ?? res.group?.id, paletteId:selectedPalette, tintaId:selectedTinta })
     onClose()
   }
 
@@ -205,6 +210,15 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
             </button>
           </div>
 
+          {/* Color de letra: cada opción se muestra sobre el color elegido arriba
+              para ver antes de guardar si se lee. */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-2"
+              style={{ color:'var(--t3)' }}>Color de letra</label>
+            <SelectorTinta groupId={group?.id ?? '__nuevo__'} paletteId={selectedPalette}
+              valor={selectedTinta} onChange={setSelectedTinta}/>
+          </div>
+
           {/* Selector visual del icono. Los cuatro usan exactamente el mismo
               marco para que las proporciones distintas de cada escudo no
               cambien el peso visual ni el área táctil. */}
@@ -218,7 +232,7 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
                   : inst.id === 'universidad'
                     ? form.curso === 'universidad' && form.instituciones.length > 1
                     : form.curso === 'universidad' && form.instituciones.length === 1 && form.instituciones[0] === inst.id
-                const logo = inst.src ? {src:inst.src,alt:inst.alt} : logoInstitucion(inst.id)
+                const logo = inst.id === 'universidad' ? { alt:inst.alt } : logoInstitucion(inst.id)
                 return (
                   <button key={inst.id} type="button"
                     aria-pressed={activo}
@@ -235,9 +249,11 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
                       boxShadow: activo ? 'var(--card-shadow)' : 'none',
                     }}>
                     <span className="w-[4.5rem] h-[4.5rem] flex items-center justify-center p-1 flex-shrink-0 overflow-hidden">
-                      <img src={logo.src} alt={logo.alt}
-                        className="w-full h-full object-contain"
-                        style={{transform:`scale(${inst.id === 'universidad' ? 1.72 : ESCALA_ICONO[inst.id] ?? 1})`,transformOrigin:'center',filter:inst.id==='universidad' && activo ?'brightness(0) invert(1)':undefined}}/>
+                      {inst.id === 'universidad'
+                        ? <EmblemaUniversidad size={64}/>
+                        : <img src={logo.src} alt={logo.alt}
+                            className="w-full h-full object-contain"
+                            style={{transform:`scale(${ESCALA_ICONO[inst.id] ?? 1})`,transformOrigin:'center'}}/>}
                     </span>
                     <span className="text-[10px] font-extrabold leading-none truncate w-full text-center"
                       style={{ color: activo ? 'var(--accent-contrast)' : 'var(--t2)' }}>
@@ -247,7 +263,7 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
                 )
               })}
             </div>
-            <p className="text-[10px] mt-2" style={{color:'var(--t4)'}}>Elige ECOEMS, UNAM, IPN, UAM o el emblema Universidad incluido en el reporte.</p>
+            <p className="text-[10px] mt-2" style={{color:'var(--t4)'}}>Elige ECOEMS, UNAM, IPN, UAM o Universidad (las tres juntas).</p>
           </div>
 
           {error && (
@@ -272,7 +288,9 @@ function GroupFormModal({ group = null, sucursales, paletteId, onClose, onSaved 
 
 export default function Groups() {
   const navigate      = useNavigate()
-  const { getAccent, getPaletteId, setGroupPalette } = useGroupColors()
+  const { getAccent, getPaletteId, setGroupPalette, getTintaId, setGroupTinta } = useGroupColors()
+  const [qrDe, setQrDe] = useState(null)   // grupo cuyos QR se descargan
+  const [masivaDe, setMasivaDe] = useState(null)   // grupo con alta masiva abierta
   const { currentUser, allowedSucursales, canAccess } = useAuth()
   const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
   const isAdmin = currentUser?.role === 'admin'
@@ -337,9 +355,10 @@ export default function Groups() {
           group={formFor.group}
           sucursales={sucursalOptions}
           paletteId={formFor.group ? getPaletteId(formFor.group.id) : 'ocean'}
+          tintaId={formFor.group ? getTintaId(formFor.group.id) : 'auto'}
           onClose={() => setFormFor(null)}
-          onSaved={async ({groupId,paletteId}) => {
-            if (groupId) setGroupPalette(groupId, paletteId)
+          onSaved={async ({groupId,paletteId,tintaId}) => {
+            if (groupId) { setGroupPalette(groupId, paletteId); setGroupTinta(groupId, tintaId) }
             await load()
           }}
         />
@@ -413,7 +432,7 @@ export default function Groups() {
           {[
             { value:'todos', label:'Todos', icon:null },
             { value:'ecoems', label:'ECOEMS', icon:<IconoCurso curso="ecoems" size={16}/> },
-            { value:'universidad', label:'Universidad', icon:<IconoCurso curso="universidad" size={16}/> },
+            { value:'universidad', label:'Universidad', icon:<IconoCurso curso="universidad" size={24}/> },
           ].map(o => {
             const activo = curso === o.value
             const n = o.value === 'todos' ? bySucursal.length : bySucursal.filter(g => g.curso === o.value).length
@@ -519,13 +538,36 @@ export default function Groups() {
                     </div>
                   </div>
 
+                  {/* Grupo vacío: la forma rápida de llenarlo es la plantilla. */}
+                  {isAdmin && grpStudents.length === 0 && (
+                    <button type="button" onClick={e => { e.stopPropagation(); setMasivaDe(g) }}
+                      className="w-full mb-2.5 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left"
+                      style={{ background:'var(--soft-bg)', border:'1px dashed var(--card-border)', color:'var(--t1)' }}>
+                      <FileSpreadsheet size={18} className="flex-shrink-0"/>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold">Grupo vacío: da de alta a todos de golpe</span>
+                        <span className="block text-[11px]" style={{ color:'var(--t3)' }}>Descarga la plantilla, que la llenen en Google Sheets y súbela.</span>
+                      </span>
+                    </button>
+                  )}
+
                   {/* Avatares + botón */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                     <StudentDock students={grpStudents} accent={getAccent(g.id)}
                       onOpenStudent={id=>navigate(`/admin/alumnos/${id}`)}/>
                     <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-auto">
+                      {/* QR del grupo: lo puede descargar cualquiera que vea el grupo. */}
+                      <button title="Descargar los QR del grupo" aria-label="Descargar los QR del grupo"
+                        onClick={e => { e.stopPropagation(); setQrDe(g) }}
+                        className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-90"
+                        style={{ color:'var(--t2)',background:'var(--soft-bg)',border:'1px solid var(--card-border)' }}
+                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--t2)' }}>
+                        <QrCode size={18}/>
+                      </button>
                       {isAdmin && [
                         { icon: UserPlus, title: 'Añadir alumno a este grupo', hover: 'var(--good)', act: () => setAddStudentTo(g) },
+                        { icon: FileSpreadsheet, title: 'Alta masiva con plantilla de Excel', hover: 'var(--good)', act: () => setMasivaDe(g) },
                         { icon: Pencil, title: 'Editar grupo',   hover: 'var(--info)', act: () => setFormFor({ group: g }) },
                         { icon: Trash2, title: 'Eliminar grupo', hover: 'var(--bad)', act: () => setDeleteFor(g) },
                       ].map(({ icon: Icon, title, hover, act }) => (
@@ -569,6 +611,16 @@ export default function Groups() {
           )
         }}
       </ProgressiveList>}
+
+      {masivaDe && (
+        <AltaMasivaModal grupo={masivaDe} nombreSucursal={nombreDe(masivaDe.sucursal)}
+          correosUsados={students.map(s => s.email).filter(Boolean)}
+          onClose={() => setMasivaDe(null)} onTerminado={load}/>
+      )}
+
+      {qrDe && (
+        <DescargarQRModal grupo={qrDe} alumnos={students.filter(s => s.groupId === qrDe.id)} onClose={() => setQrDe(null)}/>
+      )}
     </div>
   )
 }

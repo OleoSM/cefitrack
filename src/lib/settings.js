@@ -20,6 +20,15 @@ export const DEFAULT_SETTINGS = {
   toleranciaMin: 15,
   // Notificaciones por correo (envío simulado hasta conectar backend)
   notif: { nuevoExamen: true, resultadoPublicado: true, ausencia: true },
+  // Fechas propias del calendario del alumno (los festivos oficiales se
+  // calculan en lib/feriados.js): [{ fecha, titulo, tipo }]
+  calendario: [],
+  // Correo (Resend): remitente y tope diario. Capa gratis = 100/día; al pasar
+  // a la de pago solo se sube el límite y se pone el remitente del dominio.
+  correoRemitente: 'SIGA CEFIMAT <onboarding@resend.dev>',
+  correoLimite: 100,
+  // Asistente con IA: tope de gasto mensual en US$ (Claude Haiku).
+  asistenteLimiteUsd: 2,
 }
 
 function normalizar(saved) {
@@ -29,6 +38,7 @@ function normalizar(saved) {
     ...saved,
     pesos: { ...DEFAULT_SETTINGS.pesos, ...saved.pesos },
     notif: { ...DEFAULT_SETTINGS.notif, ...saved.notif },
+    calendario: Array.isArray(saved.calendario) ? saved.calendario : [],
   }
 }
 
@@ -56,13 +66,17 @@ const desdeFila = fila => normalizar({
   pesos:         fila.pesos,
   toleranciaMin: fila.tolerancia_min,
   notif:         fila.notif,
+  calendario:    fila.calendario,
+  correoRemitente: fila.correo_remitente,
+  correoLimite:    fila.correo_limite_diario,
+  asistenteLimiteUsd: fila.asistente_limite_usd == null ? 2 : Number(fila.asistente_limite_usd),
 })
 
 /** Trae la configuración global de la BD y refresca la copia local. */
 export async function syncSettings() {
   const { data, error } = await supabase
     .from('configuracion')
-    .select('platform_name, pesos, tolerancia_min, notif')
+    .select('platform_name, pesos, tolerancia_min, notif, calendario, correo_remitente, correo_limite_diario, asistente_limite_usd')
     .maybeSingle()
   if (error || !data) return loadSettings()
   const settings = desdeFila(data)
@@ -83,10 +97,14 @@ export async function saveSettings(settings) {
       pesos:          s.pesos,
       tolerancia_min: s.toleranciaMin,
       notif:          s.notif,
+      calendario:     s.calendario,
+      correo_remitente:     s.correoRemitente,
+      correo_limite_diario: s.correoLimite,
+      asistente_limite_usd: s.asistenteLimiteUsd,
       updated_at:     new Date().toISOString(),
     })
     .eq('id', true)
-    .select('platform_name, pesos, tolerancia_min, notif')
+    .select('platform_name, pesos, tolerancia_min, notif, calendario, correo_remitente, correo_limite_diario, asistente_limite_usd')
   if (error) {
     const msg = error.message?.includes('pesos_suman_100')
       ? 'Los pesos deben sumar 100.'

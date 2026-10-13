@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom'
 import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import LoadingPage from '../LoadingPage'
 import { useAuth } from '../../context/AuthContext'
+import { apartadoDeRuta, etiquetaApartado } from '../../lib/apartados'
+import AsistenteIA from '../admin/AsistenteIA'
 import {
   LayoutDashboard, CalendarCheck, Users, BookOpen,
   Upload, LogOut, ClipboardList, Trophy, Wallet,
@@ -17,7 +19,7 @@ import { AdminThemeProvider, useAdminTheme } from '../../context/AdminThemeConte
 import MenuPerfil from '../ui/MenuPerfil'
 import {
   IconPanel, IconGrupos2, IconAlumno, IconHojaCalificaciones, IconPasarLista, IconExamen,
-  IconCobros, IconCorreoMasivo, IconFirma, IconAjustes, IconAcceso, IconPodio,
+  IconCobros, IconCorreoMasivo, IconFirma, IconAjustes, IconAcceso, IconPodio, IconMateriales,
 } from '../ui/SigaAdminIcons'
 
 /* Once entradas planas mezclaban entidades, tareas, análisis y administración
@@ -33,10 +35,11 @@ const SECCIONES = [
     { to:'/admin/registrar',    label:'Calificaciones',         icon:IconHojaCalificaciones },
     { to:'/admin/asistencias',  label:'Pasar Lista',            icon:IconPasarLista },
     { to:'/admin/evaluaciones', label:'Exámenes',                icon:IconExamen },
+    { to:'/admin/materiales',   label:'Materiales',             icon:IconMateriales },
   ]},
   { titulo: 'Administración', sectionIcon:IconAcceso, items: [
-    { to:'/admin/pagos',        label:'Pagos',                  icon:IconCobros, adminOnly:true },
-    { to:'/admin/correos',      label:'Enviar correos',         icon:IconCorreoMasivo, adminOnly:true },
+    { to:'/admin/pagos',        label:'Pagos',                  icon:IconCobros },
+    { to:'/admin/correos',      label:'Enviar correos',         icon:IconCorreoMasivo },
     { to:'/admin/terminos',     label:'T&C / Firmas',           icon:IconFirma },
     { to:'/admin/configuracion',label:'Configuración',          icon:IconAjustes },
     { to:'/admin/configuracion/acceso', label:'Acceso y Disposición', icon:IconAcceso, adminOnly:true },
@@ -62,6 +65,7 @@ const pageTitles = {
   '/admin/asistencias':  'Pasar Lista',
   '/admin/rankings':     'Rankings',
   '/admin/pagos':        'Control de pagos',
+  '/admin/materiales':   'Gestión de materiales',
   '/admin/correos':      'Enviar correos',
   '/admin/terminos':     'T&C y Firmas',
   '/admin/configuracion':'Configuración',
@@ -97,8 +101,18 @@ const NOTIF_COLOR = {
 }
 
 function LayoutInner() {
-  const { pathname } = useLocation()
-  const { currentUser, logout } = useAuth()
+  const { pathname, state: estadoRuta } = useLocation()
+  const { currentUser, logout, puedeVer } = useAuth()
+  const [bloqueado, setBloqueado] = useState(null)
+  useEffect(() => {
+    if (!estadoRuta?.apartadoBloqueado) return undefined
+    setBloqueado(etiquetaApartado(estadoRuta.apartadoBloqueado))
+    const t = setTimeout(() => setBloqueado(null), 7000)
+    return () => clearTimeout(t)
+  }, [estadoRuta])
+  /* Cada sub-admin ve solo los apartados que le concedió un admin; "Acceso y
+     Disposición" (adminOnly) nunca se delega. */
+  const visibleEnMenu = n => (!n.adminOnly || currentUser?.role === 'admin') && puedeVer(apartadoDeRuta(n.to))
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -358,7 +372,7 @@ function LayoutInner() {
         {/* Nav */}
         <nav className="flex-1 px-3 py-3 overflow-y-auto" aria-label="Navegación principal">
           {SECCIONES.map(({ titulo, sectionIcon: SectionIcon, items }) => {
-          const visibles = items.filter(n => !n.adminOnly || currentUser?.role === 'admin')
+          const visibles = items.filter(visibleEnMenu)
           if (visibles.length === 0) return null
           return (
           <div key={titulo ?? 'inicio'} className="space-y-0.5 mb-1">
@@ -608,11 +622,21 @@ function LayoutInner() {
         {/* Content */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-6">
           <Suspense fallback={<LoadingPage />}>
+            {bloqueado && (
+              <div role="alert" className="mb-4 flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm"
+                style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--t1)' }}>
+                <span className="flex-1">No tienes acceso a <b>{bloqueado}</b>. Pídeselo a un administrador.</span>
+                <button type="button" onClick={() => setBloqueado(null)} aria-label="Cerrar aviso"
+                  className="w-8 h-8 -my-1 flex items-center justify-center rounded-lg" style={{ color:'var(--t3)' }}><X size={14}/></button>
+              </div>
+            )}
             <div key={pathname} className="animate-page-in">
               <Outlet />
             </div>
           </Suspense>
         </main>
+        {/* Asistente con IA: solo administradores (la función también lo exige). */}
+        {currentUser?.role === 'admin' && <AsistenteIA/>}
 
         {/* Bottom nav mobile (accesos rápidos + botón "Más" para el resto) */}
         <nav data-bottom-nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex"
@@ -623,7 +647,7 @@ function LayoutInner() {
             borderTop: `1px solid ${identity ? identity.sideBorder : 'var(--card-border)'}`,
             paddingBottom: 'env(safe-area-inset-bottom)',
           }}>
-          {bottomNav.map(({ to, label, icon: Icon, exact }) => (
+          {bottomNav.filter(visibleEnMenu).map(({ to, label, icon: Icon, exact }) => (
             <NavLink key={to} to={to} end={exact}
               className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors text-[10px] font-medium relative">
               {({ isActive }) => (

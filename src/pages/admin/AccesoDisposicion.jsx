@@ -2,21 +2,23 @@ import { useState, useEffect, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
   UserPlus, ChevronDown, ChevronRight, Building2, KeyRound, X,
-  UserMinus, UserCheck, AlertTriangle, RefreshCw,
-} from 'lucide-react'
+  UserMinus, UserCheck, AlertTriangle, RefreshCw, } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
 import {
-  fetchCuentas, createSubAdmin, fetchGroups,
+  fetchCuentas, fetchGroups, fetchApartadosPersonal, setApartadosPersonal,
   fetchSubAdminAccess, grantSubAdminAccess, revokeSubAdminAccess,
   desactivarSubAdmin, reactivarSubAdmin,
 } from '../../lib/supabaseData'
-import { generarPassword } from '../../lib/credentials'
+import { APARTADOS, APARTADOS_POR_DEFECTO, etiquetaApartado } from '../../lib/apartados'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import ModalPortal from '../../components/ui/ModalPortal'
 import { SkeletonBlock } from '../../components/ui/DataTable'
 import { DANGER_BTN_STYLE } from '../../components/admin/ConfirmDialog'
+import CredentialsPanel from '../../components/admin/CredentialsPanel'
+import AccesoCuentaModal from '../../components/admin/AccesoCuentaModal'
+import AltaPersonalModal from '../../components/admin/AltaPersonalModal'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
@@ -36,10 +38,8 @@ export default function AccesoDisposicion() {
 
   const sucursales = catalogoSucursales.map(s => s.id)
 
-  const [form, setForm] = useState({ name: '', email: '' })
-  const [creating, setCreating] = useState(false)
-  const [createdCreds, setCreatedCreds] = useState(null)
-  const [formError, setFormError] = useState(null)
+  const [altaAbierta, setAltaAbierta] = useState(false)
+  const [apartadosByUser, setApartadosByUser] = useState({}) // { [userId]: { apartados, personalizado } }
   const [errorAcceso, setErrorAcceso] = useState(null)
   const [loadError, setLoadError]     = useState(null)
 
@@ -48,6 +48,13 @@ export default function AccesoDisposicion() {
      accesos, así que no puede ser el resultado de un clic mal puesto. */
   const [confirmacion, setConfirmacion] = useState(null) // { modo, id, name, email, accesos }
   const [procesando, setProcesando]     = useState(false)
+  // Alta con confirmación, credenciales en ventana propia, confirmación al
+  // quitar accesos, consulta de credenciales y bloqueo mientras se aplica.
+  const [credNueva, setCredNueva]         = useState(null)  // { nombre, usuario, password }
+  const [recienCreado, setRecienCreado]   = useState(null)  // id de la cuenta recién creada
+  const [confirmAcceso, setConfirmAcceso] = useState(null)  // { titulo, detalle, ejecutar }
+  const [verCred, setVerCred]             = useState(null)  // cuenta cuyo acceso se ve/edita
+  const [ocupado, setOcupado]             = useState(null)  // id de la cuenta con un cambio en curso
   const [aviso, setAviso]               = useState(null) // { tono: 'good'|'bad', texto }
 
   /* La lista pasó de seis a treinta y ocho cuentas al incluir a los alumnos:
@@ -92,9 +99,10 @@ export default function AccesoDisposicion() {
     setLoading(true)
     setLoadError(null)
     try {
-      const [personal, grps] = await Promise.all([fetchCuentas(), fetchGroups()])
+      const [personal, grps, aps] = await Promise.all([fetchCuentas(), fetchGroups(), fetchApartadosPersonal()])
       setStaff(personal)
       setGroups(grps)
+      setApartadosByUser(aps)
       // Los administradores no tienen filas de acceso: su alcance es total por
       // rol. Las cuentas retiradas tampoco: la baja se las quitó todas.
       const entries = await Promise.all(
@@ -110,6 +118,16 @@ export default function AccesoDisposicion() {
 
   useEffect(() => { if (isAdmin) loadAll() }, [isAdmin, loadAll])
 
+  // Tras crear un sub-admin (y cerrar la ventana de credenciales) se lleva la
+  // vista a su tarjeta y se resalta unos segundos: ahí se le asignan accesos.
+  useEffect(() => {
+    if (!recienCreado || credNueva) return undefined
+    const el = document.querySelector(`[data-cuenta="${recienCreado}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const t = setTimeout(() => setRecienCreado(null), 6000)
+    return () => clearTimeout(t)
+  }, [recienCreado, credNueva, staff])
+
   if (!isAdmin) return <Navigate to="/admin" replace />
 
   const toggleExpanded = (userId, sucursal) => {
@@ -121,56 +139,114 @@ export default function AccesoDisposicion() {
     })
   }
 
-  const toggleWholeBranch = async (userId, sucursal) => {
-    const rows = accessByUser[userId] ?? []
-    const wholeRow = rows.find(r => r.sucursal === sucursal && r.groupId == null)
-    setErrorAcceso(null)
+  const cuentaDe = id => staff.find(a => a.id === id)
+  const nombreGrupo = id => { const g = groups.find(x => x.id === id); return g ? `${g.name} — ${g.subject}` : id }
+
+  /* Aplica un cambio de acceso con un único cambio en curso a la vez (las
+     casillas se bloquean mientras tanto: un doble clic ya no manda dos
+     peticiones contradictorias) y deja un aviso de qué se hizo. */
+  const aplicarAcceso = async (userId, fn, textoOk, textoError) => {
+    setErrorAcceso(null); setAviso(null)
+    setOcupado(userId)
     try {
-      if (wholeRow) {
-        await revokeSubAdminAccess(wholeRow.id)
-      } else {
-        const perGroupRows = rows.filter(r => r.sucursal === sucursal && r.groupId != null)
-        await Promise.all(perGroupRows.map(r => revokeSubAdminAccess(r.id)))
-        await grantSubAdminAccess(userId, sucursal, null)
-      }
+      await fn()
       await refreshAccess(userId)
+      setAviso({ tono: 'good', texto: textoOk })
     } catch (err) {
-      setErrorAcceso(`No se pudo cambiar el acceso a ${sucursal}. ${err?.message ?? ''}`)
-    }
+      setErrorAcceso(`${textoError} ${err?.message ?? ''}`)
+    } finally { setOcupado(null) }
   }
 
-  const toggleGroup = async (userId, sucursal, groupId) => {
+  const toggleWholeBranch = (userId, sucursal) => {
+    const rows = accessByUser[userId] ?? []
+    const wholeRow = rows.find(r => r.sucursal === sucursal && r.groupId == null)
+    const nombre = cuentaDe(userId)?.name ?? 'el sub-admin'
+    if (wholeRow) {
+      // Quitar acceso deja a alguien sin poder trabajar: se confirma.
+      setConfirmAcceso({
+        userId, nombre, titulo: `¿Quitar ${nombreDe(sucursal)} a ${nombre}?`,
+        detalle: 'Dejará de ver los grupos, alumnos, listas y calificaciones de toda esta sucursal.',
+        ejecutar: () => aplicarAcceso(userId, () => revokeSubAdminAccess(wholeRow.id),
+          `Se quitó ${nombreDe(sucursal)} a ${nombre}.`, `No se pudo quitar el acceso a ${nombreDe(sucursal)}.`),
+      })
+      return
+    }
+    const perGroupRows = rows.filter(r => r.sucursal === sucursal && r.groupId != null)
+    aplicarAcceso(userId, async () => {
+      await Promise.all(perGroupRows.map(r => revokeSubAdminAccess(r.id)))
+      await grantSubAdminAccess(userId, sucursal, null)
+    }, `${nombre} ahora ve toda la sucursal ${nombreDe(sucursal)}.`, `No se pudo dar acceso a ${nombreDe(sucursal)}.`)
+  }
+
+  const toggleGroup = (userId, sucursal, groupId) => {
     const rows = accessByUser[userId] ?? []
     const wholeRow = rows.find(r => r.sucursal === sucursal && r.groupId == null)
     const groupRow = rows.find(r => r.sucursal === sucursal && r.groupId === groupId)
-    setErrorAcceso(null)
-    try {
-      if (groupRow) {
-        await revokeSubAdminAccess(groupRow.id)
-      } else {
-        if (wholeRow) await revokeSubAdminAccess(wholeRow.id)
-        await grantSubAdminAccess(userId, sucursal, groupId)
-      }
-      await refreshAccess(userId)
-    } catch (err) {
-      setErrorAcceso(`No se pudo cambiar el acceso al grupo. ${err?.message ?? ''}`)
+    const nombre = cuentaDe(userId)?.name ?? 'el sub-admin'
+    if (groupRow) {
+      setConfirmAcceso({
+        userId, nombre, titulo: `¿Quitar el grupo ${nombreGrupo(groupId)} a ${nombre}?`,
+        detalle: 'Dejará de ver a sus alumnos, sus listas y sus calificaciones.',
+        ejecutar: () => aplicarAcceso(userId, () => revokeSubAdminAccess(groupRow.id),
+          `Se quitó el grupo ${nombreGrupo(groupId)} a ${nombre}.`, 'No se pudo quitar el acceso al grupo.'),
+      })
+      return
     }
+    if (wholeRow) {
+      // Pasar de "toda la sucursal" a un solo grupo RECORTA acceso: se confirma.
+      setConfirmAcceso({
+        userId, nombre, titulo: `¿Limitar a ${nombre} a un solo grupo?`,
+        detalle: `Hoy ve toda ${nombreDe(sucursal)}. Si sigues, solo verá ${nombreGrupo(groupId)} en esa sucursal.`,
+        ejecutar: () => aplicarAcceso(userId, async () => {
+          await revokeSubAdminAccess(wholeRow.id)
+          await grantSubAdminAccess(userId, sucursal, groupId)
+        }, `${nombre} ahora solo ve ${nombreGrupo(groupId)} en ${nombreDe(sucursal)}.`, 'No se pudo cambiar el acceso.'),
+      })
+      return
+    }
+    aplicarAcceso(userId, () => grantSubAdminAccess(userId, sucursal, groupId),
+      `${nombre} ahora ve el grupo ${nombreGrupo(groupId)}.`, 'No se pudo dar acceso al grupo.')
   }
 
-  const handleCreate = async (e) => {
-    e.preventDefault()
-    setFormError(null)
-    const name  = form.name.trim()
-    const email = form.email.trim().toLowerCase()
-    if (!name || !email) return
-    setCreating(true)
-    const password = generarPassword()
-    const res = await createSubAdmin({ name, email, password })
-    setCreating(false)
-    if (!res.ok) { setFormError(res.message); return }
-    setCreatedCreds({ name: res.user.name, email: res.user.email, password })
-    setForm({ name: '', email: '' })
-    loadAll()
+  const abrirCredenciales = (cuenta) => setVerCred(cuenta)
+
+  /* ── Alta de personal (popup de 3 pasos) ── */
+  const alCrear = async (user, password) => {
+    setAltaAbierta(false)
+    // Credenciales en ventana propia con botón de copiar.
+    setCredNueva({ nombre: user.name, usuario: user.email, password })
+    setRecienCreado(user.id)
+    setAviso({ tono: 'good', texto: user.role === 'admin'
+      ? `${user.name} ya puede entrar como administrador.`
+      : `${user.name} ya puede entrar. Falta asignarle sucursal o grupos en su tarjeta (resaltada abajo).` })
+    await loadAll()
+  }
+
+  /* ── Apartados del panel de un sub-admin ── */
+  const apartadosDe = id => apartadosByUser[id]?.apartados ?? APARTADOS_POR_DEFECTO
+  const guardarApartados = async (userId, lista, textoOk) => {
+    setErrorAcceso(null); setAviso(null); setOcupado(userId)
+    try {
+      const nuevos = await setApartadosPersonal(userId, lista)
+      setApartadosByUser(prev => ({ ...prev, [userId]: { apartados: nuevos, personalizado: true } }))
+      setAviso({ tono: 'good', texto: textoOk })
+    } catch (err) {
+      setErrorAcceso(err?.message ?? 'No se pudieron guardar los apartados.')
+    } finally { setOcupado(null) }
+  }
+  const toggleApartado = (userId, clave) => {
+    const actuales = apartadosDe(userId)
+    const nombre = cuentaDe(userId)?.name ?? 'el sub-admin'
+    const etiqueta = etiquetaApartado(clave)
+    if (actuales.includes(clave)) {
+      setConfirmAcceso({
+        userId, nombre, titulo: `¿Bloquear ${etiqueta} a ${nombre}?`,
+        detalle: `Desaparecerá de su menú y no podrá abrirlo. Lo notará la próxima vez que vuelva a la pestaña o recargue.`,
+        ejecutar: () => guardarApartados(userId, actuales.filter(c => c !== clave), `${nombre} ya no ve ${etiqueta}.`),
+      })
+      return
+    }
+    guardarApartados(userId, [...actuales, clave], `${nombre} ahora puede abrir ${etiqueta}.`)
   }
 
   /* ── Baja / reincorporación ───────────────────────────────────────────── */
@@ -224,37 +300,17 @@ export default function AccesoDisposicion() {
         </p>
       </div>
 
-      {/* ── Crear sub-admin ─────────────────────────────────── */}
-      <div className="card p-5 space-y-3">
-        <h2 className="section-title flex items-center gap-2"><UserPlus size={16}/> Crear sub-admin</h2>
-        <form onSubmit={handleCreate} className="flex flex-col sm:flex-row gap-2.5">
-          <input type="text" placeholder="Nombre completo" value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            className="input-field flex-1 min-h-11"/>
-          <input type="email" placeholder="correo@cefimat.mx" value={form.email}
-            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            className="input-field flex-1 min-h-11"/>
-          <button type="submit" disabled={creating}
-            className="btn-primary min-h-11 justify-center">
-            <UserPlus size={14}/> {creating ? 'Creando…' : 'Crear'}
-          </button>
-        </form>
-        {formError && <p className="text-xs font-semibold" style={{ color:'var(--bad)' }}>{formError}</p>}
-
-        {createdCreds && (
-          <div className="flex items-start gap-3 rounded-xl p-3.5"
-            style={{ background:'var(--good-soft)', border:'1px solid var(--good-line)' }}>
-            <KeyRound size={16} className="mt-0.5 flex-shrink-0" style={{ color:'var(--good)' }}/>
-            <div className="flex-1 text-xs" style={{ color: 'var(--t2)' }}>
-              <p className="font-bold mb-1" style={{ color:'var(--good)' }}>Sub-admin creado — guarda estas credenciales, no se mostrarán de nuevo:</p>
-              <p><strong>{createdCreds.name}</strong> — {createdCreds.email}</p>
-              <p>Contraseña: <span className="font-mono font-bold">{createdCreds.password}</span></p>
-            </div>
-            <button onClick={() => setCreatedCreds(null)} aria-label="Cerrar" className="w-8 h-8 -my-1 flex items-center justify-center rounded-lg flex-shrink-0" style={{ color: 'var(--t3)' }}>
-              <X size={14}/>
-            </button>
-          </div>
-        )}
+      {/* ── Registrar personal (solo admin) ── */}
+      <div className="card p-5 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div>
+          <h2 className="section-title flex items-center gap-2"><UserPlus size={16}/> Registrar personal</h2>
+          <p className="text-xs mt-1" style={{ color: 'var(--t3)' }}>
+            Da de alta a un administrador o a un sub-admin y elige qué apartados del panel podrá ver.
+          </p>
+        </div>
+        <button type="button" onClick={() => setAltaAbierta(true)} className="btn-primary min-h-11 justify-center">
+          <UserPlus size={14}/> Registrar admin o sub-admin
+        </button>
       </div>
 
       {/* ── Lista de cuentas ────────────────────────────────── */}
@@ -322,12 +378,18 @@ export default function AccesoDisposicion() {
             const esAlumno = a.role === 'student'
             const retirada = a.activo === false
             return (
-              <div key={a.id} className="rounded-xl p-3.5 space-y-2.5"
+              <div key={a.id} data-cuenta={a.id} className="rounded-xl p-3.5 space-y-2.5 transition-shadow"
                 style={{
                   background: 'var(--card-bg)',
-                  border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)',
+                  border: recienCreado === a.id ? '2px solid var(--accent)' : '1px solid var(--card-border)',
+                  boxShadow: recienCreado === a.id ? '0 0 0 4px var(--soft-bg), var(--card-shadow)' : 'var(--card-shadow)',
                   opacity: retirada ? 0.72 : 1,
                 }}>
+                {recienCreado === a.id && (
+                  <p className="text-[11px] font-bold" style={{ color: 'var(--accent)' }}>
+                    Cuenta recién creada · asígnale sucursal o grupos aquí abajo
+                  </p>
+                )}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: 'var(--t1)' }}>{a.name}</p>
@@ -362,18 +424,29 @@ export default function AccesoDisposicion() {
                 ) : esAdmin ? (
                   /* El alcance del administrador viene de su rol, no de filas de
                      acceso: mostrarle casillas sugeriría que se le puede recortar. */
-                  <p className="text-xs" style={{ color: 'var(--t3)' }}>
-                    Acceso total a todas las sucursales y grupos.
-                  </p>
+                  <div>
+                    <p className="text-xs" style={{ color: 'var(--t3)' }}>
+                      Acceso total a todas las sucursales y grupos.
+                    </p>
+                    <button type="button" onClick={() => abrirCredenciales(a)}
+                      className="btn-secondary text-xs py-2 mt-2.5 justify-center w-full sm:w-auto">
+                      <KeyRound size={13}/> {a.id === currentUser?.id ? 'Ver y editar mi acceso' : 'Ver acceso'}
+                    </button>
+                  </div>
                 ) : esAlumno ? (
                   /* El alumno sólo ve lo suyo: no hay nada que conceder ni
                      recortar, así que se muestra a qué grupo pertenece. */
+                  <div>
                   <p className="text-xs" style={{ color: 'var(--t3)' }}>
                     {a.grupoNombre
                       ? <>Grupo <strong style={{ color:'var(--t2)' }}>{a.grupoNombre}</strong>
                           {a.sucursal ? ` · ${nombreDe(a.sucursal)}` : ''} · sólo ve su propia información.</>
                       : 'Sin grupo asignado.'}
                   </p>
+                    <button type="button" onClick={() => abrirCredenciales(a)}
+                      className="btn-secondary text-xs py-2 mt-2.5 justify-center w-full sm:w-auto">
+                      <KeyRound size={13}/> Ver y editar acceso
+                    </button></div>
                 ) : (
                 <div className="space-y-1.5">
                   {sucursales.map(suc => {
@@ -392,6 +465,7 @@ export default function AccesoDisposicion() {
                           </button>
                           <NeonCheckbox className="flex-1"
                             checked={wholeChecked}
+                            disabled={ocupado === a.id}
                             onChange={() => toggleWholeBranch(a.id, suc)}
                             label={<>
                               {nombreDe(suc)}
@@ -411,6 +485,7 @@ export default function AccesoDisposicion() {
                               return (
                                 <NeonCheckbox key={g.id}
                                   checked={checked}
+                                  disabled={ocupado === a.id}
                                   onChange={() => toggleGroup(a.id, suc, g.id)}
                                   label={<span className="text-xs font-normal">{g.name} — {g.subject}</span>}/>
                               )
@@ -421,13 +496,40 @@ export default function AccesoDisposicion() {
                     )
                   })}
 
-                  {/* La baja va al final y en tono de peligro: es la única acción
-                      de esta tarjeta que no se deshace con otro clic. */}
-                  <button onClick={() => pedirBaja(a)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 mt-1"
-                    style={DANGER_BTN_STYLE}>
-                    <UserMinus size={13}/> Dar de baja
-                  </button>
+                  <div className="rounded-lg px-3 py-2.5 space-y-2" style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-1">
+                      <p className="text-xs font-bold" style={{ color: 'var(--t1)' }}>Apartados que puede ver</p>
+                      <p className="text-[11px]" style={{ color: 'var(--t3)' }}>
+                        {apartadosDe(a.id).length} de {APARTADOS.length}{apartadosByUser[a.id]?.personalizado ? '' : ' · los de siempre'}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-1">
+                      {APARTADOS.map(ap => (
+                        <NeonCheckbox key={ap.clave}
+                          checked={apartadosDe(a.id).includes(ap.clave)}
+                          disabled={ocupado === a.id}
+                          onChange={() => toggleApartado(a.id, ap.clave)}
+                          label={<span className="text-xs font-normal">{ap.label}{ap.sensible && <span className="text-[10px] font-bold ml-1" style={{ color: 'var(--warn)' }}>SENSIBLE</span>}</span>}/>
+                      ))}
+                    </div>
+                  </div>
+
+                  {ocupado === a.id && (
+                    <p className="text-[11px] font-semibold" role="status" style={{ color: 'var(--t3)' }}>Aplicando cambio…</p>
+                  )}
+                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <button type="button" onClick={() => abrirCredenciales(a)}
+                      className="btn-secondary text-xs py-2 justify-center">
+                      <KeyRound size={13}/> Ver y editar acceso
+                    </button>
+                    {/* La baja va al final y en tono de peligro: es la única
+                        acción de esta tarjeta que no se deshace con otro clic. */}
+                    <button type="button" onClick={() => pedirBaja(a)}
+                      className="flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-xl sm:ml-auto"
+                      style={DANGER_BTN_STYLE}>
+                      <UserMinus size={13}/> Dar de baja
+                    </button>
+                  </div>
                 </div>
                 )}
               </div>
@@ -488,6 +590,44 @@ export default function AccesoDisposicion() {
             </div>
           </div>
         </ModalPortal>
+      )}
+
+      {altaAbierta && (
+        <AltaPersonalModal correosUsados={staff.map(a => (a.email ?? '').toLowerCase())}
+          onClose={() => setAltaAbierta(false)} onCreado={alCrear}/>
+      )}
+
+      {/* ── Credenciales recién generadas (con copiar) ── */}
+      {credNueva && <CredentialsPanel cred={credNueva} onClose={() => setCredNueva(null)}/>}
+
+      {/* ── Confirmar recorte de acceso ── */}
+      {confirmAcceso && (
+        <ModalPortal maxWidth="max-w-sm" onClose={() => setConfirmAcceso(null)}>
+          <div className="p-6 space-y-4">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
+              style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
+              <AlertTriangle size={20} style={{ color:'var(--warn)' }}/>
+            </div>
+            <div className="text-center">
+              <h2 className="text-base font-bold mb-1" style={{ color:'var(--t1)' }}>{confirmAcceso.titulo}</h2>
+              <p className="text-sm" style={{ color:'var(--t2)' }}>{confirmAcceso.detalle}</p>
+              <p className="text-xs mt-2" style={{ color:'var(--t3)' }}>Puedes volver a darle acceso cuando quieras.</p>
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setConfirmAcceso(null)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+              <button type="button" onClick={() => { const c = confirmAcceso; setConfirmAcceso(null); c.ejecutar() }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold" style={DANGER_BTN_STYLE}>
+                Sí, quitar
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ── Ver / editar el acceso de cualquier cuenta ── */}
+      {verCred && (
+        <AccesoCuentaModal cuenta={verCred} esPropia={verCred.id === currentUser?.id}
+          onClose={() => setVerCred(null)} onGuardado={loadAll}/>
       )}
     </div>
   )

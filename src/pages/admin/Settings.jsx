@@ -9,6 +9,7 @@ import { sendNotification, NOTIF_EVENTS } from '../../lib/notifications'
 import { fetchStudents } from '../../lib/supabaseData'
 import { useAdminTheme } from '../../context/AdminThemeContext'
 import AppearancePicker from '../../components/ui/AppearancePicker'
+import EditorCalendario from '../../components/admin/EditorCalendario'
 
 const PESO_FIELDS = [
   { id: 'examenes',   label: 'Exámenes',   icon: Scale,         desc: 'Promedio de evaluaciones y simulacros' },
@@ -171,6 +172,39 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {/* ── Envío de correos (Resend) ── */}
+      <div className="card p-5 space-y-3">
+        <h2 className="section-title flex items-center gap-2"><Send size={16}/> Envío de correos</h2>
+        <p className="text-xs -mt-1" style={{ color: 'var(--t3)' }}>
+          Se envían con Resend. En la capa gratis el límite es 100 al día; cuando pases a la de pago, súbelo aquí.
+        </p>
+        <label className="block">
+          <span className="block text-xs font-semibold mb-1" style={{ color: 'var(--t1)' }}>Remitente</span>
+          <input value={settings.correoRemitente} disabled={!isAdmin} maxLength={120}
+            onChange={e => setSettings(s => ({ ...s, correoRemitente: e.target.value }))}
+            placeholder="CEFIMAT <avisos@tudominio.mx>" className="input-field w-full"/>
+          <span className="block text-[11px] mt-1" style={{ color: 'var(--t3)' }}>
+            Mientras no verifiques un dominio en Resend, deja onboarding@resend.dev (solo entrega al correo dueño de la cuenta de Resend).
+          </span>
+        </label>
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold" style={{ color: 'var(--t1)' }}>Tope mensual del asistente de IA (US$)</span>
+          <input type="number" min="0.5" max="500" step="0.5" value={settings.asistenteLimiteUsd} disabled={!isAdmin}
+            onChange={e => setSettings(s => ({ ...s, asistenteLimiteUsd: Math.max(0.5, Math.min(500, parseFloat(e.target.value) || 0.5)) }))}
+            className="input-field !w-24 !px-2 text-center font-bold tabular-nums"/>
+        </label>
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold" style={{ color: 'var(--t1)' }}>Límite de correos por día</span>
+          <input type="number" min="1" max="100000" value={settings.correoLimite} disabled={!isAdmin}
+            onChange={e => setSettings(s => ({ ...s, correoLimite: Math.max(1, Math.min(100000, parseInt(e.target.value, 10) || 1)) }))}
+            className="input-field !w-24 !px-2 text-center font-bold tabular-nums"/>
+        </label>
+      </div>
+
+      {/* ── Calendario del alumno ── */}
+      <EditorCalendario eventos={settings.calendario} disabled={!isAdmin}
+        onChange={calendario => setSettings(s => ({ ...s, calendario }))}/>
 
       {/* ── Notificaciones por correo ───────────────────────── */}
       <div className="card p-5 space-y-3">

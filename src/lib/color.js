@@ -31,6 +31,14 @@ function luminancia([r, g, b]) {
   return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b)
 }
 
+/** Razón de contraste WCAG entre dos colores (1–21); null si alguno no se entiende. */
+export function contraste(a, b) {
+  const ra = aRgb(a), rb = aRgb(b)
+  if (!ra || !rb) return null
+  const [x, y] = [luminancia(ra), luminancia(rb)].sort((m, n) => n - m)
+  return (x + 0.05) / (y + 0.05)
+}
+
 /**
  * '#ffffff' o '#0f172a', la que más contraste dé sobre `fondo`.
  * Para valores que no se pueden leer (p. ej. 'var(--x)') devuelve blanco,

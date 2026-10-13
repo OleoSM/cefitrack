@@ -1,5 +1,5 @@
 import { nombreCanal } from '../../lib/realtime'
-import { useState, useMemo, useRef, useEffect, useCallback, createContext, useContext } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback, createContext, useContext, Fragment } from 'react'
 import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
@@ -7,14 +7,15 @@ import {
   Plus, Minus, Check, ChevronDown, ChevronRight,
   UserPlus, X, Maximize2, SlidersHorizontal,
   ArrowLeft, Calendar, Shield, Users, Clock,
-  Save, RotateCw, Download, Pencil, Search, Columns2, Rows3,
+  Save, RotateCw, Download, Pencil, Search, Columns2, Rows3, GripVertical, AlertTriangle,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
   fetchGroups, fetchStudents,
   fetchColumnasRegistro, fetchCeldasRegistro, fetchAsistenciaRegistro,
   setCeldaRegistro, crearColumnaRegistro, borrarColumnaRegistro, setRegistroAdmin,
-  actualizarContactoAlumno,
+  actualizarContactoAlumno, reordenarRegistro, configurarColumnaRegistro,
+  configurarRequisitoColumna, agregarBloqueExamen, fetchOrdenBloques, guardarOrdenBloques,
 } from '../../lib/supabaseData'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
@@ -34,6 +35,7 @@ import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import StudentDock from '../../components/ui/StudentDock'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { tintaSobre } from '../../lib/color'
+import ConfirmDialog from '../../components/admin/ConfirmDialog'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -210,7 +212,32 @@ function GroupPicker({ groups, students, loading, onSelect }) {
 /* `celda`: identificador "alumno_columna" para poder llegar a esta celda
    desde el detalle de una calificación. `foco`: resaltada (se acaba de llegar
    a ella): borde grueso de acento que parpadea para guiar la vista. */
-function ScoreCell({ value, onChange, compact, bg: cellBg, sc, celda, foco = false }) {
+/* Texto "Falta …" cuando la columna tiene un prerrequisito sin cumplir (mismo
+   criterio que requisito_cumplido en la BD). La celda se captura igual, pero
+   esa calificación no cuenta para el promedio hasta que se cumpla. */
+function avisoRequisito(col, sc, colsPorId) {
+  if (!col.requisitoId) return null
+  const req = colsPorId[col.requisitoId]
+  if (!req) return null
+  const v = sc[`${req.materia}_${req.id}`]
+  let ok
+  if (v === undefined || v === null || String(v).trim() === '') ok = false
+  else if (req.formato === 'check') ok = v === 1 || v === '1'
+  else if (req.formato === 'valor') ok = true
+  else if (String(v).toUpperCase() === 'NP') ok = false
+  else {
+    const n = parseFloat(String(v).replace(',', '.'))
+    ok = !isNaN(n) && (col.requisitoMin == null || n >= col.requisitoMin)
+  }
+  return ok ? null : `Falta ${req.name.replace(/\s+\d+$/, '').toLowerCase()}`
+}
+
+function MarcaAviso({ aviso }) {
+  if (!aviso) return null
+  return <span style={{ display:'block', fontSize:8, fontWeight:800, lineHeight:1.1, color:'var(--bad)', whiteSpace:'nowrap' }}>{aviso}</span>
+}
+
+function ScoreCell({ value, onChange, compact, bg: cellBg, sc, celda, foco = false, aviso = null }) {
   const hc = useHC()
   const [editing, setEditing] = useState(false)
   const [draft,   setDraft]   = useState('')
@@ -247,7 +274,7 @@ function ScoreCell({ value, onChange, compact, bg: cellBg, sc, celda, foco = fal
   const neonBorder = sc ? `1px solid ${sc}55` : 'none'
   const neonGlow   = (sc && display !== '—') ? `0 0 7px ${sc}35` : 'none'
   return (
-    <td onClick={startEdit} title="Click para editar" data-celda={celda}
+    <td onClick={startEdit} title={aviso ? `${aviso}: no cuenta para el promedio hasta cumplirlo. Click para editar` : 'Click para editar'} data-celda={celda}
       className={foco ? 'celda-foco' : undefined}
       style={{
       minWidth: compact ? 52 : 64, textAlign:'center', fontSize:12, fontWeight:700,
@@ -259,11 +286,14 @@ function ScoreCell({ value, onChange, compact, bg: cellBg, sc, celda, foco = fal
       padding:'0 2px', cursor:'pointer', userSelect:'none',
       transition:'background .15s',
       ...(foco ? { outline:'3px solid var(--accent)', outlineOffset:'-3px' } : null),
-    }}>{display}</td>
+    }}>
+      <span style={{ opacity: aviso && display !== '—' ? .55 : 1, textDecoration: aviso && display !== '—' ? 'line-through' : 'none' }}>{display}</span>
+      <MarcaAviso aviso={aviso}/>
+    </td>
   )
 }
 
-function CheckCell({ checked, onChange, bg: cellBg, sc }) {
+function CheckCell({ checked, onChange, bg: cellBg, sc, aviso = null }) {
   const hc = useHC()
   return (
     <td style={{
@@ -283,6 +313,36 @@ function CheckCell({ checked, onChange, bg: cellBg, sc }) {
         }}>
         {checked && <Check size={12} style={{ color:'var(--good)' }}/>}
       </button>
+      <MarcaAviso aviso={aviso}/>
+    </td>
+  )
+}
+
+/* Celda de una actividad que NO es evaluación: texto libre o, si la columna
+   define opciones, una lista para elegir. */
+function ValorCell({ value, onChange, opciones, sc, aviso = null }) {
+  const hc = useHC()
+  const [draft, setDraft] = useState(value ?? '')
+  useEffect(() => { setDraft(value ?? '') }, [value])
+  const estilo = { width:'100%', fontSize:11, fontWeight:700, textAlign:'center', background:'transparent',
+    border:'none', outline:'none', color: draft ? 'var(--t1)' : 'var(--t4)', padding:'4px 2px' }
+  return (
+    <td style={{ minWidth:76, textAlign:'center', background: hc ? 'var(--card-bg)' : 'transparent',
+      border: hc ? '1px solid var(--divider)' : sc ? `1px solid ${sc}45` : 'none', padding:'0 2px' }}>
+      {opciones?.length ? (
+        <select value={draft} onChange={e => { setDraft(e.target.value); onChange(e.target.value) }}
+          aria-label="Valor" style={{ ...estilo, cursor:'pointer', appearance:'none' }}>
+          <option value="">—</option>
+          {opciones.map(o => <option key={o} value={o} style={{ background:'var(--panel-bg)', color:'var(--t1)' }}>{o}</option>)}
+        </select>
+      ) : (
+        <input value={draft} maxLength={60} placeholder="—" aria-label="Valor"
+          onChange={e => setDraft(e.target.value)}
+          onBlur={() => { if (String(draft) !== String(value ?? '')) onChange(draft.trim()) }}
+          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+          style={estilo}/>
+      )}
+      <MarcaAviso aviso={aviso}/>
     </td>
   )
 }
@@ -376,14 +436,28 @@ export function resumenAsistencia(att = {}) {
   return { total, present, pct: total > 0 ? (present / total) * 100 : 0 }
 }
 
-function GuaranteeBadge({ studentId, cells, attendance, simCount, bg: cellBg, sc }) {
+/* Garantía: 90 % de asistencia, todos los simulacros presentados, todas las
+   tareas entregadas y mínimo 80 % en cada una. `reglas` trae solo las columnas
+   que cuentan para la garantía y que ya se aplicaron (alguien tiene valor):
+   una tarea que aún no se deja no puede quitarle la garantía a nadie. */
+function GuaranteeBadge({ studentId, cells, attendance, reglas, bg: cellBg }) {
   const hc = useHC()
-  const { pct } = resumenAsistencia(attendance[studentId])
-  const simsOk = Array.from({length:simCount},(_,i)=>i+1)
-    .every(n => { const v=cells[`sim_${n}`]; return v!==undefined && v!=='NP' && parseFloat(v)>0 })
-  const ok = pct >= 90 && simsOk
+  const { pct, total } = resumenAsistencia(attendance[studentId])
+  const vacio = v => v === undefined || v === null || String(v).trim() === '' || String(v).toUpperCase() === 'NP'
+  const faltas = []
+  if (total > 0 && pct < 90) faltas.push(`Asistencia ${Math.round(pct)} % (mínimo 90 %)`)
+  for (const s of reglas?.simulacros ?? []) if (vacio(cells[s.clave])) faltas.push(`No presentó ${s.name}`)
+  for (const t of reglas?.tareas ?? []) {
+    const v = cells[t.clave]
+    if (t.check) { if (!(v === 1 || v === '1')) faltas.push(`No entregó ${t.name}`); continue }
+    if (vacio(v)) { faltas.push(`No entregó ${t.name}`); continue }
+    const n = parseFloat(String(v).replace(',', '.'))
+    if (!isNaN(n) && n < t.calMax * 0.8) faltas.push(`${t.name}: ${n} (mínimo ${+(t.calMax * 0.8).toFixed(2)})`)
+  }
+  const ok = faltas.length === 0
   return (
-    <td style={{
+    <td title={ok ? 'Cumple: 90 % de asistencia, todos los simulacros y todas las tareas con 80 % o más.' : `Sin garantía:\n· ${faltas.join('\n· ')}`}
+      style={{
       minWidth:90,
       background: hc ? 'var(--card-bg)' : cellBg,
       border: hc ? '1px solid var(--divider)' : 'none',
@@ -515,26 +589,205 @@ function AttendanceModal({ studentId, studentName, attendance, onChange, onClose
 // MODALES AUXILIARES
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AddColModal({ subjName, onAdd, onClose }) {
-  const [name,setName]=useState(''); const [type,setType]=useState('actividad')
-  return (
-    <ModalPortal maxWidth="max-w-sm" onClose={onClose}>
-      <div className="p-5 space-y-4">
-        <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Añadir columna — {subjName}</h2>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre (ej: TAREA 4)"
-          className="input-field w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),type)}/>
-        <div className="flex gap-2">
-          {['actividad','tarea'].map(t=>(
-            <button key={t} onClick={()=>setType(t)} className="flex-1 min-h-11 py-2 rounded-xl text-xs font-bold transition-all"
-              style={{ background:type===t?'var(--accent)':'var(--soft-bg)', color:type===t?'var(--accent-contrast)':'var(--t3)' }}>
-              {t.charAt(0).toUpperCase()+t.slice(1)}
-            </button>
-          ))}
+/* ── Configurar columna (crear o editar) ──
+   El lápiz ya no renombra solo en este navegador: abre esta ventana y guarda
+   en la BD nombre, tipo, FORMATO (calificación / check / valor), máximo, si
+   cuenta para el promedio, opciones y descripción. */
+const TIPOS_COLUMNA = ['tarea', 'actividad', 'examen', 'proyecto', 'participación']
+const FORMATOS = [
+  { id:'calificacion', titulo:'Calificación', desc:'Un número de 0 al máximo. Puede contar para el promedio.', icono:'9.5' },
+  { id:'check',        titulo:'Check',        desc:'Hecho / no hecho. No es una evaluación.',                  icono:'✓' },
+  { id:'valor',        titulo:'Valor',        desc:'Texto, número o una opción de tu lista. No es una evaluación.', icono:'Aa' },
+]
+/* `columnas`: las demás columnas del grupo, para elegir prerrequisito.
+   `soloExtras`: columna fija de la plantilla — no se renombra ni cambia de
+   formato, pero sí se le puede poner requisito y decidir si cuenta para la garantía. */
+function ColumnaModal({ titulo, inicial, onGuardar, onClose, columnas = [], soloExtras = false }) {
+  const [f, setF] = useState(() => ({
+    nombre: inicial?.name ?? '', tipo: inicial?.t ?? 'actividad', formato: inicial?.formato ?? 'calificacion',
+    calMax: inicial?.calMax ?? 10, cuenta: inicial?.cuenta ?? true,
+    opcionesTxt: (inicial?.opciones ?? []).join(', '), descripcion: inicial?.descripcion ?? '',
+    requisitoId: inicial?.requisitoId ?? '', requisitoMin: inicial?.requisitoMin ?? '',
+    cuentaGarantia: inicial?.cuentaGarantia ?? true,
+  }))
+  const candidatos = columnas.filter(c => c.id !== inicial?.id)
+  const reqElegido = candidatos.find(c => c.id === f.requisitoId)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+  const [confirmar, setConfirmar] = useState(null)   // n valores que se borrarían
+  const set = (k, v) => setF(prev => ({ ...prev, [k]: v }))
+  const opciones = f.opcionesTxt.split(',').map(o => o.trim()).filter(Boolean)
+
+  const guardar = async (limpiar = false) => {
+    setError('')
+    if (!soloExtras && !f.nombre.trim()) { setError('Escribe un nombre para la columna.'); return }
+    if (f.requisitoMin !== '' && !(Number(f.requisitoMin) >= 0)) { setError('El mínimo del requisito debe ser un número.'); return }
+    if (f.formato === 'calificacion' && !(Number(f.calMax) > 0)) { setError('La calificación máxima debe ser mayor que 0.'); return }
+    setGuardando(true)
+    const res = await onGuardar({
+      nombre: f.nombre.trim(), tipo: f.tipo, formato: f.formato, calMax: Number(f.calMax) || 10,
+      cuenta: f.formato === 'calificacion' ? f.cuenta : false,
+      opciones: f.formato === 'valor' ? opciones : null, descripcion: f.descripcion.trim(), limpiar,
+      requisitoId: f.requisitoId || null,
+      requisitoMin: f.requisitoId && reqElegido?.formato === 'calificacion' && f.requisitoMin !== '' ? Number(f.requisitoMin) : null,
+      cuentaGarantia: f.cuentaGarantia,
+    })
+    setGuardando(false)
+    if (res?.conValores) { setConfirmar(res.conValores); return }
+    if (!res?.ok) { setError(res?.message || 'No se pudo guardar.'); return }
+  }
+
+  if (confirmar) return (
+    <ModalPortal maxWidth="max-w-sm" onClose={() => !guardando && setConfirmar(null)}>
+      <div className="p-6 space-y-4 text-center">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center mx-auto"
+          style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
+          <AlertTriangle size={20} style={{ color:'var(--warn)' }}/>
         </div>
+        <h2 className="text-base font-bold" style={{ color:'var(--t1)' }}>¿Cambiar el formato de "{f.nombre}"?</h2>
+        <p className="text-sm" style={{ color:'var(--t2)' }}>
+          Esta columna ya tiene <b>{confirmar}</b> valor{confirmar !== 1 ? 'es' : ''} capturado{confirmar !== 1 ? 's' : ''}.
+          En el formato nuevo no tienen sentido y <b>se borrarán</b>. Si eran calificaciones, el promedio se recalcula.
+        </p>
         <div className="flex gap-3">
-          <button onClick={onClose} className="btn-secondary flex-1 min-h-11 justify-center">Cancelar</button>
-          <button onClick={()=>name.trim()&&onAdd(name.trim(),type)} disabled={!name.trim()}
-            className="btn-primary flex-1 min-h-11 justify-center">Añadir</button>
+          <button type="button" onClick={() => setConfirmar(null)} disabled={guardando} className="btn-secondary flex-1 justify-center">Cancelar</button>
+          <button type="button" onClick={() => guardar(true)} disabled={guardando} className="btn-danger flex-1 justify-center">
+            {guardando ? 'Aplicando…' : 'Sí, cambiar y borrar'}
+          </button>
+        </div>
+      </div>
+    </ModalPortal>
+  )
+
+  return (
+    <ModalPortal maxWidth="max-w-md" onClose={() => !guardando && onClose()}>
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5" style={{ borderBottom:'1px solid var(--divider)' }}>
+        <h2 className="text-sm font-bold" style={{ color:'var(--t1)' }}>{titulo}</h2>
+        <button type="button" onClick={onClose} aria-label="Cerrar" className="w-11 h-11 flex items-center justify-center rounded-lg" style={{ color:'var(--t3)' }}><X size={15}/></button>
+      </div>
+      <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        {soloExtras && (
+          <p className="text-xs rounded-lg px-3 py-2" style={{ background:'var(--soft-bg)', color:'var(--t3)', border:'1px solid var(--card-border)' }}>
+            Columna fija de la hoja: su nombre y formato no cambian, pero puedes ponerle un requisito y decidir si cuenta para la garantía.
+          </p>
+        )}
+        {!soloExtras && <>
+        <label className="block">
+          <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Nombre</span>
+          <input value={f.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Tarea 4, Trajo material" maxLength={60}
+            className="input-field w-full min-h-11" autoFocus/>
+        </label>
+
+        <div>
+          <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Tipo</span>
+          <div className="flex flex-wrap gap-1.5">
+            {TIPOS_COLUMNA.map(t => (
+              <button key={t} type="button" onClick={() => set('tipo', t)} aria-pressed={f.tipo === t}
+                className="min-h-9 px-3 rounded-full text-xs font-bold capitalize"
+                style={f.tipo === t ? { background:'var(--accent)', color:'var(--accent-contrast)' } : { background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>¿Qué se captura?</span>
+          <div className="grid gap-2">
+            {FORMATOS.map(fm => {
+              const activo = f.formato === fm.id
+              return (
+                <button key={fm.id} type="button" onClick={() => set('formato', fm.id)} aria-pressed={activo}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl text-left"
+                  style={activo ? { background:'var(--card-bg)', border:'2px solid var(--accent)' } : { background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
+                  <span className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                    style={activo ? { background:'var(--accent)', color:'var(--accent-contrast)' } : { background:'var(--card-bg)', color:'var(--t2)' }}>
+                    {fm.icono}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold" style={{ color:'var(--t1)' }}>{fm.titulo}</span>
+                    <span className="block text-[11px]" style={{ color:'var(--t3)' }}>{fm.desc}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {f.formato === 'calificacion' && (
+          <div className="grid grid-cols-2 gap-3 items-end">
+            <label className="block">
+              <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Calificación máxima</span>
+              <input type="number" min="1" step="any" inputMode="decimal" value={f.calMax} onChange={e => set('calMax', e.target.value)}
+                className="input-field w-full min-h-11 text-center font-bold"/>
+            </label>
+            <NeonCheckbox className="min-h-11" checked={f.cuenta} onChange={() => set('cuenta', !f.cuenta)}
+              label={<span className="text-xs font-semibold">Cuenta para el promedio</span>}/>
+          </div>
+        )}
+        {f.formato === 'calificacion' && !f.cuenta && (
+          <p className="text-[11px]" style={{ color:'var(--t3)' }}>Se captura y se ve en la hoja, pero no afecta el promedio, el ranking ni lo que ve el alumno.</p>
+        )}
+        {f.formato === 'valor' && (
+          <label className="block">
+            <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Opciones (opcional, separadas por coma)</span>
+            <input value={f.opcionesTxt} onChange={e => set('opcionesTxt', e.target.value)} placeholder="Ej: Excelente, Bien, Regular"
+              className="input-field w-full min-h-11"/>
+            <span className="block text-[11px] mt-1" style={{ color:'var(--t3)' }}>
+              {opciones.length ? `Se elegirá de una lista: ${opciones.join(' · ')}` : 'Sin opciones: se escribe texto libre en cada celda.'}
+            </span>
+          </label>
+        )}
+
+        <label className="block">
+          <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Descripción (opcional)</span>
+          <textarea value={f.descripcion} onChange={e => set('descripcion', e.target.value)} rows={2} maxLength={200}
+            placeholder="Qué se evalúa o cuándo se marca" className="input-field w-full"/>
+        </label>
+        </>}
+
+        {/* ── Depende de… ── Ej.: el examen solo cuenta si antes se entregó la guía. */}
+        <div className="rounded-xl p-3 space-y-2" style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
+          <span className="block text-[10px] font-bold uppercase tracking-widest" style={{ color:'var(--t3)' }}>Prerrequisito (opcional)</span>
+          <select value={f.requisitoId} onChange={e => set('requisitoId', e.target.value)} aria-label="Prerrequisito"
+            className="input-field w-full min-h-11">
+            <option value="">Ninguno: cuenta siempre</option>
+            {[...new Set(candidatos.map(c => c.materia))].map(m => (
+              <optgroup key={m} label={m}>
+                {candidatos.filter(c => c.materia === m).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}{c.formato === 'check' ? ' (✓)' : c.formato === 'valor' ? ' (valor)' : ''}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {reqElegido?.formato === 'calificacion' && (
+            <label className="flex items-center gap-2 text-xs" style={{ color:'var(--t2)' }}>
+              Mínimo en "{reqElegido.name}" para cumplirlo
+              <input type="number" min="0" step="any" value={f.requisitoMin} onChange={e => set('requisitoMin', e.target.value)}
+                placeholder="cualquiera" className="input-field !w-24 min-h-9 text-center"/>
+            </label>
+          )}
+          <p className="text-[11px]" style={{ color:'var(--t3)' }}>
+            {reqElegido
+              ? `Si "${reqElegido.name}" no está ${reqElegido.formato === 'check' ? 'marcada' : 'capturada'}, esta celda se puede llenar pero NO cuenta para el promedio y la hoja la marca "Falta …".`
+              : 'Ejemplo: el examen solo cuenta si antes se entregó la guía de estudio.'}
+          </p>
+        </div>
+
+        <NeonCheckbox checked={f.cuentaGarantia} onChange={() => set('cuentaGarantia', !f.cuentaGarantia)}
+          label={<span className="text-xs font-semibold">Cuenta para la garantía</span>}/>
+        <p className="text-[11px] -mt-2" style={{ color:'var(--t3)' }}>
+          {f.cuentaGarantia
+            ? 'Si es tarea o simulacro, el alumno debe cumplirla para conservar la garantía.'
+            : 'No afecta la garantía del alumno (por ejemplo, una tarea extra).'}
+        </p>
+
+        {error && <p role="alert" className="text-xs font-semibold" style={{ color:'var(--bad)' }}>{error}</p>}
+        <div className="flex gap-3">
+          <button type="button" onClick={onClose} disabled={guardando} className="btn-secondary flex-1 min-h-11 justify-center">Cancelar</button>
+          <button type="button" onClick={() => guardar(false)} disabled={guardando} className="btn-primary flex-1 min-h-11 justify-center">
+            {guardando ? 'Guardando…' : 'Guardar'}
+          </button>
         </div>
       </div>
     </ModalPortal>
@@ -572,7 +825,9 @@ function AddSubjectModal({ onAdd, onClose }) {
 // HEADER DE SECCIÓN (collapse/expand con +/-)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemoveItem, onRename, nota }) {
+/* `arrastre` (solo materias): { id, activo, onDown, onKey } — asa para mover la
+   materia a izquierda o derecha. */
+function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemoveItem, onRename, nota, arrastre, tituloAdd = 'Añadir' }) {
   const hc = useHC()
   const c = color ?? (hc ? '#64748b' : 'var(--t2)')
   const [editingLabel, setEditingLabel] = useState(false)
@@ -583,7 +838,8 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
     if (next && next !== label) onRename?.(next)
   }
   return (
-    <th colSpan={cols} style={{
+    <th colSpan={cols} data-bloque-slot={arrastre?.id} style={{
+      ...(arrastre?.activo ? { outline:'2px dashed #ffffff', outlineOffset:'-3px', opacity:.85 } : null),
       textAlign:'center', padding:'5px 6px', fontWeight:800, fontSize:10,
       letterSpacing:'0.07em',
       color: color ? '#ffffff' : 'var(--t2)',
@@ -596,6 +852,14 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
       background: color ?? (hc ? '#e2e8f0' : 'var(--soft-bg)'),
     }}>
       <span className="flex items-center justify-center gap-1.5">
+        {arrastre && (
+          <button type="button" data-sin-zoom onPointerDown={arrastre.onDown} onKeyDown={arrastre.onKey}
+            title="Arrastra para mover este bloque" aria-label={`Mover ${label} (flechas izquierda y derecha)`}
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/20"
+            style={{ cursor: arrastre.activo ? 'grabbing' : 'grab', touchAction:'none', color: color ? '#ffffff' : 'var(--t2)' }}>
+            <GripVertical size={12}/>
+          </button>
+        )}
         {/* Botón collapse / expand */}
         <button onClick={onToggle}
           className="flex items-center justify-center w-4 h-4 rounded transition-all hover:bg-white/15 active:scale-90 font-black"
@@ -628,9 +892,9 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
         {/* Añadir columna */}
         {onAdd && !collapsed && (
           <button onClick={e=>{ e.stopPropagation(); onAdd() }}
-            className="w-4 h-4 rounded flex items-center justify-center hover:bg-white/20 transition-colors active:scale-90"
-            title="Añadir">
-            <Plus size={9}/>
+            className={`${tituloAdd === 'Añadir' ? 'w-4' : 'px-1.5 gap-0.5'} h-4 rounded flex items-center justify-center hover:bg-white/20 transition-colors active:scale-90`}
+            title={tituloAdd} aria-label={tituloAdd}>
+            <Plus size={9}/>{tituloAdd !== 'Añadir' && <span style={{ fontSize:9, letterSpacing:0 }}>{tituloAdd}</span>}
           </button>
         )}
         {/* Quitar último ítem */}
@@ -684,23 +948,63 @@ function AreaCell({ value, onChange, bg, sc }) {
    garantía, área, asistencia y las secciones de la plantilla base—. No se
    renombran ni se borran: renombrarlas rompe el significado de la columna para
    quien la lea después, y borrarlas por accidente se lleva las notas. */
-function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52, rowSpan, style: extraStyle, locked }) {
+/* `arrastre` (columnas de materia): { id, materia, activo, onDown, onKey } —
+   asa para mover la columna dentro de su materia. */
+function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52, rowSpan, style: extraStyle, locked, arrastre, onConfigurar, formato, cuenta, requisito, garantia = true, bloque }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   const inputRef = useRef(null)
   const textColor = light ? '#0f172a' : '#ffffff'
+  const slot = arrastre ? { 'data-col-slot': arrastre.id, 'data-col-materia': arrastre.materia } : {}
+  const resalte = arrastre?.activo ? { outline:'2px dashed var(--accent)', outlineOffset:'-3px' } : null
+  const asa = arrastre && (
+    <button type="button" data-sin-zoom onPointerDown={arrastre.onDown} onKeyDown={arrastre.onKey}
+      title="Arrastra para mover esta columna" aria-label={`Mover la columna ${value} (flechas izquierda y derecha)`}
+      className="shrink-0 rounded flex items-center justify-center hover:opacity-70"
+      style={{ color:textColor, width:18, height:22, cursor: arrastre.activo ? 'grabbing' : 'grab', touchAction:'none' }}>
+      <GripVertical size={11}/>
+    </button>
+  )
 
   useEffect(() => { if (!editing) setDraft(value) }, [value, editing])
 
+  /* `bloque`: asa para mover un bloque fijo entero (Pago, Garantía, Área…). */
+  const slotBloque = bloque ? { 'data-bloque-slot': bloque.id } : {}
+  const resalteBloque = bloque?.activo ? { outline:'2px dashed var(--accent)', outlineOffset:'-3px', opacity:.85 } : null
+  const asaBloque = bloque && (
+    <button type="button" data-sin-zoom onPointerDown={bloque.onDown} onKeyDown={bloque.onKey}
+      title="Arrastra para mover este bloque" aria-label={`Mover ${value} (flechas izquierda y derecha)`}
+      className="shrink-0 rounded flex items-center justify-center hover:opacity-70"
+      style={{ color:textColor, width:18, height:22, cursor: bloque.activo ? 'grabbing' : 'grab', touchAction:'none' }}>
+      <GripVertical size={11}/>
+    </button>
+  )
+  const extras = [requisito && `requiere ${requisito}`, garantia === false && 'sin garantía'].filter(Boolean)
+
   if (locked) return (
-    <th rowSpan={rowSpan} title="Columna fija de la hoja"
+    <th rowSpan={rowSpan} title="Columna fija de la hoja" {...slot} {...slotBloque}
       style={{ minWidth, padding:'4px 2px', textAlign:'center', fontSize:9,
-        fontWeight:700, color:textColor, borderRight:'1px solid var(--divider)', ...extraStyle }}>
-      {value}
+        fontWeight:700, color:textColor, borderRight:'1px solid var(--divider)', ...extraStyle, ...resalte, ...resalteBloque }}>
+      <span className="flex items-center justify-center gap-0.5">
+        {asaBloque}{asa}
+        <span className="min-w-0 flex flex-col items-center leading-tight">
+          <span className="truncate max-w-full">{value}</span>
+          {extras.map(x => <span key={x} className="text-[8px] font-bold uppercase opacity-75 whitespace-nowrap">{x}</span>)}
+        </span>
+        {onConfigurar && (
+          <button type="button" onClick={onConfigurar} title={`Requisito y garantía de ${value}`}
+            aria-label={`Configurar requisito y garantía de ${value}`}
+            className="shrink-0 rounded flex items-center justify-center hover:opacity-70" style={{ color:textColor, width:22, height:22 }}>
+            <SlidersHorizontal size={10}/>
+          </button>
+        )}
+      </span>
     </th>
   )
 
+  const marca = formato === 'check' ? '✓ check' : formato === 'valor' ? 'Aa valor' : cuenta === false ? 'no cuenta' : null
   const startEditing = () => {
+    if (onConfigurar) { onConfigurar(); return }
     setDraft(value)
     setEditing(true)
     setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select() }, 20)
@@ -712,8 +1016,8 @@ function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52,
   }
 
   return (
-    <th rowSpan={rowSpan} style={{ minWidth, padding:'4px 2px', textAlign:'center', fontSize:9,
-      fontWeight:700, color:textColor, borderRight:'1px solid var(--divider)', ...extraStyle }}>
+    <th rowSpan={rowSpan} {...slot} style={{ minWidth, padding:'4px 2px', textAlign:'center', fontSize:9,
+      fontWeight:700, color:textColor, borderRight:'1px solid var(--divider)', ...extraStyle, ...resalte }}>
       {editing ? (
         <input ref={inputRef} value={draft} onChange={e=>setDraft(e.target.value)}
           onBlur={commit}
@@ -724,8 +1028,13 @@ function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52,
             color:textColor, border:`1px solid ${light?'#475569':'rgba(255,255,255,.55)'}` }}/>
       ) : (
         <span className="flex items-center justify-center gap-1 px-0.5">
-          <span className="truncate" title={value}>{value}</span>
-          <button type="button" onClick={startEditing} title={`Editar ${value}`}
+          {asa}
+          <span className="min-w-0 flex flex-col items-center leading-tight">
+            <span className="truncate max-w-full" title={value}>{value}</span>
+            {marca && <span className="text-[8px] font-bold uppercase opacity-75 whitespace-nowrap">{marca}</span>}
+            {extras.map(x => <span key={x} className="text-[8px] font-bold uppercase opacity-75 whitespace-nowrap">{x}</span>)}
+          </span>
+          <button type="button" onClick={startEditing} title={onConfigurar ? `Configurar ${value}` : `Editar ${value}`}
             aria-label={`Editar nombre de ${value}`}
             className="shrink-0 rounded flex items-center justify-center transition-opacity hover:opacity-70"
             style={{ color:textColor, width:22, height:22 }}>
@@ -989,6 +1298,11 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
   const [fijarAlumno,   setFijarAlumno]   = useState(false)
   const [attModal,      setAttModal]      = useState(null)
   const [addColModal,   setAddColModal]   = useState(null)
+  const [configCol,     setConfigCol]     = useState(null)   // { subjId, col } columna en configuración
+  // Borrar una columna o una sección entera se lleva sus calificaciones: siempre con confirmación.
+  const [borrarPend,    setBorrarPend]    = useState(null)   // { tipo, subjId, colId?, nombre, valores }
+  // Orden de TODOS los bloques de la hoja (también Pago, Garantía, Área…), por grupo.
+  const [ordenGuardado, setOrdenGuardado] = useState(null)
   const [addSubjModal,  setAddSubjModal]  = useState(false)
   const [saveFlash,     setSaveFlash]     = useState(false)
   const [showAddStudent, setShowAddStudent] = useState(false)
@@ -1112,7 +1426,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
   const cargarHoja = useCallback(async () => {
     setErrorHoja(null)
     try {
-      const [cols, celdas, asis, docs, pagosAlumnos] = await Promise.all([
+      const [cols, celdas, asis, docs, pagosAlumnos, orden] = await Promise.all([
         fetchColumnasRegistro(group.id),
         fetchCeldasRegistro(group.id),
         fetchAsistenciaRegistro(group.id),
@@ -1120,7 +1434,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
         // El cobro de los exámenes adicionales se refleja solo en la hoja: no
         // hay que marcarlo dos veces, en Pagos y aquí.
         fetchPagosDeAlumnos(groupStudents.map(s=>s.id)).catch(() => []),
+        fetchOrdenBloques(group.id).catch(() => null),
       ])
+      setOrdenGuardado(orden)
 
       // Las columnas llegan planas; la hoja las dibuja agrupadas por materia.
       const porMateria = new Map()
@@ -1131,7 +1447,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
             color: c.materiaColor || 'var(--info)', cols: [],
           })
         }
-        porMateria.get(c.materia).cols.push({ id: c.id, name: c.nombre, t: c.tipo, calMax: c.calMax, esFija:c.esFija })
+        porMateria.get(c.materia).cols.push({ id: c.id, name: c.nombre, t: c.tipo, calMax: c.calMax, esFija:c.esFija,
+          formato: c.formato, cuenta: c.cuenta, opciones: c.opciones, descripcion: c.descripcion,
+          materia: c.materia, requisitoId: c.requisitoId, requisitoMin: c.requisitoMin, cuentaGarantia: c.cuentaGarantia })
       }
       setSubjects([...porMateria.values()])
 
@@ -1231,8 +1549,12 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
       try {
         await setCeldaRegistro(sid, columnaId, value)
         onDataChange?.()
-      } catch {
-        setErrorHoja('No se pudo guardar una calificación. Vuelve a escribirla.')
+      } catch (err) {
+        const m = err?.message ?? ''
+        setErrorHoja(m.includes('fuera_de_rango') ? 'Esa calificación pasa del máximo de la columna. Corrígela.'
+          : m.includes('valor_no_permitido') ? 'Ese valor no está en las opciones de la columna.'
+          : m.includes('invalid_grade') ? 'Escribe un número (o NP) en las columnas de calificación.'
+          : 'No se pudo guardar una calificación. Vuelve a escribirla.')
       }
     }, 600)
   }
@@ -1368,6 +1690,165 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [foco, subjects])
 
+  /* ── Reordenar materias y columnas arrastrando ──
+     Igual que las tarjetas KPI: eventos de puntero (ratón y dedo), la
+     cabecera se mueve en vivo sobre la que tiene debajo y al soltar se guarda
+     en la BD (reordenar_registro), así el orden es el mismo para todo el que
+     abra la hoja. Si se arrastra cerca del borde, la hoja se desplaza sola. */
+  const [arrastre, setArrastre] = useState(null)   // { tipo:'materia'|'col', id, materia }
+  const [errorOrden, setErrorOrden] = useState(null)
+  const subjectsRef = useRef(subjects)
+  useEffect(() => { subjectsRef.current = subjects }, [subjects])
+
+  /* ── Columnas por id, lista para elegir requisito y reglas de la garantía ── */
+  const colsPorId = useMemo(() => Object.fromEntries(
+    subjects.flatMap(sj => sj.cols.map(c => [c.id, { ...c, materia: sj.id }]))), [subjects])
+  const todasLasColumnas = useMemo(() => subjects.flatMap(sj =>
+    sj.cols.map(c => ({ id: c.id, name: c.name, materia: sj.name, formato: c.formato }))), [subjects])
+  const reglasGarantia = useMemo(() => {
+    // Solo las actividades ya aplicadas (alguien tiene valor) pueden quitar la garantía.
+    const aplicada = clave => Object.values(cells).some(sc => {
+      const v = sc?.[clave]; return v !== undefined && v !== null && String(v).trim() !== ''
+    })
+    const r = { tareas: [], simulacros: [] }
+    for (const sj of subjects) for (const c of sj.cols) {
+      if (c.cuentaGarantia === false) continue
+      const clave = `${sj.id}_${c.id}`
+      if (!aplicada(clave)) continue
+      if (c.t === 'tarea') r.tareas.push({ clave, name: c.name, calMax: c.calMax, check: c.formato === 'check' })
+      else if (c.t === 'simulacro') r.simulacros.push({ clave, name: c.name })
+    }
+    return r
+  }, [subjects, cells])
+
+  /* ── Orden de bloques ──
+     Tokens: 'pago','garantia','area','asistencia','docs' y 'm:<materia>'. Por
+     defecto Asistencia va justo después de Área. Los bloques nuevos (una
+     materia recién creada) se añaden al final; un fijo que falte, en su sitio. */
+  const ordenBloques = useMemo(() => {
+    const porDefecto = ['pago', 'garantia', 'area', 'asistencia', 'docs', ...subjects.map(sj => `m:${sj.id}`)]
+    if (!ordenGuardado?.length) return porDefecto
+    const existe = new Set(porDefecto)
+    const base = ordenGuardado.filter(t => existe.has(t))
+    for (const t of porDefecto.filter(x => !base.includes(x))) {
+      if (t.startsWith('m:')) { base.push(t); continue }
+      const i = porDefecto.indexOf(t)
+      const antes = porDefecto.slice(0, i).reverse().find(x => base.includes(x))
+      base.splice(antes ? base.indexOf(antes) + 1 : 0, 0, t)
+    }
+    return base
+  }, [subjects, ordenGuardado])
+  const ordenRef = useRef(ordenBloques)
+  useEffect(() => { ordenRef.current = ordenBloques }, [ordenBloques])
+
+  const moverToken = (lista, id, destino) => {
+    if (!destino || destino === id) return lista
+    const desde = lista.indexOf(id), hacia = lista.indexOf(destino)
+    if (desde < 0 || hacia < 0) return lista
+    const copia = lista.filter(x => x !== id)
+    copia.splice(copia.indexOf(destino) + (desde < hacia ? 1 : 0), 0, id)
+    return copia
+  }
+  const moverBloque = (id, destino) => {
+    const next = moverToken(ordenRef.current, id, destino)
+    if (next === ordenRef.current) return
+    ordenRef.current = next
+    setOrdenGuardado(next)
+  }
+  const guardarOrdenBloquesYMaterias = async () => {
+    setErrorOrden(null)
+    const tokens = ordenRef.current
+    // Las materias también quedan en ese orden en la BD (lo usa el portal del alumno).
+    const posicion = Object.fromEntries(tokens.map((t, i) => [t, i]))
+    const materias = [...subjectsRef.current].sort((a, b) => (posicion[`m:${a.id}`] ?? 999) - (posicion[`m:${b.id}`] ?? 999))
+    aplicarOrden(materias)
+    try {
+      await guardarOrdenBloques(group.id, tokens)
+      await reordenarRegistro(group.id, materias.map(sj => ({ materia: sj.id, columnas: sj.cols.map(c => c.id) })))
+    } catch {
+      setErrorOrden('No se pudo guardar el nuevo orden. Se restauró el anterior.')
+      cargarHoja()
+    }
+  }
+
+  const moverEn = (lista, id, destino) => {
+    if (!destino || destino === id) return lista
+    const desde = lista.findIndex(x => x.id === id)
+    const hacia = lista.findIndex(x => x.id === destino)
+    if (desde < 0 || hacia < 0) return lista
+    const copia = lista.filter(x => x.id !== id)
+    copia.splice(copia.findIndex(x => x.id === destino) + (desde < hacia ? 1 : 0), 0, lista[desde])
+    return copia
+  }
+  const aplicarOrden = next => { subjectsRef.current = next; setSubjects(next) }
+  const moverColumna = (materia, id, destino) => aplicarOrden(subjectsRef.current.map(sj =>
+    sj.id === materia ? { ...sj, cols: moverEn(sj.cols, id, destino) } : sj))
+
+  const guardarOrden = async () => {
+    setErrorOrden(null)
+    try {
+      await reordenarRegistro(group.id, subjectsRef.current.map(sj => ({ materia: sj.id, columnas: sj.cols.map(c => c.id) })))
+    } catch {
+      setErrorOrden('No se pudo guardar el nuevo orden. Se restauró el anterior.')
+      cargarHoja()
+    }
+  }
+
+  const empezarArrastre = (tipo, id, materia, e) => {
+    e.preventDefault(); e.stopPropagation()
+    setArrastre({ tipo, id, materia })
+    const contenedor = e.currentTarget.closest('[data-wide-sheet]')?.parentElement
+    const foto = () => JSON.stringify([ordenRef.current, subjectsRef.current.map(sj => [sj.id, sj.cols.map(c => c.id)])])
+    const inicial = foto()
+    const mover = ev => {
+      if (contenedor) {
+        const r = contenedor.getBoundingClientRect()
+        if (ev.clientX < r.left + 56) contenedor.scrollLeft -= 16
+        else if (ev.clientX > r.right - 56) contenedor.scrollLeft += 16
+      }
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)
+      if (tipo === 'bloque') {
+        moverBloque(id, el?.closest('[data-bloque-slot]')?.dataset.bloqueSlot)
+      } else {
+        const th = el?.closest('[data-col-slot]')
+        if (th && th.dataset.colMateria === materia) moverColumna(materia, id, th.dataset.colSlot)
+      }
+    }
+    const soltar = () => {
+      setArrastre(null)
+      window.removeEventListener('pointermove', mover)
+      window.removeEventListener('pointerup', soltar)
+      window.removeEventListener('pointercancel', soltar)
+      if (foto() !== inicial) {   // un clic sin mover no escribe nada
+        if (tipo === 'bloque') guardarOrdenBloquesYMaterias(); else guardarOrden()
+      }
+    }
+    window.addEventListener('pointermove', mover)
+    window.addEventListener('pointerup', soltar)
+    window.addEventListener('pointercancel', soltar)
+  }
+
+  // Teclado: con el asa enfocada, ← y → la mueven un lugar y se guarda.
+  const moverConTeclado = (tipo, id, materia, e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    const paso = e.key === 'ArrowLeft' ? -1 : 1
+    if (tipo === 'bloque') {
+      const lista = ordenRef.current
+      const vecino = lista[lista.indexOf(id) + paso]
+      if (!vecino) return
+      moverBloque(id, vecino)
+      guardarOrdenBloquesYMaterias()
+      return
+    }
+    const lista = subjectsRef.current.find(sj => sj.id === materia)?.cols ?? []
+    const i = lista.findIndex(x => x.id === id)
+    const vecino = lista[i + paso]
+    if (!vecino) return
+    moverColumna(materia, id, vecino.id)
+    guardarOrden()
+  }
+
   /* En vertical la hoja abría con las materias desplegadas: cuarenta columnas
      que obligaban a un barrido horizontal largo antes de encontrar nada. Fuera
      de escritorio arranca con TODO plegado, y se abre la sección que se va a
@@ -1401,18 +1882,83 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
     setSubjects(p => p.filter(s => s.id !== subjId))
   }
 
-  const addCol = async (subjId, name, type) => {
+  // Crear: primero la columna y, si no es la configuración por defecto, se
+  // configura en el acto. Devuelve { ok, message } a la ventana.
+  const addCol = async (subjId, cfg) => {
+    const materia = subjects.find(s => s.id === subjId)
+    if (!materia) return { ok: false, message: 'Materia no encontrada.' }
+    if (materia.cols.some(c => c.name.toLowerCase() === cfg.nombre.toLowerCase()))
+      return { ok: false, message: 'Ya hay otra columna con ese nombre en esta materia.' }
+    try {
+      const nueva = await crearColumnaRegistro({
+        groupId: group.id, materia: materia.name, nombre: cfg.nombre,
+        tipo: cfg.tipo, calMax: cfg.calMax, color: materia.color,
+      })
+      const porDefecto = cfg.formato === 'calificacion' && cfg.cuenta && !cfg.descripcion
+      if (!porDefecto && nueva?.id) {
+        const res = await configurarColumnaRegistro({ id: nueva.id, ...cfg })
+        if (!res.ok) return res
+      }
+      if (nueva?.id && (cfg.requisitoId || cfg.cuentaGarantia === false)) {
+        const res = await configurarRequisitoColumna({ id: nueva.id, ...cfg })
+        if (!res.ok) return res
+      }
+      setAddColModal(null)
+      await cargarHoja()
+      return { ok: true }
+    } catch { return { ok: false, message: 'No se pudo crear la columna.' } }
+  }
+
+  const guardarConfigColumna = async cfg => {
+    const col = configCol.col
+    if (!col.esFija) {
+      const res = await configurarColumnaRegistro({ id: col.id, ...cfg })
+      if (!res.ok) return res
+    }
+    const cambiaExtras = (cfg.requisitoId ?? null) !== (col.requisitoId ?? null)
+      || (cfg.requisitoMin ?? null) !== (col.requisitoMin ?? null) || cfg.cuentaGarantia !== col.cuentaGarantia
+    if (cambiaExtras) {
+      const res = await configurarRequisitoColumna({ id: col.id, ...cfg })
+      if (!res.ok) return res
+    }
+    setConfigCol(null); await cargarHoja(); onDataChange?.()
+    return { ok: true }
+  }
+
+  /* Bloque de examen: Guía de estudio → Examen → Análisis, ya encadenados. */
+  const nuevoExamen = async () => {
+    try { await agregarBloqueExamen(group.id); await cargarHoja(); onDataChange?.() }
+    catch { setErrorHoja('No se pudo añadir el examen.') }
+  }
+
+  /* Cuántas celdas con valor se perderían (para decirlo en la confirmación). */
+  const contarValores = claves => students.reduce((n, s) => n + claves.filter(k => {
+    const v = cells[s.id]?.[k]; return v !== undefined && v !== null && v !== ''
+  }).length, 0)
+  const pedirBorrarColumna = (subjId, col) => setBorrarPend({
+    tipo: 'columna', subjId, colId: col.id, nombre: col.name, valores: contarValores([`${subjId}_${col.id}`]),
+  })
+  const pedirBorrarSeccion = subjId => {
     const materia = subjects.find(s => s.id === subjId)
     if (!materia) return
-    setAddColModal(null)
-    try {
-      await crearColumnaRegistro({
-        groupId: group.id, materia: materia.name, nombre: name,
-        tipo: type, color: materia.color,
-      })
-      await cargarHoja()
-    } catch { setErrorHoja('No se pudo crear la columna.') }
+    setBorrarPend({ tipo: 'seccion', subjId, nombre: materia.name, columnas: materia.cols.length,
+      valores: contarValores(materia.cols.map(c => `${subjId}_${c.id}`)) })
   }
+  const confirmarBorrado = async () => {
+    const p = borrarPend
+    if (p.tipo === 'columna') await removeCol(p.subjId, p.colId)
+    else await removeSubject(p.subjId)
+  }
+  const dialogoBorrado = borrarPend && (
+    <ConfirmDialog
+      title={borrarPend.tipo === 'columna' ? `¿Eliminar la columna "${borrarPend.nombre}"?` : `¿Eliminar la sección "${borrarPend.nombre}"?`}
+      message={borrarPend.tipo === 'columna'
+        ? `Se borra la columna y ${borrarPend.valores} calificación(es) capturada(s) en ella.`
+        : `Se borran sus ${borrarPend.columnas} columna(s) y ${borrarPend.valores} calificación(es) capturada(s).`}
+      detail="Los promedios del grupo se recalculan. Esta acción no se puede deshacer."
+      onConfirm={confirmarBorrado}
+      onClose={() => setBorrarPend(null)}/>
+  )
 
   const removeCol = async (subjId, colId) => {
     try {
@@ -1666,6 +2212,130 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
   const rowHoverBg = hcMode ? HC.hover               : 'rgba(255,255,255,.045)'
   const cellBorder = hcMode ? '1px solid rgba(0,0,0,.08)' : '1px solid rgba(255,255,255,.05)'
 
+  /* ── Render por bloque ── */
+  const bloqueVisible = t =>
+    t === 'pago' || t === 'garantia' ? showSummary
+    : t === 'area' ? showSummary && esUniversidad
+    : t === 'asistencia' ? showAttendance
+    : t === 'docs' ? showDocs
+    : t.startsWith('m:') ? showSubject(t.slice(2)) && subjects.some(sj => sj.id === t.slice(2))
+    : false
+  const bloquesVisibles = ordenBloques.filter(bloqueVisible)
+  const asaBloque = t => ({ id: t, activo: arrastre?.tipo === 'bloque' && arrastre.id === t,
+    onDown: e => empezarArrastre('bloque', t, null, e), onKey: e => moverConTeclado('bloque', t, null, e) })
+  const subjDe = t => subjects.find(sj => sj.id === t.slice(2))
+  const estiloFijo = color => ({ background: hcMode ? 'var(--soft-bg)' : solidBg, borderBottom: `3px solid ${color}` })
+
+  const cabecera1 = t => {
+    if (t === 'pago') return <EditableColumnHeader key={t} locked rowSpan={2} minWidth={W.pago} light={hcMode}
+      value="PAGO" bloque={asaBloque(t)} style={estiloFijo(HC.pago)}/>
+    if (t === 'garantia') return <EditableColumnHeader key={t} locked rowSpan={2} minWidth={W.gar} light={hcMode}
+      value="GARANTÍA" bloque={asaBloque(t)} style={estiloFijo(HC.gar)}/>
+    if (t === 'area') return <EditableColumnHeader key={t} locked rowSpan={2} minWidth={W.area} light={hcMode}
+      value="ÁREA" bloque={asaBloque(t)} style={estiloFijo(HC.area)}/>
+    if (t === 'asistencia') return <SectionHeader key={t} label="ASISTENCIAS" color="var(--good)"
+      cols={1} collapsed={false} onToggle={() => {}} arrastre={asaBloque(t)}/>
+    if (t === 'docs') return <SectionHeader key={t} label="DOCUMENTOS" cols={collapsed['docs'] ? 1 : 5}
+      collapsed={!!collapsed['docs']} onToggle={() => toggleSection('docs')} arrastre={asaBloque(t)}/>
+    const subj = subjDe(t)
+    if (!subj) return null
+    const fija = esSeccionFija(subj)
+    const esExamen = subj.id === 'Exámenes'
+    return (
+      <SectionHeader key={t}
+        label={fija ? subj.name.toUpperCase() : headerName(`section:${subj.id}`, subj.name.toUpperCase())}
+        color={subj.color}
+        onRename={fija ? undefined : v => renameHeader(`section:${subj.id}`, v)}
+        cols={collapsed[subj.id] ? 1 : subj.cols.length + 1}
+        collapsed={!!collapsed[subj.id]}
+        onToggle={() => toggleSection(subj.id)}
+        onAdd={esExamen ? nuevoExamen : () => setAddColModal(subj.id)}
+        tituloAdd={esExamen ? 'Añadir examen' : 'Añadir'}
+        onRemoveItem={fija ? undefined : () => pedirBorrarSeccion(subj.id)}
+        arrastre={asaBloque(t)}/>
+    )
+  }
+
+  const cabecera2 = t => {
+    if (t === 'pago' || t === 'garantia' || t === 'area') return null
+    if (t === 'asistencia') return <EditableColumnHeader key={t} locked minWidth={88} light={hcMode} value="% ASIST."/>
+    if (t === 'docs') return collapsed['docs']
+      ? <th key={t} style={{ minWidth:52, fontSize:10, color: hcMode ? HC.docs : 'var(--t4)', textAlign:'center', borderRight: hcMode ? `2px solid ${HC.docs}` : '1px solid rgba(255,255,255,.06)' }}>···</th>
+      : <Fragment key={t}>{[
+          ['doc_curp','CURP'], ['doc_ine','INE tutor'], ['doc_terms','Firma T&C'], ['doc_guarantee','Garantía'], ['doc_exams','Exámenes'],
+        ].map(([key, fallback]) => (
+          <EditableColumnHeader locked key={key} minWidth={68} light={hcMode} value={fallback}
+            style={{ background:hcMode?'var(--soft-bg)':`${HC.docs}0a`, borderBottom:`${hcMode?2:1}px solid ${HC.docs}${hcMode?'80':'60'}` }}/>
+        ))}</Fragment>
+    const subj = subjDe(t)
+    if (!subj) return null
+    if (collapsed[subj.id]) return <th key={t} style={{ minWidth:52, fontSize:10, color: 'var(--t4)', textAlign:'center', borderRight: '1px solid var(--divider)' }}>···</th>
+    return (
+      <Fragment key={t}>
+        {subj.cols.map(col => (
+          <EditableColumnHeader key={`${subj.id}_${col.id}`} minWidth={76} light={hcMode}
+            locked={col.esFija}
+            value={col.name}
+            onChange={v => renameHeader(`col:${col.id}`, v)}
+            onConfigurar={() => setConfigCol({ subjId: subj.id, col })}
+            formato={col.formato} cuenta={col.cuenta}
+            requisito={colsPorId[col.requisitoId]?.name} garantia={col.cuentaGarantia}
+            onRemove={col.esFija ? undefined : () => pedirBorrarColumna(subj.id, col)}
+            arrastre={{ id: col.id, materia: subj.id, activo: arrastre?.tipo === 'col' && arrastre.id === col.id,
+              onDown: e => empezarArrastre('col', col.id, subj.id, e),
+              onKey: e => moverConTeclado('col', col.id, subj.id, e) }}/>
+        ))}
+        <th style={{ minWidth:26, borderRight: '1px solid var(--divider)' }}>
+          <button onClick={() => setAddColModal(subj.id)} className="mx-auto flex items-center justify-center w-4 h-4 rounded hover:bg-white/15" title="Añadir columna">
+            <Plus size={9} style={{ color: 'var(--t3)' }}/>
+          </button>
+        </th>
+      </Fragment>
+    )
+  }
+
+  const celdasBloque = (t, s, sc, rowBg) => {
+    if (t === 'pago') return <PaymentCell key={t} value={s.pago} onChange={v => setPago(s.id, v)}
+      tdStyle={{ minWidth:W.pago, background: hcMode ? 'var(--card-bg)' : rowBg, border: hcMode ? '1px solid var(--divider)' : `1px solid ${HC.pago}40`, boxShadow: !hcMode ? `0 0 6px ${HC.pago}25` : 'none', verticalAlign:'middle' }}/>
+    if (t === 'garantia') return <GuaranteeBadge key={t} studentId={s.id} cells={sc} attendance={attendance}
+      reglas={reglasGarantia} bg={rowBg}/>
+    if (t === 'area') return <AreaCell key={t} value={s.area} onChange={v => setArea(s.id, v)} bg={rowBg} sc={HC.area}/>
+    if (t === 'asistencia') return <AttSummaryCell key={t} studentId={s.id} attendance={attendance} onClick={() => setAttModal(s.id)}/>
+    if (t === 'docs') return collapsed['docs']
+      ? <td key={t} style={{ minWidth:52, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
+      : <Fragment key={t}>
+          <AutoStatusCell value={s.curpEstado} bg={rowBg}/>
+          <AutoStatusCell value={s.ineEstado} bg={rowBg}/>
+          <AutoStatusCell value={s.firmaTyC?'firmado':'pendiente'} bg={rowBg}/>
+          <AutoStatusCell value={s.garantiaEstado} bg={rowBg}/>
+          <AutoStatusCell value={s.examenesEstado} bg={rowBg}/>
+        </Fragment>
+    const subj = subjDe(t)
+    if (!subj) return null
+    if (collapsed[subj.id]) return <td key={t} style={{ minWidth:52, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
+    return (
+      <Fragment key={t}>
+        {subj.cols.map(col => {
+          const clave = `${subj.id}_${col.id}`
+          const aviso = avisoRequisito(col, sc, colsPorId)
+          if (col.formato === 'check') return (
+            <CheckCell key={clave} checked={sc[clave] === 1 || sc[clave] === '1'}
+              onChange={v => setCell(s.id, clave, v ? '1' : '0')} sc={subj.color} aviso={aviso}/>
+          )
+          if (col.formato === 'valor') return (
+            <ValorCell key={clave} value={sc[clave]} opciones={col.opciones}
+              onChange={v => setCell(s.id, clave, v)} sc={subj.color} aviso={aviso}/>
+          )
+          return (
+            <ScoreCell key={clave} value={sc[clave]} onChange={v => setCell(s.id, clave, v)} sc={subj.color}
+              celda={`${s.id}_${col.id}`} foco={celdaFoco === `${s.id}_${col.id}`} aviso={aviso}/>
+          )
+        })}
+        <td style={{ minWidth:26, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
+      </Fragment>
+    )
+  }
+
   const tableEl = (
     <div className="rounded-2xl overflow-hidden"
       style={{ border:'1px solid var(--card-border)', boxShadow:'var(--card-shadow)',
@@ -1673,6 +2343,19 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
            lugar de restarle una altura fija: la barra envuelve en varias líneas
            en móvil, y el `calc(100vh - 104px)` de antes se pasaba de largo. */
         ...(isFullscreen ? { flex:1, minHeight:0, display:'flex', flexDirection:'column' } : {}) }}>
+      {/* Avisos de la hoja: antes el error de carga no se mostraba nunca y la
+          hoja quedaba vacía sin explicación. */}
+      {(errorHoja || errorOrden) && (
+        <div role="alert" className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+          style={{ background:'var(--bad-soft)', borderBottom:'1px solid var(--bad-line)', color:'var(--bad)' }}>
+          <span>{errorHoja || errorOrden}</span>
+          {errorHoja && <button type="button" onClick={cargarHoja} className="btn-secondary text-xs min-h-9">Reintentar</button>}
+        </div>
+      )}
+      <p className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-[11px]"
+        style={{ color:'var(--t3)', borderBottom:'1px solid var(--divider)', background:'var(--soft-bg)' }}>
+        <GripVertical size={12}/> Arrastra el asa de cualquier bloque (Pago, Garantía, Área, Asistencias, Documentos o una materia) o de una columna para cambiarla de lugar. El orden se guarda para este grupo.
+      </p>
       <div style={{
         overflowX:'auto', overflowY:'auto',
         /* El barrido horizontal sobre la hoja disparaba el gesto de "atrás"
@@ -1700,39 +2383,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
               <EditableColumnHeader rowSpan={2} minWidth={W.name} light={hcMode}
                 value={headerName('student','ALUMNO')} onChange={v=>renameHeader('student',v)}
                 style={{ ...thStickyStyle(L.name), textAlign:'left', padding:'8px 12px' }}/>
-              {/* PAGO y GARANTÍA: NO sticky */}
-              {showSummary && <>
-                <EditableColumnHeader locked rowSpan={2} minWidth={W.pago} light={hcMode}
-                  value="PAGO"
-                  style={{ background:hcMode?'var(--soft-bg)':solidBg, borderBottom:`3px solid ${HC.pago}` }}/>
-                <EditableColumnHeader locked rowSpan={2} minWidth={W.gar} light={hcMode}
-                  value="GARANTÍA"
-                  style={{ background:hcMode?'var(--soft-bg)':solidBg, borderBottom:`3px solid ${HC.gar}` }}/>
-                {esUniversidad && (
-                  <EditableColumnHeader locked rowSpan={2} minWidth={W.area} light={hcMode}
-                    value="ÁREA"
-                    style={{ background:hcMode?'var(--soft-bg)':solidBg, borderBottom:`3px solid ${HC.area}` }}/>
-                )}
-              </>}
-
-              {showDocs && <SectionHeader label="DOCUMENTOS"
-                cols={collapsed['docs']?1:5}
-                collapsed={!!collapsed['docs']} onToggle={()=>toggleSection('docs')}/>}
-
-              {subjects.filter(subj=>showSubject(subj.id)).map(subj => {
-                const fija = esSeccionFija(subj)
-                return (
-                <SectionHeader key={subj.id}
-                  label={fija ? subj.name.toUpperCase() : headerName(`section:${subj.id}`,subj.name.toUpperCase())}
-                  color={subj.color}
-                  onRename={fija ? undefined : v=>renameHeader(`section:${subj.id}`,v)}
-                  cols={collapsed[subj.id] ? 1 : subj.cols.length+1}
-                  collapsed={!!collapsed[subj.id]}
-                  onToggle={()=>toggleSection(subj.id)}
-                  onAdd={()=>setAddColModal(subj.id)}
-                  onRemoveItem={fija ? undefined : ()=>removeSubject(subj.id)}
-                />
-              )})}
+              {/* Bloques (fijos y materias) en el orden del grupo */}
+              {bloquesVisibles.map(t => cabecera1(t))}
 
               {showSims && <SectionHeader label={headerName('section:sims','SIMULACROS (EX)')}
                 onRename={v=>renameHeader('section:sims',v)} color="var(--warn)"
@@ -1748,47 +2400,11 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
                 onToggle={()=>toggleSection('online')}
                 nota="Próximamente: aún no se guarda"
               />}
-              {showAttendance && <SectionHeader label="ASISTENCIAS" color="var(--good)"
-                cols={1} collapsed={false} onToggle={()=>{}}/>}
             </tr>
 
             {/* ── Fila 2: nombres de columna ── */}
             <tr style={{ background: solidBg }}>
-              {/* Documentos */}
-              {showDocs && (collapsed['docs']
-                ? <th style={{ minWidth:52, fontSize:10, color: hcMode ? HC.docs : 'var(--t4)', textAlign:'center', borderRight: hcMode ? `2px solid ${HC.docs}` : '1px solid rgba(255,255,255,.06)' }}>···</th>
-                : [
-                    ['doc_curp','CURP'],
-                    ['doc_ine','INE tutor'],
-                    ['doc_terms','Firma T&C'],
-                    ['doc_guarantee','Garantía'],
-                    ['doc_exams','Exámenes'],
-                  ].map(([key,fallback]) => (
-                    <EditableColumnHeader locked key={key} minWidth={68} light={hcMode}
-                      value={fallback}
-                      style={{ background:hcMode?'var(--soft-bg)':`${HC.docs}0a`,
-                        borderBottom:`${hcMode?2:1}px solid ${HC.docs}${hcMode?'80':'60'}` }}/>
-                  ))
-              )}
-
-              {/* Secciones */}
-              {subjects.filter(subj=>showSubject(subj.id)).map(subj => {
-                if (collapsed[subj.id]) return <th key={subj.id} style={{ minWidth:52, fontSize:10, color: 'var(--t4)', textAlign:'center', borderRight: '1px solid var(--divider)' }}>···</th>
-                return [
-                  ...subj.cols.map(col => (
-                    <EditableColumnHeader key={`${subj.id}_${col.id}`} minWidth={76} light={hcMode}
-                      locked={col.esFija}
-                      value={col.esFija ? col.name : headerName(`col:${col.id}`,col.name)}
-                      onChange={v=>renameHeader(`col:${col.id}`,v)}
-                      onRemove={col.esFija ? undefined : ()=>removeCol(subj.id,col.id)}/>
-                  )),
-                  <th key={`${subj.id}_add`} style={{ minWidth:26, borderRight: '1px solid var(--divider)' }}>
-                    <button onClick={()=>setAddColModal(subj.id)} className="mx-auto flex items-center justify-center w-4 h-4 rounded hover:bg-white/15" title="Añadir columna">
-                      <Plus size={9} style={{ color: 'var(--t3)' }}/>
-                    </button>
-                  </th>,
-                ]
-              })}
+              {bloquesVisibles.map(t => cabecera2(t))}
 
               {/* Simulacros */}
               {showSims && (collapsed['sims']
@@ -1817,9 +2433,6 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
                 ]
               )}
 
-              {/* Asistencias */}
-              {showAttendance && <EditableColumnHeader locked minWidth={88} light={hcMode}
-                value="% ASIST."/>}
             </tr>
           </thead>
 
@@ -1863,50 +2476,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
                     </div>
                   </td>
 
-                  {/* Pago — NO sticky */}
-                  {showSummary && <PaymentCell value={s.pago} onChange={v=>setPago(s.id,v)}
-                    tdStyle={{ minWidth:W.pago, background: hcMode ? 'var(--card-bg)' : rowBg, border: hcMode ? '1px solid var(--divider)' : `1px solid ${HC.pago}40`, boxShadow: !hcMode ? `0 0 6px ${HC.pago}25` : 'none', verticalAlign:'middle' }}
-                  />}
-
-                  {/* Garantía — NO sticky */}
-                  {showSummary && <GuaranteeBadge studentId={s.id} cells={sc} attendance={attendance} simCount={simCount}
-                    bg={rowBg} sc={HC.gar}
-                  />}
-
-                  {/* Área — sólo en grupos de universidad: ECOEMS no se
-                      divide por áreas y la columna sobraría en la hoja. */}
-                  {showSummary && esUniversidad && (
-                    <AreaCell value={s.area} onChange={v=>setArea(s.id,v)} bg={rowBg} sc={HC.area}/>
-                  )}
-
-                  {/* Documentos */}
-                  {showDocs && (collapsed['docs']
-                    ? <td style={{ minWidth:52, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
-                    : <>
-                        <AutoStatusCell value={s.curpEstado} bg={rowBg}/>
-                        <AutoStatusCell value={s.ineEstado} bg={rowBg}/>
-                        <AutoStatusCell value={s.firmaTyC?'firmado':'pendiente'} bg={rowBg}/>
-                        <AutoStatusCell value={s.garantiaEstado} bg={rowBg}/>
-                        <AutoStatusCell value={s.examenesEstado} bg={rowBg}/>
-                      </>
-                  )}
-
-                  {/* Materias */}
-                  {subjects.filter(subj=>showSubject(subj.id)).map(subj => {
-                    if(collapsed[subj.id]) return <td key={subj.id} style={{ minWidth:52, background: hcMode ? 'var(--card-bg)' : rowBg }}/>
-                    return [
-                      ...subj.cols.map(col=>(
-                        <ScoreCell key={`${subj.id}_${col.id}`}
-                          value={sc[`${subj.id}_${col.id}`]}
-                          onChange={v=>setCell(s.id,`${subj.id}_${col.id}`,v)}
-                          sc={subj.color}
-                          celda={`${s.id}_${col.id}`}
-                          foco={celdaFoco === `${s.id}_${col.id}`}
-                        />
-                      )),
-                      <td key={`${subj.id}_sp`} style={{ minWidth:26, background: hcMode ? 'var(--card-bg)' : rowBg }}/>,
-                    ]
-                  })}
+                  {bloquesVisibles.map(t => celdasBloque(t, s, sc, rowBg))}
 
                   {/* Simulacros */}
                   {showSims && (collapsed['sims']
@@ -1928,8 +2498,6 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
                     ]
                   )}
 
-                  {/* Asistencias */}
-                  {showAttendance && <AttSummaryCell studentId={s.id} attendance={attendance} onClick={()=>setAttModal(s.id)}/>}
                 </tr>
               )
             })}
@@ -1994,11 +2562,16 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
         )}
         {/* Modales */}
         {attModal && <AttendanceModal studentId={attModal} studentName={students.find(s=>s.id===attModal)?.name??''} attendance={attendance} onChange={toggleAtt} onClose={()=>setAttModal(null)}/>}
-        {addColModal && <AddColModal subjName={subjects.find(s=>s.id===addColModal)?.name??''} onAdd={(n,t)=>addCol(addColModal,n,t)} onClose={()=>setAddColModal(null)}/>}
+        {addColModal && <ColumnaModal titulo={`Añadir columna — ${subjects.find(s=>s.id===addColModal)?.name ?? ''}`}
+          columnas={todasLasColumnas} onGuardar={cfg => addCol(addColModal, cfg)} onClose={()=>setAddColModal(null)}/>}
+        {configCol && <ColumnaModal titulo={`Configurar columna — ${configCol.col.name}`} inicial={configCol.col}
+          columnas={todasLasColumnas} soloExtras={configCol.col.esFija}
+          onGuardar={guardarConfigColumna} onClose={()=>setConfigCol(null)}/>}
         {addSubjModal && <AddSubjectModal onAdd={addSubject} onClose={()=>setAddSubjModal(false)}/>}
         {showAddStudent && <StudentFormModal groups={[group]} defaultGroupId={group.id}
           onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
+        {dialogoBorrado}
       </div>
     </HCCtx.Provider>,
     document.body
@@ -2014,11 +2587,16 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
         {legend}
 
         {attModal && <AttendanceModal studentId={attModal} studentName={students.find(s=>s.id===attModal)?.name??''} attendance={attendance} onChange={toggleAtt} onClose={()=>setAttModal(null)}/>}
-        {addColModal && <AddColModal subjName={subjects.find(s=>s.id===addColModal)?.name??''} onAdd={(n,t)=>addCol(addColModal,n,t)} onClose={()=>setAddColModal(null)}/>}
+        {addColModal && <ColumnaModal titulo={`Añadir columna — ${subjects.find(s=>s.id===addColModal)?.name ?? ''}`}
+          columnas={todasLasColumnas} onGuardar={cfg => addCol(addColModal, cfg)} onClose={()=>setAddColModal(null)}/>}
+        {configCol && <ColumnaModal titulo={`Configurar columna — ${configCol.col.name}`} inicial={configCol.col}
+          columnas={todasLasColumnas} soloExtras={configCol.col.esFija}
+          onGuardar={guardarConfigColumna} onClose={()=>setConfigCol(null)}/>}
         {addSubjModal && <AddSubjectModal onAdd={addSubject} onClose={()=>setAddSubjModal(false)}/>}
         {showAddStudent && <StudentFormModal groups={[group]} defaultGroupId={group.id}
           onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
+        {dialogoBorrado}
       </div>
     </HCCtx.Provider>
   )

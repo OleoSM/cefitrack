@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Pencil, Check, TableProperties, CalendarDays, Tag, Layers, Info } from 'lucide-react'
+import { X, Pencil, Check, TableProperties, CalendarDays, Tag, Layers, Info, FileDown } from 'lucide-react'
 import ModalPortal from './ModalPortal'
 import { iconoMateria } from './SigaMateriaIcons'
 import { fetchColumnaRegistro } from '../../lib/supabaseData'
+import { fetchMaterialesDeColumna, urlMaterial, tiempoHasta } from '../../lib/materialesData'
 import { colorMateria, colorCalificacion, calificacionBase10 } from '../../lib/studentMetrics'
 import { tintaSobre } from '../../lib/color'
 
@@ -24,11 +25,14 @@ export default function DetalleEvaluacion({ evaluacion: e, grupo, light = false,
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [guardado, setGuardado] = useState(false)
+  const [materiales, setMateriales] = useState([])   // solucionarios de esta actividad
   const inputRef = useRef(null)
 
   useEffect(() => {
     let vivo = true
     if (e.columnaId) fetchColumnaRegistro(e.columnaId).then(c => { if (vivo) setColumna(c) }).catch(() => {})
+    // La RLS ya filtra: el alumno solo recibe los que están en su ventana de tiempo.
+    if (e.columnaId) fetchMaterialesDeColumna(e.columnaId).then(m => { if (vivo) setMateriales(m) }).catch(() => {})
     return () => { vivo = false }
   }, [e.columnaId])
 
@@ -142,6 +146,23 @@ export default function DetalleEvaluacion({ evaluacion: e, grupo, light = false,
             ? <>Capturada en la hoja de Calificaciones{grupo ? <> del grupo <b>{grupo}</b></> : null}.</>
             : <>Registrada directamente, sin columna en la hoja de Calificaciones.</>}
         </p>
+
+        {materiales.length > 0 && (
+          <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--info-soft)', border: '1px solid var(--info-line)' }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--info)' }}>Material de esta actividad</p>
+            {materiales.map(m => (
+              <button key={m.id} type="button"
+                onClick={async () => { try { window.open(await urlMaterial(m), '_blank', 'noopener') } catch { /* sin acceso */ } }}
+                className="w-full flex items-center gap-2 text-left min-h-11 px-2 rounded-lg" style={{ color: 'var(--t1)' }}>
+                <FileDown size={16} className="flex-shrink-0" style={{ color: 'var(--info)' }}/>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold truncate">{m.titulo}</span>
+                  <span className="block text-[11px]" style={{ color: 'var(--t3)' }}>Disponible {tiempoHasta(m.expiraEn) === 'ya' ? 'hasta hoy' : `; se borra ${tiempoHasta(m.expiraEn)}`}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {onAbrirHoja && e.columnaId && (
           <button type="button" onClick={onAbrirHoja} className="btn-primary w-full justify-center min-h-11">

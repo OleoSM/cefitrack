@@ -13,6 +13,7 @@ import { jsPDF } from 'jspdf'
 import { useSucursales } from '../../hooks/useSucursales'
 import { estadoPerfil } from './EstadoPagina'
 import { CabeceraModal, SeccionAvatar, SeccionColor, useAvatares } from './Personalizar'
+import FotoPerfil from '../../components/ui/FotoPerfil'
 
 const QR_PREFIX = 'EDUTRACK:'
 const FONT = "'Plus Jakarta Sans', Manrope, system-ui, -apple-system, sans-serif"
@@ -547,6 +548,10 @@ export default function MyQR() {
               <p className="text-xs mt-0.5" style={{ color: tt.t3 }}>{grp?.name} · {grp?.subject}</p>
             </div>
           </div>
+
+          {/* Foto de perfil: la usa el docente para reconocerlo al pasar lista. */}
+          <FotoPerfil student={student}
+            onCambio={fotoPath => setStudent(s => s && ({ ...s, fotoPath }))}/>
 
           {/* Descargas */}
           <div className="card p-5 space-y-3">

@@ -9,7 +9,8 @@ import ProgressiveList from '../../components/ui/ProgressiveList'
 import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
 import { IconAsistencia, IconRetardos, IconFaltas } from '../../components/ui/SigaKpiIcons'
 import { useStudentTheme } from '../../context/StudentThemeContext'
-import { CheckCircle2, Clock, XCircle, Calendar, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, Calendar, ChevronLeft, ChevronRight, ChevronDown, Check, X, CalendarDays } from 'lucide-react'
+import { eventosCalendario, tonoEvento } from '../../lib/feriados'
 import { estadoPerfil } from './EstadoPagina'
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -21,6 +22,14 @@ const TONO_ESTADO = { presente: 'good', tardanza: 'warn', ausente: 'bad' }
 const ICONO_ESTADO = { presente: IconAsistencia, tardanza: IconRetardos, ausente: IconFaltas }
 const tonoDe = status => TONO_ESTADO[status] ?? 'neutral'
 const solidoDe = status => TONO_ESTADO[status] ? `var(--${TONO_ESTADO[status]}-solid)` : 'var(--neutral-solid)'
+
+/* Marca de cada clase: paloma (asistió), tache (faltó) o reloj (retardo).
+   Se lee de un vistazo sin depender solo del color. */
+const MARCA_ESTADO = { presente: Check, tardanza: Clock, ausente: X }
+function MarcaClase({ status, size = 14 }) {
+  const Icono = MARCA_ESTADO[status]
+  return Icono ? <Icono size={size} strokeWidth={3} aria-hidden="true"/> : null
+}
 
 /** Distintivo de estado: relleno pleno del tono con texto blanco (regla 2-bis). */
 function EstadoBadge({ status }) {
@@ -124,7 +133,7 @@ function TodayCard({ record, tardanzasRestantes, tardanzasConvertidas, lastRecor
 }
 
 /* ── Selector de semana con calendario completo ── */
-function WeekPicker({ weekStart, onSelect, recordDates, t }) {
+function WeekPicker({ weekStart, onSelect, recordDates, eventos, t }) {
   const [open, setOpen] = useState(false)
   const [viewMonth, setViewMonth] = useState(() => new Date(weekStart.getFullYear(), weekStart.getMonth(), 1))
   const ref = useRef(null)
@@ -203,8 +212,10 @@ function WeekPicker({ weekStart, onSelect, recordDates, t }) {
               const inMonth = d.getMonth() === viewMonth.getMonth()
               const inSelWeek = dISO >= selStart && dISO <= selEnd
               const hasRecord = recordDates.has(dISO)
+              const evs = eventos?.get(dISO)
               return (
                 <button key={dISO} onClick={() => { onSelect(mondayOf(d)); setOpen(false) }}
+                  title={evs ? evs.map(e => e.titulo).join(' · ') : undefined}
                   className="relative h-10 rounded-lg text-[11px] font-semibold transition-colors tabular-nums"
                   style={{
                     color: inSelWeek ? 'var(--accent-contrast)' : inMonth ? t.t2 : t.t4,
@@ -213,6 +224,11 @@ function WeekPicker({ weekStart, onSelect, recordDates, t }) {
                   onMouseEnter={e => { if (!inSelWeek) e.currentTarget.style.background = t.softBg }}
                   onMouseLeave={e => { if (!inSelWeek) e.currentTarget.style.background = 'transparent' }}>
                   {d.getDate()}
+                  {/* Festivo o fecha de CEFIMAT: subrayado del tono del evento. */}
+                  {evs && !inSelWeek && (
+                    <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
+                      style={{ background: `var(--${tonoEvento(evs[0].tipo)}-solid)` }}/>
+                  )}
                   {hasRecord && (
                     <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
                       style={{ background: inSelWeek ? 'var(--accent-contrast)' : 'var(--good)' }}/>
@@ -240,6 +256,15 @@ export default function MyAttendance() {
 
   const { student: s, attendance, loading, error } = useStudentData({ withAttendance: true })
   const stats = useMemo(() => s ? statsAsistencia(attendance) : null, [s, attendance])
+  /* Festivos oficiales de México + fechas propias de CEFIMAT (Configuración). */
+  const eventos = useMemo(() => {
+    const y = new Date().getFullYear()
+    return eventosCalendario([y - 1, y, y + 1])
+  }, [])
+  const proximos = useMemo(() => {
+    const hoy = todayISO()
+    return [...eventos.entries()].filter(([f]) => f >= hoy).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 4)
+  }, [eventos])
 
   const [weekStart, setWeekStart] = useState(() => {
     // Por defecto: la semana del registro más reciente (o la actual)
@@ -374,38 +399,74 @@ export default function MyAttendance() {
         <div className="card overflow-visible p-4 sm:p-5 xl:col-span-2">
           <div className="flex items-center justify-between gap-2 sm:gap-3 flex-wrap mb-4">
             <h2 className="section-title">Registro por Semana</h2>
-            <WeekPicker weekStart={weekStart} onSelect={setWeekStart}
+            <WeekPicker weekStart={weekStart} onSelect={setWeekStart} eventos={eventos}
               recordDates={new Set(att.map(a => a.date))} t={t}/>
           </div>
 
           <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
             {weekDays.map((d, i) => {
               const rec = byDate.get(iso(d))
+              const evs = eventos.get(iso(d))
               const isWeekend = i >= 5
+              const tonoEv = evs && tonoEvento(evs[0].tipo)
               return (
-                <div key={i} className="flex flex-col items-center">
+                <div key={i} className="flex flex-col items-center min-w-0">
                   <span className="text-[10px] font-bold uppercase mb-1.5" style={{ color: t.t4 }}>{DOW[i]}</span>
                   <div
-                    title={rec ? `${getAttendanceColor(rec.status).label}${rec.time ? ' — ' + rec.time : ''}` : isWeekend ? 'Fin de semana' : 'Sin registro'}
+                    title={[rec && `${getAttendanceColor(rec.status).label}${rec.time ? ' — ' + rec.time : ''}`,
+                      evs?.map(e => e.titulo).join(' · '), !rec && !evs && (isWeekend ? 'Fin de semana' : 'Sin registro')]
+                      .filter(Boolean).join(' · ')}
                     className={`w-full aspect-square max-w-[52px] rounded-xl flex flex-col items-center justify-center ${rec ? 'text-white' : ''}`}
-                    style={rec ? { background: solidoDe(rec.status) } : { border: '1.5px dashed var(--card-border)', color: 'var(--t4)' }}>
+                    style={rec ? { background: solidoDe(rec.status) }
+                      : evs ? { background: `var(--${tonoEv}-soft)`, border: `1.5px solid var(--${tonoEv}-line)`, color: `var(--${tonoEv})` }
+                      : { border: '1.5px dashed var(--card-border)', color: 'var(--t4)' }}>
                     <span className="text-sm font-bold tabular-nums">{d.getDate()}</span>
-                    {rec ? <div className="w-1.5 h-1.5 rounded-full mt-0.5 bg-white"/> : <span className="text-[8px] mt-0.5">—</span>}
+                    {rec ? <MarcaClase status={rec.status} size={13}/>
+                      : evs ? <CalendarDays size={11} aria-hidden="true"/>
+                      : <span className="text-[8px] mt-0.5">—</span>}
                   </div>
                   {rec?.time && <span className="text-[8.5px] mt-1 tabular-nums" style={{ color: t.t4 }}>{rec.time}</span>}
+                  {!rec && evs && (
+                    <span className="text-[8.5px] mt-1 leading-tight text-center line-clamp-2 w-full" style={{ color: `var(--${tonoEv})` }}>
+                      {evs[0].titulo}
+                    </span>
+                  )}
                 </div>
               )
             })}
           </div>
+
+          {/* Próximas fechas: festivos oficiales y las que publique CEFIMAT. */}
+          {proximos.length > 0 && (
+            <div className="mt-4 pt-3 space-y-1.5" style={{ borderTop: `1px solid ${t.divider}` }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--t3)' }}>Próximas fechas</p>
+              {proximos.map(([f, evs]) => (
+                <div key={f} className="flex items-center gap-2 text-xs">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: `var(--${tonoEvento(evs[0].tipo)}-solid)` }}/>
+                  <span className="tabular-nums capitalize w-28 flex-shrink-0" style={{ color: 'var(--t3)' }}>
+                    {new Date(f + 'T12:00').toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </span>
+                  <span className="truncate" style={{ color: 'var(--t1)' }}>{evs.map(e => e.titulo).join(' · ')}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-3 mt-4 pt-4" style={{ borderTop: `1px solid ${t.divider}` }}>
             {/* `sinRegistro` es sólo el respaldo del helper, no un estado que
                 el docente capture: fuera de la leyenda. */}
             {Object.entries(attendanceColors).filter(([k]) => TONO_ESTADO[k]).map(([k, v]) => (
               <div key={k} className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--t3)' }}>
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: solidoDe(k) }}/>{v.label}
+                <span className="w-4 h-4 rounded flex items-center justify-center text-white" style={{ background: solidoDe(k) }}>
+                  <MarcaClase status={k} size={10}/>
+                </span>{v.label}
               </div>
             ))}
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--t3)' }}>
+              <span className="w-4 h-4 rounded flex items-center justify-center" style={{ background: 'var(--bad-soft)', border: '1px solid var(--bad-line)', color: 'var(--bad)' }}>
+                <CalendarDays size={9}/>
+              </span>Día sin clases / fecha especial
+            </div>
           </div>
         </div>
       </div>
@@ -500,6 +561,11 @@ export default function MyAttendance() {
                             {a.time ? `Llegada: ${a.time}` : a.status === 'ausente' ? 'Sin registro de llegada' : 'Hora no registrada'}
                           </span>
                         </div>
+                        {/* Paloma verde / tache rojo de la clase. */}
+                        <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white"
+                          title={getAttendanceColor(a.status).label} style={{ background: solidoDe(a.status) }}>
+                          <MarcaClase status={a.status} size={18}/>
+                        </span>
                       </div>
                     )
                   })}

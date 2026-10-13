@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line,
 } from 'recharts'
-import { Layers, ArrowLeft, ChevronRight, ClipboardList, AlertTriangle, Compass, MousePointerClick } from 'lucide-react'
+import { Layers, ArrowLeft, ChevronRight, ClipboardList, AlertTriangle, Compass, MousePointerClick, MessageCircleQuestion } from 'lucide-react'
 import MateriaBarChart from '../../components/ui/MateriaBarChart'
 import { useStudentData } from '../../hooks/useStudentData'
 import { calificacionBase10, colorCalificacion, tonoCalificacion, colorMateria } from '../../lib/studentMetrics'
@@ -121,6 +121,17 @@ export default function MyGrades() {
           <p><b>Promedio de esta página:</b> es la media simple de tus calificaciones. El <b>promedio oficial</b> (el de Mi Panel) combina exámenes, tareas y asistencia con los pesos que define CEFIMAT.</p>
           <p>Usa los botones de materia para cambiar entre "Todas" y una materia concreta.</p>
         </BotonAyuda>
+      </div>
+
+      {/* Las calificaciones las captura el profesor: una duda sobre una nota se
+          resuelve con él, en clase, no en la plataforma. */}
+      <div role="note" className="flex items-start gap-2.5 rounded-xl px-3.5 py-3 text-sm"
+        style={{ background: 'var(--info-soft)', border: '1px solid var(--info-line)', color: 'var(--t2)' }}>
+        <MessageCircleQuestion size={18} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--info)' }}/>
+        <p>
+          <b style={{ color: 'var(--t1)' }}>¿Dudas con una calificación?</b> Coméntalo directamente con tu
+          profesor en clase: él puede revisarla y corregirla si hace falta.
+        </p>
       </div>
 
       {/* ── Selector de materia: visible y explícito ──

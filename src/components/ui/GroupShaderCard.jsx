@@ -9,7 +9,9 @@ import {
   MATE_PALETTES,
   SHADER_CONFIG,
 } from '../../hooks/useGroupColors'
-import { logoInstitucion, estiloLogo } from '../../lib/instituciones'
+import { logoInstitucion, estiloLogoTinta } from '../../lib/instituciones'
+import EmblemaUniversidad from './EmblemaUniversidad'
+import SelectorTinta from './SelectorTinta'
 import { useAdminTheme } from '../../context/AdminThemeContext'
 
 /* ── Fondo del grupo ───────────────────────────────────────────────────────
@@ -68,7 +70,7 @@ function fondoDegradado(colors) {
 const VISIBLES_POR_SECCION = 3
 
 function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
-  const { isLight } = useGroupColors()
+  const { isLight, getTintaId, setGroupTinta } = useGroupColors()
   const pickerRef = useRef(null)
   const [pos, setPos] = useState({ top:0, left:0 })
   const [expandidas, setExpandidas] = useState(() => ({
@@ -97,7 +99,7 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
     const scrollY = window.scrollY || document.documentElement.scrollTop
     setPos({
       top:  r.bottom + scrollY + 8,
-      left: Math.max(8, r.right - 280),
+      left: Math.max(8, Math.min(r.right - 320, window.innerWidth - 328)),
     })
   }, [anchorRef])
 
@@ -120,7 +122,10 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
         position:   'absolute',
         top:        pos.top,
         left:       pos.left,
-        width:      280,
+        width:      320,
+        maxWidth:   'calc(100vw - 16px)',
+        maxHeight:  '80vh',
+        overflowY:  'auto',
         zIndex:     9999,
         background: 'var(--panel-bg)',
         backdropFilter: 'blur(28px)',
@@ -245,6 +250,13 @@ function ColorPicker({ anchorRef, groupId, activeId, onSelect, onClose }) {
 
       <VerMas lista={MATE_PALETTES} clave="mate"/>
 
+      {/* ── Color de letra ── */}
+      <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <p className="text-[9px] font-bold uppercase tracking-widest mb-2" style={{ color:'var(--t3)' }}>
+        Color de letra
+      </p>
+      <SelectorTinta groupId={groupId} valor={getTintaId(groupId)} onChange={id => setGroupTinta(groupId, id)}/>
+
       {/* Footer hint */}
       <p className="mt-3 text-[9px] text-center" style={{ color:'var(--t4)' }}>
         El color se guarda automáticamente
@@ -263,7 +275,7 @@ export default function GroupShaderCard({
   showPicker = true,
   className = '',
 }) {
-  const { getColors, getAccent, getSurface, isLight, getPaletteId, getPalette, setGroupPalette } = useGroupColors()
+  const { getColors, getAccent, getSurface, isLight, getPaletteId, getPalette, setGroupPalette, resolverTinta } = useGroupColors()
   const [open, setOpen] = useState(false)
   const btnRef = useRef(null)
 
@@ -272,6 +284,7 @@ export default function GroupShaderCard({
   const accent    = getAccent(group.id)
   const surface   = getSurface(group.id)
   const activeId  = getPaletteId(group.id)
+  const tinta     = resolverTinta(group.id)
   const cardRef   = useRef(null)
   /* «Reducir movimiento» apaga el shader del todo: es un bucle a pantalla
      completa detrás de cada tarjeta, justo lo que estorba a quien lo pide. El
@@ -289,12 +302,15 @@ export default function GroupShaderCard({
   /* Con una sola institución manda su escudo —dice a qué aspira el grupo—; con
      varias, o con ninguna, manda el emblema conjunto de Universidad. */
   const escudo = (curso === 'universidad' && (group.instituciones?.length ?? 0) !== 1)
-    ? { src:'/logos/universidad-informe-transparente.png', alt:'Universidad — UNAM, UAM e IPN', compuesto:true }
+    ? { compuesto:true }
     : logo
 
   return (
     /* Sin overflow-hidden en el root — lo ponemos solo en el shader layer */
-    <div ref={cardRef} className={`relative rounded-2xl ${className}`}
+    /* El hover levanta la tarjeta ENTERA 2 px. Antes la cabecera (role=button)
+       heredaba el zoom global de botones y, como la raíz no recorta, el escudo
+       se salía de la tarjeta. */
+    <div ref={cardRef} className={`relative rounded-2xl ${onClick ? 'transition-transform duration-200 hover:-translate-y-0.5' : ''} ${className}`}
       style={{
         border: `1px solid ${isLight ? surface : 'var(--card-border)'}`,
         boxShadow: 'var(--card-shadow)',
@@ -304,16 +320,9 @@ export default function GroupShaderCard({
            escala de texto tiene que invertirse: se redefinen las variables en
            este ámbito y todo lo anidado —cabecera, métricas, pie— las hereda
            sin tener que saber nada del tema. */
-        ...(isLight ? {
-          '--t1': '#ffffff',
-          '--t2': 'rgba(255,255,255,.82)',
-          '--t3': 'rgba(255,255,255,.62)',
-          '--t4': 'rgba(255,255,255,.45)',
-          '--divider': 'rgba(255,255,255,.20)',
-          '--card-border': 'rgba(255,255,255,.24)',
-          '--soft-bg': 'rgba(255,255,255,.12)',
-          '--card-bg': 'rgba(255,255,255,.10)',
-        } : {}),
+        /* El color de letra lo elige quien personaliza el grupo (o se decide
+           por contraste). Todo lo anidado hereda estas variables. */
+        ...tinta.vars,
       }}>
 
       {/* ── Fondo ───────────────────────────────────────────────
@@ -346,7 +355,7 @@ export default function GroupShaderCard({
               </div>
             )}
             {/* El velo mantiene legible el texto encima del color. */}
-            <div className="absolute inset-0" style={{ background:'rgba(0,0,0,.72)' }} />
+            <div className="absolute inset-0" style={{ background: tinta.velaClara ? 'rgba(236,236,242,.84)' : 'rgba(0,0,0,.72)' }} />
           </>
         ) : (
           /* Sólido: fondo + glow sutil del color de acento */
@@ -356,6 +365,7 @@ export default function GroupShaderCard({
             <div className="absolute inset-0" style={{
               background: `radial-gradient(ellipse 70% 70% at 80% 50%, ${accent}18 0%, transparent 70%)`,
             }} />
+            {tinta.velaClara && <div className="absolute inset-0" style={{ background:'rgba(236,236,242,.84)' }} />}
           </div>
         )}
       </div>
@@ -366,6 +376,7 @@ export default function GroupShaderCard({
         {/* Header */}
         <div
           role={onClick ? 'button' : undefined}
+          data-sin-zoom
           tabIndex={onClick ? 0 : undefined}
           onClick={onClick}
           onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
@@ -374,8 +385,9 @@ export default function GroupShaderCard({
           {/* Avatar: escudo de la vertiente, o la inicial si no tiene.
               En universidad va el icono conjunto UNAM+UAM+IPN, que es lo que
               el grupo persigue realmente. */}
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-base sm:text-lg flex-shrink-0"
+          <div className={`${escudo?.ancho ? 'w-[3.6rem] sm:w-[4.8rem]' : 'w-9 sm:w-12'} h-9 sm:h-12 rounded-xl flex items-center justify-center font-bold text-base sm:text-lg flex-shrink-0`}
             style={{
+              color: (escudo || isLight) ? 'var(--t1)' : '#ffffff',
               // Con escudo no hay recuadro: se pinta en silueta blanca sobre el
               // color del grupo. El fondo blanco de antes se recortaba contra
               // la tarjeta y se veía como un parche.
@@ -388,16 +400,18 @@ export default function GroupShaderCard({
                 cada logo llevaba su propio factor (.9 el IPN, 1.16 la UAM…):
                 puestas en columna, ninguna tarjeta medía igual que la de al
                 lado aunque todas fueran lo mismo. */}
-            {escudo
-              ? <img src={escudo.src} alt={escudo.alt}
-                  className="w-full h-full object-contain"
-                  style={escudo.compuesto
-                    /* El emblema conjunto es un montaje de tres y no admite la
-                       silueta blanca: se queda con sus colores y se separa del
-                       fondo con un halo. */
-                    ? { filter:'drop-shadow(0 0 1px rgba(255,255,255,.95)) drop-shadow(0 0 3px rgba(255,255,255,.6))' }
-                    : estiloLogo(true)}/>
-              : letter}
+            {escudo?.compuesto
+              /* Universidad: UNAM, IPN y UAM unidos en triángulo, cada uno en su
+                 medallón blanco con sus colores. */
+              ? <>
+                  <EmblemaUniversidad size={36} className="sm:hidden"/>
+                  <EmblemaUniversidad size={48} className="hidden sm:inline-block"/>
+                </>
+              : escudo
+                ? <img src={escudo.src} alt={escudo.alt}
+                    className="w-full h-full object-contain"
+                    style={estiloLogoTinta(tinta.oscura)}/>
+                : letter}
           </div>
 
           {/* Info */}

@@ -244,7 +244,7 @@ export default function StudentDashboard() {
   const KPI_INFO = {
     simulacro: 'Aciertos de tu último examen de simulación sobre el total de preguntas.',
     asistencia: 'Porcentaje de clases a las que asististe. Cada 3 retardos cuentan como 1 falta. Para la garantía necesitas al menos 90 %.',
-    tareas: 'Tareas que entregaste de las que te asignaron. Para la garantía necesitas al menos 80 % en cada una.',
+    tareas: 'Tareas que entregaste de las que te asignaron. Para la garantía debes entregar todas y sacar mínimo 80 % en cada una.',
     promedio: `Tu promedio oficial: combina exámenes (${pesos.examenes} %), tareas (${pesos.tareas} %) y asistencia (${pesos.asistencia} %). Si aún no hay datos de alguna parte, su peso se reparte entre las demás.`,
     ranking: 'Tu lugar en el grupo según el promedio ponderado. Tus compañeros no ven tus calificaciones ni tú las suyas.',
   }

@@ -12,7 +12,9 @@
 const LOGOS = {
   unam:   { src: '/logos/instituciones/unam.svg',   alt: 'UNAM' },
   ipn:    { src: '/logos/instituciones/ipn.webp',   alt: 'IPN' },
-  uam:    { src: '/logos/instituciones/uam.png',    alt: 'UAM' },
+  // Apaisado (530×216): en caja cuadrada queda diminuto. `ancho` pide una caja
+  // más ancha que alta para que pese lo mismo que los demás escudos.
+  uam:    { src: '/logos/instituciones/uam.png',    alt: 'UAM', ancho: 1.6 },
   ecoems: { src: '/logos/instituciones/ecoems.png', alt: 'ECOEMS' },
 }
 
@@ -54,3 +56,14 @@ export const INSTITUCIONES = [
  */
 export const estiloLogo = sobreColor =>
   sobreColor ? { filter: 'brightness(0) invert(1)' } : undefined
+
+/**
+ * Silueta en el color de letra de la tarjeta (blanco u oscuro). `oscura`
+ * aplasta a negro; si no, a blanco. Un halo fino del color contrario separa
+ * el escudo del fondo cuando este se le parece.
+ */
+export const estiloLogoTinta = oscura => ({
+  filter: oscura
+    ? 'brightness(0) drop-shadow(0 0 .5px rgba(255,255,255,.6))'
+    : 'brightness(0) invert(1) drop-shadow(0 0 .5px rgba(0,0,0,.35))',
+})

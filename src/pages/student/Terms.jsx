@@ -234,7 +234,7 @@ CEFIMAT provee servicios educativos de preparación para exámenes de admisión 
 La garantía de repetición del curso sin costo aplica cuando el alumno cumple simultáneamente con:
   a) Asistencia mínima del 90% (considerando la regla de 3 retardos = 1 inasistencia)
   b) Haber presentado todos los exámenes de simulación
-  c) Obtener calificación mínima del 80% en cada tarea asignada
+  c) Entregar todas las tareas asignadas y obtener una calificación mínima del 80% en cada una
 
 El incumplimiento de cualquiera de los tres requisitos anula la garantía de forma definitiva.
 
@@ -286,7 +286,7 @@ const PASOS = [
   { id:'docs',     titulo:'Subir tus documentos',            corto:'Documentos', icon:Upload,
     explica:'Sube tu CURP y la identificación (INE) de tu tutor. Sirve una foto clara o un PDF.' },
   { id:'garantia', titulo:'Firmar la garantía del curso',    corto:'Garantía',   icon:FileSignature,
-    explica:'Con tu firma aceptas las condiciones de la garantía: 90 % de asistencia, todos los simulacros y 80 % en cada tarea.' },
+    explica:'Con tu firma aceptas las condiciones de la garantía: 90 % de asistencia, todos los simulacros, todas las tareas y mínimo un 80 % en cada tarea.' },
   { id:'firma',    titulo:'Firmar y enviar',                 corto:'Firma',      icon:PenLine,
     explica:'Último paso: firma los Términos y envía tu expediente para que administración lo revise.' },
 ]
@@ -354,7 +354,9 @@ function Rechazo({ motivo, children }) {
 
 // ── Página principal ─────────────────────────────────────────────────────────
 export default function Terms() {
-  const { student: s, loading, error } = useStudentData()
+  const { student: s, group, loading, error } = useStudentData()
+  // El comprobante de inscripción solo existe para ECOEMS.
+  const esEcoems = (group?.curso ?? (group?.institucion === 'ecoems' ? 'ecoems' : null)) === 'ecoems'
 
   const [documents, setDocuments]         = useState([])
   const [termsDocument, setTermsDocument] = useState(null)
@@ -449,6 +451,7 @@ export default function Terms() {
       const d = nuevos.find(x => x.document_type === t)
       return d && d.status !== 'rechazado'
     }
+    if (type === 'comprobante_ecoems') { setNota('✓ Comprobante de inscripción ECOEMS recibido.'); return }
     if (tiene('curp') && tiene('ine_tutor')) completar('docs')
     else setNota(tiene('curp') ? '✓ CURP recibida. Ahora sube la INE de tu tutor.' : '✓ INE recibida. Ahora sube tu CURP.')
   }
@@ -647,6 +650,21 @@ export default function Terms() {
               motivo={docs.ine?.rejection_reason}
               onChange={f => subirDocDePaso('ine_tutor', f)} disabled={!!uploading}/>
             {estActual.estado === 'hecho' && <Hecho>Tus dos documentos están entregados</Hecho>}
+            {/* Comprobante ECOEMS: opcional. Muchos alumnos lo reciben después
+                de inscribirse, así que no bloquea el paso ni el proceso. */}
+            {esEcoems && (
+              <div className="pt-3 mt-1 space-y-2" style={{ borderTop:'1px dashed var(--divider)' }}>
+                <p className="text-xs" style={{ color:'var(--t3)' }}>
+                  <b style={{ color:'var(--t2)' }}>Opcional:</b> si ya tienes tu comprobante de inscripción al examen ECOEMS, súbelo aquí.
+                  Si aún no lo tienes, puedes subirlo después: no te impide terminar.
+                </p>
+                <DocUpload
+                  label={uploading === 'comprobante_ecoems' ? 'Subiendo comprobante…' : 'Comprobante de inscripción ECOEMS'}
+                  icon={FileText} fileName={docs.ecoems?.file_name} estado={docs.ecoems?.status}
+                  motivo={docs.ecoems?.rejection_reason}
+                  onChange={f => subirDocDePaso('comprobante_ecoems', f)} disabled={!!uploading}/>
+              </div>
+            )}
           </>
         )}
 

@@ -5,6 +5,8 @@ export const DOCUMENT_TYPES = [
   { id: 'ine_tutor', label: 'INE del tutor' },
   { id: 'garantia', label: 'Garantía firmada' },
   { id: 'terminos', label: 'T&C firmados a mano' },
+  // Opcional y solo para alumnos de ECOEMS: no bloquea terminar el proceso.
+  { id: 'comprobante_ecoems', label: 'Comprobante de inscripción ECOEMS', opcional: true },
 ]
 
 export async function fetchDocumentos(studentId) {
@@ -45,7 +47,10 @@ export async function subirDocumento(studentId, documentType, file) {
     file_name: file.name, mime_type: contentType, status: 'entregado',
     rejection_reason: null, validated_by: null, validated_at: null, updated_at: new Date().toISOString(),
   }, { onConflict: 'student_id,document_type' }).select().single()
-  if (error) throw error
+  if (error) {
+    if ((error.message ?? '').includes('comprobante_solo_ecoems')) throw new Error('El comprobante de inscripción solo aplica a alumnos de ECOEMS.')
+    throw error
+  }
   return data
 }
 

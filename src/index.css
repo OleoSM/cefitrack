@@ -87,8 +87,10 @@
 :root {
   --t1: rgba(255,255,255,.88);   /* texto principal   */
   --t2: rgba(255,255,255,.55);   /* texto secundario  */
-  --t3: rgba(255,255,255,.35);   /* texto terciario   */
-  --t4: rgba(255,255,255,.22);   /* texto tenue       */
+  /* t3/t4 auditados con WCAG AA (2026-10-14): .35 daba ~3.1:1 sobre las
+     tarjetas; .52 da ~5.5:1. t4 es decorativo/placeholder: ~3:1. */
+  --t3: rgba(255,255,255,.52);   /* texto terciario   */
+  --t4: rgba(255,255,255,.38);   /* texto tenue       */
   --card-bg: rgba(255,255,255,.05);
   --card-border: rgba(255,255,255,.08);
   --soft-bg: rgba(255,255,255,.06);
@@ -136,8 +138,10 @@
 
   h1,h2,h3,h4,h5,h6 { letter-spacing: -0.02em; font-weight: 700; color: rgba(255,255,255,.90); }
 
-  /* Selects dark */
-  select option { background: #111118; color: rgba(255,255,255,.85); }
+  /* Selects dark. Los encabezados de grupo (<optgroup>) también: sin esto el
+     navegador los pinta en blanco puro y la lista se ve "rota". */
+  select option, select optgroup { background: #111118; color: rgba(255,255,255,.85); }
+  select optgroup { color: rgba(255,255,255,.6); font-weight: 700; }
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -292,17 +296,19 @@
   .btn-pill:hover .btn-slide-wrap span:last-child   { transform: translateY(-100%); }
 
   /* ── Form inputs (unified dark) ── */
+  /* Borde propio (no --card-border): con .08 la caja se confundía con la
+     tarjeta donde vive. Las identidades claras lo sobrescriben más abajo. */
   .input-field, .input-dark {
     @apply w-full rounded-xl px-3.5 py-2.5 text-sm outline-none transition-all duration-200;
-    background: var(--soft-bg);
-    border: 1px solid var(--card-border);
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.22);
     color: var(--t1);
   }
   .input-field::placeholder, .input-dark::placeholder { color: var(--t4); }
-  .input-field:hover:not(:focus), .input-dark:hover:not(:focus) { border-color: rgba(255,255,255,.16); }
+  .input-field:hover:not(:focus), .input-dark:hover:not(:focus) { border-color: rgba(255,255,255,.32); }
   .input-field:focus, .input-dark:focus {
-    background: rgba(255,255,255,.09);
-    border-color: rgba(255,255,255,.24);
+    background: rgba(255,255,255,.10);
+    border-color: rgba(255,255,255,.45);
     box-shadow: 0 0 0 3px rgba(255,255,255,.05);
   }
 
@@ -592,6 +598,13 @@ table tbody tr:hover { background: var(--soft-bg); }
 [data-theme-light] .btn-primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 88%, #000);
 }
+/* En las identidades claras la caja vuelve a sus tokens: el borde blanco del
+   tema oscuro (ver .input-field) sería invisible sobre fondo blanco. */
+[data-theme-light] .input-field, [data-theme-light] .input-dark,
+[data-stheme-light] .input-field, [data-stheme-light] .input-dark {
+  background: var(--soft-bg);
+  border-color: var(--card-border);
+}
 [data-theme-light] .input-field:hover:not(:focus),
 [data-theme-light] .input-dark:hover:not(:focus) { border-color: var(--accent); }
 [data-theme-light] .input-field:focus,
@@ -600,7 +613,8 @@ table tbody tr:hover { background: var(--soft-bg); }
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
-[data-theme-light] select option { background: #ffffff; color: var(--t1); }
+[data-theme-light] select option, [data-theme-light] select optgroup { background: #ffffff; color: var(--t1); }
+[data-theme-light] select optgroup { color: var(--t3); }
 [data-theme-light] h1, [data-theme-light] h2, [data-theme-light] h3,
 [data-theme-light] h4, [data-theme-light] h5, [data-theme-light] h6 { color: var(--t1); }
 

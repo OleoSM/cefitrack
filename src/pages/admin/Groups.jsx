@@ -546,7 +546,7 @@ export default function Groups() {
                       <FileSpreadsheet size={18} className="flex-shrink-0"/>
                       <span className="min-w-0">
                         <span className="block text-sm font-bold">Grupo vacío: da de alta a todos de golpe</span>
-                        <span className="block text-[11px]" style={{ color:'var(--t3)' }}>Descarga la plantilla, que la llenen en Google Sheets y súbela.</span>
+                        <span className="block text-[11px]" style={{ color:'var(--t2)' }}>Descarga la plantilla, que la llenen en Google Sheets y súbela.</span>
                       </span>
                     </button>
                   )}

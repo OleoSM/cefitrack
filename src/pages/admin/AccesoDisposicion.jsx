@@ -367,7 +367,9 @@ export default function AccesoDisposicion() {
               porDefecto:'todos', grupos:gruposFiltrables, query:buscaGrupo, onQuery:setBuscaGrupo,
               nombreDe },
           ]}
-          busqueda={{ value: busqueda, onChange: setBusqueda, placeholder:'Buscar por nombre o correo…' }}
+          busqueda={{ value: busqueda, onChange: setBusqueda, placeholder:'Buscar por nombre o correo…',
+            coincidencias: staff.map(a => ({ id: a.id, label: a.name,
+              sub: a.role === 'admin' ? 'Administrador' : a.role === 'sub_admin' ? 'Sub-admin' : (a.grupoNombre ?? 'Alumno') })) }}
           resumen={`${filtradas.length} de ${staff.length}`}/>
 
         {loading ? (

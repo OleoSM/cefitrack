@@ -794,27 +794,52 @@ function ColumnaModal({ titulo, inicial, onGuardar, onClose, columnas = [], solo
   )
 }
 
+/* Una materia solo existe en la BD a través de sus columnas: por eso se crea
+   junto con su primera actividad. Antes vivía solo en la pantalla hasta que se
+   le añadía una columna, y si se recargaba antes se perdía — y nunca llegaba a
+   Materiales ni a ninguna otra parte. */
 function AddSubjectModal({ onAdd, onClose }) {
   const [name,setName]=useState('')
+  const [primera,setPrimera]=useState('Tarea 1')
+  const [guardando,setGuardando]=useState(false)
+  const [error,setError]=useState('')
   // Literales a propósito: se guardan en subj.color. Tonos mate, no neón.
   const COLORS=['#2B5F9E','#5D3E90','#2F6B41','#8A5A12','#A03A32','#90501C','#94356B','#1C6474']
   const [color,setColor]=useState(COLORS[0])
+  const listo = name.trim() && primera.trim() && !guardando
+  const crear = async () => {
+    if (!listo) return
+    setGuardando(true); setError('')
+    const res = await onAdd(name.trim(), color, primera.trim())
+    setGuardando(false)
+    if (!res?.ok) setError(res?.message || 'No se pudo crear la sección.')
+  }
   return (
-    <ModalPortal maxWidth="max-w-sm" onClose={onClose}>
+    <ModalPortal maxWidth="max-w-sm" onClose={() => !guardando && onClose()}>
       <div className="p-5 space-y-4">
         <h2 className="text-sm font-bold" style={{ color: 'var(--t1)' }}>Nueva sección</h2>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre de la sección"
-          className="input-field w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&name.trim()&&onAdd(name.trim(),color)} autoFocus/>
+        <label className="block">
+          <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Nombre de la sección</span>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej. Matemáticas"
+            className="input-field w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&crear()} autoFocus/>
+        </label>
+        <label className="block">
+          <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Primera actividad</span>
+          <input value={primera} onChange={e=>setPrimera(e.target.value)} placeholder="Ej. Tarea 1"
+            className="input-field w-full min-h-11" onKeyDown={e=>e.key==='Enter'&&crear()}/>
+          <span className="block text-[11px] mt-1" style={{ color:'var(--t3)' }}>Se guarda en ese momento. Después puedes añadir más columnas o configurarla con el lápiz.</span>
+        </label>
         <div className="flex gap-2 flex-wrap">
           {COLORS.map(c=>(
             <button key={c} onClick={()=>setColor(c)} aria-label={`Elegir color ${c}`} className="w-11 h-11 rounded-full transition-all active:scale-90"
               style={{ background:c, outline:color===c?'3px solid var(--accent)':'none', outlineOffset:2 }}/>
           ))}
         </div>
+        {error && <p role="alert" className="text-xs font-semibold" style={{ color:'var(--bad)' }}>{error}</p>}
         <div className="flex gap-3">
-          <button onClick={onClose} className="btn-secondary flex-1 min-h-11 justify-center">Cancelar</button>
-          <button onClick={()=>name.trim()&&onAdd(name.trim(),color)} disabled={!name.trim()}
-            className="btn-primary flex-1 min-h-11 justify-center">Añadir</button>
+          <button onClick={onClose} disabled={guardando} className="btn-secondary flex-1 min-h-11 justify-center">Cancelar</button>
+          <button onClick={crear} disabled={!listo}
+            className="btn-primary flex-1 min-h-11 justify-center">{guardando ? 'Guardando…' : 'Añadir'}</button>
         </div>
       </div>
     </ModalPortal>
@@ -1864,11 +1889,18 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
   }, [isDesktop, subjects])
 
 
-  /* Una materia sin columnas no existe en la BD; se materializa al crear su
-     primera columna. Mientras tanto vive en el estado para poder nombrarla. */
-  const addSubject = (name, color) => {
-    setSubjects(p => p.some(s => s.name === name) ? p : [...p, { id: name, name, color, cols: [] }])
-    setAddSubjModal(false)
+  /* La materia se guarda YA, junto con su primera actividad: así existe para
+     todas las pantallas (Materiales, Exámenes, portal del alumno…). */
+  const addSubject = async (name, color, primera) => {
+    if (subjects.some(s => s.name.toLowerCase() === name.toLowerCase()))
+      return { ok: false, message: 'Ya existe una sección con ese nombre en este grupo.' }
+    try {
+      await crearColumnaRegistro({ groupId: group.id, materia: name, nombre: primera, tipo: 'tarea', calMax: 10, color })
+      setAddSubjModal(false)
+      await cargarHoja()
+      onDataChange?.()
+      return { ok: true }
+    } catch { return { ok: false, message: 'No se pudo guardar la sección. Revisa tu conexión.' } }
   }
 
   const removeSubject = async subjId => {

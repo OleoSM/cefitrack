@@ -252,7 +252,9 @@ export default function Pagos() {
             options:[{ value:'nombre', label:'Nombre A-Z' }, { value:'avance', label:'Menor avance' },
               { value:'saldo', label:'Mayor saldo' }, { value:'reciente', label:'Pago más reciente' }] },
         ]}
-        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno o correo…' }}
+        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno o correo…',
+          coincidencias: filas.map(f => ({ id: f.studentId, label: f.studentName, sub: f.groupName ?? '' })),
+          onElegir: id => setDetalle(id) }}
         resumen={`${filtradas.length} alumno(s)`}>
         <NeonCheckbox checked={soloAdeudo} onChange={e => setSoloAdeudo(e.target.checked)}
           label="Sólo con adeudo"/>

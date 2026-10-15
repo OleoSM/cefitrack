@@ -224,7 +224,9 @@ export default function GroupDetail() {
 
         <div className="mb-3">
           <BarraFiltros
-            busqueda={{ value: studentQuery, onChange: setStudentQuery, placeholder: 'Buscar alumno por nombre o correo' }}
+            busqueda={{ value: studentQuery, onChange: setStudentQuery, placeholder: 'Buscar alumno por nombre o correo',
+              coincidencias: students.map(s => ({ id: s.id, label: s.name, sub: s.email ?? '' })),
+              onElegir: id => navigate(`/admin/alumnos/${id}`) }}
             resumen={`${visibleStudents.length} de ${students.length}`}/>
         </div>
 
@@ -279,8 +281,10 @@ export default function GroupDetail() {
                   {
                     className: 'w-11 sm:w-16 flex justify-end',
                     content: (
-                      <span className="text-xs font-semibold inline-flex items-center gap-1" style={{ color: accent }}>
-                        <Eye size={15}/><span className="hidden sm:inline">Ver perfil</span>
+                      <span className="text-xs font-semibold inline-flex items-center gap-1" style={{ color: 'var(--t2)' }}>
+                        {/* El color del grupo va en el ícono; el texto, en el del tema
+                            (con algunos acentos quedaba por debajo de 4.5:1). */}
+                        <Eye size={15} style={{ color: accent }}/><span className="hidden sm:inline">Ver perfil</span>
                       </span>
                     ),
                   },

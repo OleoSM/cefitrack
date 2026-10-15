@@ -12,9 +12,13 @@ export const valorQR = studentId => `${QR_PREFIX}${studentId}`
 
 /** PNG (dataURL) del QR de un alumno, con su nombre debajo si se pide. */
 async function pngQR(student, { lado = 600, conNombre = true, grupo = '' } = {}) {
-  const svg = renderToStaticMarkup(createElement(QRCodeSVG, {
+  let svg = renderToStaticMarkup(createElement(QRCodeSVG, {
     value: valorQR(student.id), size: lado, level: 'H', fgColor: '#0f172a', bgColor: '#ffffff',
   }))
+  // qrcode.react no declara el espacio de nombres. Dentro de la página da
+  // igual, pero cargado como imagen (Blob image/svg+xml) un SVG sin xmlns
+  // FALLA, y con él toda la descarga del grupo.
+  if (!svg.includes('xmlns=')) svg = svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"')
   const img = new Image()
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
   await new Promise((ok, mal) => { img.onload = ok; img.onerror = mal; img.src = url })

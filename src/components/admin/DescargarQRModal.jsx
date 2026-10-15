@@ -21,7 +21,9 @@ export default function DescargarQRModal({ grupo, alumnos, onClose }) {
       const fn = formato === 'pdf' ? descargarPdfGrupo : descargarZipGrupo
       await fn(grupo, ordenados, (hechos, total) => setAvance({ hechos, total }))
       onClose()
-    } catch {
+    } catch (err) {
+      // El detalle va a la consola: el mensaje genérico escondía la causa real.
+      console.error('[QR del grupo]', err)
       setError('No se pudo generar la descarga. Inténtalo de nuevo.')
     } finally { setAvance(null) }
   }

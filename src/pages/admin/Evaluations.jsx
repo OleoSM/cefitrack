@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, CheckCircle, Trash2, AlertCircle, ClipboardCheck, MonitorCheck, GraduationCap } from 'lucide-react'
+import { Plus, X, CheckCircle, Trash2, AlertCircle, ClipboardCheck, MonitorCheck, GraduationCap, FileCheck2 } from 'lucide-react'
 import {
   fetchEvaluations, fetchStudents, fetchGroups,
   saveEvaluation, deleteEvaluation,
@@ -16,12 +16,20 @@ import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
 // Las cuatro categorías autorizadas por CEFIMAT (requisito EVA-01).
 // Las anteriores (Examen Parcial, Proyecto, Examen Final, Quíz, Práctica) se retiran.
+/* `alias`: los tipos con que llega cada examen. Los de esta pantalla vienen
+   con el nombre largo; los de la hoja de Calificaciones, con el `tipo` de su
+   columna (simulacro, digital, general y examen, el del bloque Guía → Examen →
+   Análisis). Esta pantalla muestra SOLO exámenes: tareas y actividades viven
+   en la hoja. */
 const EXAMENES = [
-  { tipo:'Simulacro base', total:6, icon:ClipboardCheck, desc:'Seis aplicaciones presenciales programadas' },
-  { tipo:'Simulacro digital', total:5, icon:MonitorCheck, desc:'Cinco aplicaciones en plataforma' },
-  { tipo:'Examen general', total:1, icon:GraduationCap, desc:'Una evaluación integral final' },
+  { tipo:'Simulacro base', total:6, icon:ClipboardCheck, desc:'Seis aplicaciones presenciales programadas', alias:['simulacro base', 'simulacro'] },
+  { tipo:'Simulacro digital', total:5, icon:MonitorCheck, desc:'Cinco aplicaciones en plataforma', alias:['simulacro digital', 'digital'] },
+  { tipo:'Examen general', total:1, icon:GraduationCap, desc:'Una evaluación integral final', alias:['examen general', 'general'] },
+  { tipo:'Examen', total:null, icon:FileCheck2, desc:'Exámenes del bloque Guía → Examen → Análisis', alias:['examen'] },
 ]
-const tipos = EXAMENES.map(x => x.tipo)
+const tipos = EXAMENES.slice(0, 3).map(x => x.tipo)   // los que se capturan desde esta pantalla
+/** Categoría de examen de una calificación, o null si no es examen. */
+const categoriaDe = tipo => EXAMENES.find(x => x.alias.includes(String(tipo ?? '').trim().toLowerCase()))?.tipo ?? null
 
 const gradeColor = c =>
   c >= 8 ? { bg:'bg-emerald-500/15', text:'text-emerald-400', border:'border-emerald-500/30' }
@@ -215,7 +223,9 @@ export default function Evaluations() {
     setEvaluations(prev => prev.filter(e => e.id !== id))
   }
 
-  const filtered = evaluations.filter(e => {
+  // Solo exámenes; cada uno con su categoría ya resuelta.
+  const examenes = evaluations.map(e => ({ ...e, categoria: categoriaDe(e.tipo) })).filter(e => e.categoria)
+  const filtered = examenes.filter(e => {
     const s = students.find(st => st.id === e.studentId)
     if (!s) return false
     const group = groups.find(g => g.id === s.groupId)
@@ -223,7 +233,7 @@ export default function Evaluations() {
     return (s.name.toLowerCase().includes(q) || e.materia.toLowerCase().includes(q))
       && (groupFilter === 'all' || s.groupId === groupFilter)
       && (sucursalFilter === TODAS || group?.sucursal === sucursalFilter)
-      && (typeFilter  === 'all' || e.tipo === typeFilter)
+      && (typeFilter  === 'all' || e.categoria === typeFilter)
   })
 
   return (
@@ -248,13 +258,13 @@ export default function Evaluations() {
         />
       )}
 
-      <KpiGrid cols={3}>
+      <KpiGrid cols={4}>
         {EXAMENES.map(({ tipo, total, icon, desc }) => {
-          const capturados = evaluations.filter(e => e.tipo === tipo).length
+          const capturados = examenes.filter(e => e.categoria === tipo).length
           const activo = typeFilter === tipo
           return (
             <KpiCard key={tipo} variant="surface" icon={icon} tone={activo ? 'info' : 'neutral'}
-              label={tipo} value={total} sub={`${desc} · ${capturados} registros`}
+              label={tipo} value={total ?? capturados} sub={`${desc} · ${capturados} registros`}
               onClick={() => setType(activo ? 'all' : tipo)}
               className={activo ? 'ring-2 ring-[var(--accent)]' : ''}/>
           )
@@ -270,10 +280,11 @@ export default function Evaluations() {
             porDefecto:'all', grupos:groupsInSucursal, query:buscaGrupo, onQuery:setBuscaGrupo,
             nombreDe },
           { id:'tipo', label:'Tipo', value:typeFilter, onChange:setType, porDefecto:'all',
-            options:[{ value:'all', label:'Todos los tipos' }, ...tipos.map(t => ({ value:t, label:t }))] },
+            options:[{ value:'all', label:'Todos los exámenes' }, ...EXAMENES.map(x => ({ value:x.tipo, label:x.tipo }))] },
         ]}
-        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno o materia…' }}
-        resumen={loading ? 'Cargando…' : `${filtered.length} evaluación(es)`}
+        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno o materia…',
+          coincidencias: students.map(s => ({ id: s.id, label: s.name, sub: groups.find(g => g.id === s.groupId)?.name ?? '' })) }}
+        resumen={loading ? 'Cargando…' : `${filtered.length} examen(es)`}
         acciones={
           <button onClick={() => setShowModal(true)} disabled={loading || students.length === 0}
             className="btn-primary flex-shrink-0">
@@ -293,9 +304,9 @@ export default function Evaluations() {
 
       {/* Tabla */}
       <DataTable columns={COLUMNS} isEmpty={!loading && !loadError && filtered.length === 0}
-        emptyText={evaluations.length === 0
-          ? 'Aún no hay calificaciones capturadas. Usa “Agregar evaluación” para registrar la primera.'
-          : 'No hay evaluaciones para los filtros seleccionados.'}>
+        emptyText={examenes.length === 0
+          ? 'Aún no hay calificaciones de exámenes. Captúralas en la hoja de Calificaciones o con “Agregar evaluación”.'
+          : 'No hay exámenes para los filtros seleccionados.'}>
         {loading ? <SkeletonRows/> : (
         <ProgressiveList items={filtered} emptyLabel="Ninguna evaluación coincide con el filtro.">
         {e => {
@@ -321,7 +332,7 @@ export default function Evaluations() {
                 className: 'w-36 hidden md:flex',
                 content: (
                   <span className="badge" style={{ background:'var(--soft-bg)', color:'var(--t2)' }}>
-                    {e.tipo}
+                    {e.categoria}
                   </span>
                 ),
               },

@@ -47,20 +47,20 @@ function CeldaDocumento({ etiqueta, doc, onVer, onAprobar, onRechazar, ocupado }
               {doc.status === 'validado' ? 'Validado' : doc.status === 'rechazado' ? 'Rechazado' : 'Por revisar'}
             </span>
             <button title="Ver documento" onClick={() => onVer(doc)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+              className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
               style={{ background:'var(--info-soft)', color:'var(--info)' }}>
               <Eye size={12}/>
             </button>
             {doc.status !== 'validado' && (
               <button title="Aprobar" disabled={trabajando} onClick={() => onAprobar(doc)}
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                 style={{ background:'var(--good-soft)', color:'var(--good)' }}>
                 <Check size={12}/>
               </button>
             )}
             {doc.status !== 'rechazado' && (
               <button title="Rechazar" disabled={trabajando} onClick={() => onRechazar({ doc, motivo:'' })}
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                 style={{ background:'var(--bad-soft)', color:'var(--bad)' }}>
                 <X size={12}/>
               </button>
@@ -296,7 +296,8 @@ export default function TermsManager() {
               { value:'activo', label:'Acceso activo' },
             ] },
         ]}
-        busqueda={{ value: search, onChange: setSearch, placeholder:'Buscar alumno…' }}
+        busqueda={{ value: search, onChange: setSearch, placeholder:'Buscar alumno…',
+          coincidencias: list.map(s => ({ id: s.id, label: s.name, sub: grupos.find(g => g.id === s.groupId)?.name ?? '' })) }}
         resumen={`${filtered.length} alumno(s)`}/>
 
       {/* Tabla de alumnos. En pantalla chica las columnas de documentos se
@@ -330,7 +331,7 @@ export default function TermsManager() {
               </span>
               {tyc && (
                 <button title="Ver PDF firmado a mano" aria-label="Ver PDF firmado a mano" onClick={() => verDocumento(tyc)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background:'var(--info-soft)', color:'var(--info)' }}>
                   <FileText size={12}/>
                 </button>
@@ -338,12 +339,12 @@ export default function TermsManager() {
               {isSigned && (
                 <>
                   <button title="Ver firma" aria-label="Ver firma" onClick={() => setPreview(s)}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
+                    className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
                     style={{ background:'var(--info-soft)', color:'var(--info)' }}>
                     <Eye size={12}/>
                   </button>
                   <button title="Invalidar firma" aria-label="Invalidar firma" onClick={() => setConfirmReset(s.id)}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
+                    className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
                     style={{ background:'var(--bad-soft)', color:'var(--bad)' }}>
                     <Trash2 size={12}/>
                   </button>
@@ -364,14 +365,14 @@ export default function TermsManager() {
               </span>
               {gar && (
                 <button title="Ver garantía subida" aria-label="Ver garantía subida" onClick={() => verDocumento(gar)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background:'var(--info-soft)', color:'var(--info)' }}>
                   <Eye size={12}/>
                 </button>
               )}
               {(s.garantiaFirmaAlumno || s.garantiaFirmaTutor) && (
                 <button title="Ver firmas de la garantía" aria-label="Ver firmas de la garantía" onClick={() => setGarantiaPreview(s)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
                   <PenLine size={12}/>
                 </button>
@@ -379,7 +380,7 @@ export default function TermsManager() {
               {s.garantiaEstado === 'entregada' && (
                 <button title="Validar garantía" aria-label="Validar garantía" disabled={ocupado === s.id}
                   onClick={() => aprobarGarantia(s.id)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                  className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                   style={{ background:'var(--good-soft)', color:'var(--good)' }}>
                   <Check size={12}/>
                 </button>

@@ -508,7 +508,7 @@ function LayoutInner() {
                 </button>
               )}
               <Link to="/admin" title="Ir a mi dashboard"
-                className="text-[11px] font-medium hidden sm:block hover:underline underline-offset-2" style={{ color: t.sideT3 }}>SIGA CEFIMAT</Link>
+                className="text-[11px] font-medium hidden sm:inline-flex items-center min-h-9 hover:underline underline-offset-2" style={{ color: t.sideT3 }}>SIGA CEFIMAT</Link>
               <ChevronRight size={12} className="hidden sm:block flex-shrink-0" style={{ color: t.sideT3 }} />
               <h1 className="text-sm font-bold truncate" style={{ color: t.sideT1 }}>{pageTitle}</h1>
             </div>

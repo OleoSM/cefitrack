@@ -20,7 +20,7 @@ const PESO_FIELDS = [
 function Toggle({ checked, onChange, disabled = false }) {
   return (
     <button onClick={onChange} role="switch" aria-checked={checked} disabled={disabled}
-      className="relative inline-flex w-10 h-[22px] rounded-full transition-colors duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="relative inline-flex w-10 h-[22px] rounded-full transition-colors duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed after:absolute after:content-[''] after:-inset-x-1 after:-inset-y-[11px]"
       style={{ background: checked ? 'var(--good)' : 'var(--t4)' }}>
       <span className="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white transition-transform duration-200"
         style={{ transform: checked ? 'translateX(18px)' : 'translateX(0)' }}/>
@@ -131,7 +131,7 @@ export default function Settings() {
               </div>
               <input type="range" min="0" max="100" step="5" value={settings.pesos[id]}
                 onChange={e => setPeso(id, e.target.value)} disabled={!isAdmin}
-                className="w-28 hidden sm:block" style={{ accentColor:'var(--accent)' }}/>
+                className="w-28 h-8 hidden sm:block" style={{ accentColor:'var(--accent)' }}/>
               <div className="flex items-center gap-1">
                 <input type="number" min="0" max="100" value={settings.pesos[id]}
                   onChange={e => setPeso(id, e.target.value)} disabled={!isAdmin}

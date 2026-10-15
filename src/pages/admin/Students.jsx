@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Users, Plus, Pencil, Trash2, KeyRound, AlertCircle, RefreshCw } from 'lucide-react'
 import { statusConfig, getStatusConfig } from '../../data/mockData'
@@ -45,7 +45,17 @@ export default function Students() {
 
   const [query, setQuery]         = useState('')
   const { sucursal: sucursalFilter, setSucursal: setSucursalFilter, opcionesConTodas } = useSucursalActiva()
-  const [groupFilter, setGroup]   = useState('all')
+  /* Se recuerda el último grupo elegido (en este navegador): al volver a
+     Alumnos se abre donde se dejó, en vez de volver a buscarlo cada vez. */
+  const CLAVE_GRUPO = 'siga_alumnos_ultimo_grupo'
+  const [groupFilter, setGroupState] = useState(() => {
+    try { return localStorage.getItem(CLAVE_GRUPO) || 'all' } catch { return 'all' }
+  })
+  const setGroup = id => {
+    setGroupState(id)
+    try { if (id && id !== 'all') localStorage.setItem(CLAVE_GRUPO, id); else localStorage.removeItem(CLAVE_GRUPO) } catch { /* sin storage */ }
+  }
+  const restaurado = useRef(false)
   const [buscaGrupo, setBuscaGrupo] = useState('')
   const [statusFilter, setStatus] = useState('all')
   const [sort, setSort]           = useState('name')
@@ -86,8 +96,17 @@ export default function Students() {
     : visibleGroups.filter(g => g.sucursal === sucursalFilter)
 
   useEffect(() => {
-    if (groupFilter !== 'all' && !groupsInSucursal.some(g => g.id === groupFilter)) setGroup('all')
-  }, [sucursalFilter, groupFilter, groupsInSucursal])
+    // Hasta que llegan los grupos no se puede saber si el guardado existe:
+    // comprobarlo antes lo borraba siempre al entrar.
+    if (loading || groupFilter === 'all') return
+    if (groupsInSucursal.some(g => g.id === groupFilter)) { restaurado.current = true; return }
+    const grupo = visibleGroups.find(g => g.id === groupFilter)
+    // Al entrar, si el grupo recordado es de otra sucursal, se va a la suya (una vez).
+    if (grupo && !restaurado.current) { restaurado.current = true; setSucursalFilter(grupo.sucursal); return }
+    setGroup('all')
+    // setGroup/setSucursalFilter son estables en la práctica
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, sucursalFilter, groupFilter, groupsInSucursal])
 
   const filtered = students
     .filter(s => visibleGroupIds.has(s.groupId))
@@ -158,7 +177,10 @@ export default function Students() {
             options:[{ value:'name', label:'Nombre A-Z' }, { value:'grade', label:'Mayor promedio' },
               { value:'attend', label:'Mayor asistencia' }] },
         ]}
-        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno…' }}
+        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno…',
+          coincidencias: students.filter(s => visibleGroupIds.has(s.groupId)).map(s => ({
+            id: s.id, label: s.name, sub: groups.find(g => g.id === s.groupId)?.name ?? '' })),
+          onElegir: id => navigate(`/admin/alumnos/${id}`) }}
         resumen={`${filtered.length} de ${students.length}`}
         acciones={
           <button onClick={() => setFormFor({ student: null })} disabled={visibleGroups.length === 0}
@@ -239,7 +261,7 @@ export default function Students() {
                 {
                   className: 'w-36 hidden lg:flex',
                   content: s.attendanceRate === null
-                    ? <span className="text-xs" style={{ color:'var(--t4)' }}>Sin datos</span>
+                    ? <span className="text-xs" style={{ color:'var(--t3)' }}>Sin datos</span>
                     : (
                       <DataTableBar
                         value={s.attendanceRate}
@@ -299,7 +321,7 @@ export default function Students() {
                       </p>
                     </>
                   ) : (
-                    <span className="text-xs" style={{ color:'var(--t4)' }}>Sin tutor</span>
+                    <span className="text-xs" style={{ color:'var(--t3)' }}>Sin tutor</span>
                   ),
                 },
                 /* Acciones */

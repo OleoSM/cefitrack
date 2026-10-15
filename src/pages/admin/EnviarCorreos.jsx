@@ -17,7 +17,8 @@ export default function EnviarCorreos() {
   const { nombreDe } = useSucursales()
   const { sucursal, setSucursal, opcionesConTodas } = useSucursalActiva()
   const [groups, setGroups] = useState([])
-  const [grupo, setGrupo] = useState('todos')
+  // Siempre hay UN grupo elegido: por defecto, el primero de la sucursal.
+  const [grupo, setGrupo] = useState('')
   const [buscaGrupo, setBuscaGrupo] = useState('')
   const [query, setQuery] = useState('')
   const [students, setStudents] = useState([])
@@ -51,13 +52,16 @@ export default function EnviarCorreos() {
   const restante = cupo ? Math.max(0, cupo.limite - cupo.enviados) : null
 
   const gruposEnSucursal = sucursal === TODAS ? groups : groups.filter(g => g.sucursal === sucursal)
+  const primerGrupo = gruposEnSucursal[0]?.id ?? ''
+  // Si el grupo elegido no está en la sucursal (al entrar o al cambiarla), el primero.
+  useEffect(() => {
+    if (!gruposEnSucursal.some(g => g.id === grupo)) setGrupo(primerGrupo)
+  }, [gruposEnSucursal, grupo, primerGrupo])
+  const delGrupo = useMemo(() => students.filter(s => s.groupId === grupo), [students, grupo])
   const visibles = useMemo(() => {
-    const ids = new Set(gruposEnSucursal.map(g => g.id))
     const q = query.trim().toLocaleLowerCase('es-MX')
-    return students.filter(s => ids.has(s.groupId)
-      && (grupo === 'todos' || s.groupId === grupo)
-      && (!q || `${s.name} ${s.email ?? ''}`.toLocaleLowerCase('es-MX').includes(q)))
-  }, [students, gruposEnSucursal, grupo, query])
+    return delGrupo.filter(s => !q || `${s.name} ${s.email ?? ''}`.toLocaleLowerCase('es-MX').includes(q))
+  }, [delGrupo, query])
   /* "Todos" opera sobre lo filtrado: seleccionar a un grupo entero es filtrar
      por él y pulsar "Todos". */
   const all = visibles.length > 0 && visibles.every(s => selected.includes(s.id))
@@ -132,12 +136,14 @@ export default function EnviarCorreos() {
 
       <BarraFiltros
         filtros={[
-          { id:'sucursal', label:'Sucursal', value:sucursal, onChange:v => { setSucursal(v); setGrupo('todos') },
+          { id:'sucursal', label:'Sucursal', value:sucursal, onChange:v => { setSucursal(v); setGrupo('') },
             porDefecto:sucursal, options:opcionesConTodas },
-          { id:'grupo', label:'Grupo', tipo:'grupo', value:grupo, onChange:setGrupo, porDefecto:'todos',
+          { id:'grupo', label:'Grupo', tipo:'grupo', value:grupo, onChange:v => setGrupo(v || primerGrupo), porDefecto:primerGrupo,
             grupos:gruposEnSucursal, query:buscaGrupo, onQuery:setBuscaGrupo, nombreDe },
         ]}
-        busqueda={{ value: query, onChange: setQuery, placeholder: 'Buscar alumno…' }}
+        busqueda={{ value: query, onChange: setQuery, placeholder: 'Buscar alumno…',
+          coincidencias: delGrupo.map(s => ({ id: s.id, label: s.name, sub: s.personalEmail || 'sin correo personal' })),
+          onElegir: id => setSelected(v => v.includes(id) ? v : [...v, id]) }}
         resumen={`${selected.length} seleccionado(s)`}/>
 
       <form onSubmit={submit} className="grid lg:grid-cols-[minmax(0,340px)_1fr] gap-4">
@@ -148,16 +154,23 @@ export default function EnviarCorreos() {
               {all ? 'Quitar todos' : `Todos (${visibles.length})`}
             </button>
           </div>
-          <ProgressiveList items={visibles} className="space-y-2.5" emptyLabel="Ningún alumno coincide con el filtro.">
-            {s => (
+          {/* La caja crece con el grupo y, pasado el tamaño de antes, hace scroll
+              en vez de "Mostrar más": un grupo se revisa de un vistazo. */}
+          <div className="max-h-[26rem] overflow-y-auto overscroll-contain pr-1 space-y-2.5">
+          {visibles.length === 0 && (
+            <p className="text-sm py-8 text-center" style={{ color:'var(--t3)' }}>
+              {grupo ? (query.trim() ? 'Ningún alumno coincide con la búsqueda.' : 'Este grupo aún no tiene alumnos.') : 'No hay grupos en esta sucursal.'}
+            </p>
+          )}
+          {visibles.map(s => (
               <NeonCheckbox key={s.id} className="w-full items-start"
                 checked={selected.includes(s.id)} onChange={() => toggle(s.id)}
                 label={<span className="text-sm min-w-0" style={{ color:'var(--t1)' }}>{s.name}
                   <small className="block truncate" style={{ color:'var(--t3)' }}>
                     {s.personalEmail || s.email} · {s.tutor?.email || 'Tutor sin correo'}
                   </small></span>}/>
-            )}
-          </ProgressiveList>
+          ))}
+          </div>
         </section>
 
         <section className="card p-5 space-y-4 min-w-0">

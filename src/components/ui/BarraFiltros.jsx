@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { SlidersHorizontal, X, Search, Check } from 'lucide-react'
 import BuscadorGrupo from './BuscadorGrupo'
+import ComboBusqueda from './ComboBusqueda'
 
 /**
  * Barra de filtros de una sola entrada.
@@ -51,6 +52,9 @@ export default function BarraFiltros({
     if (!abierto) return
     const fuera = e => {
       if (panelRef.current?.contains(e.target) || botonRef.current?.contains(e.target)) return
+      // Las listas flotantes (p. ej. el buscador de grupo) se pintan en un portal
+      // fuera del panel: tocarlas NO es "tocar fuera".
+      if (e.target.closest?.('[data-flotante]')) return
       setAbierto(false)
     }
     const escape = e => { if (e.key === 'Escape') setAbierto(false) }
@@ -93,14 +97,15 @@ export default function BarraFiltros({
           )}
         </button>
 
+        {/* La búsqueda despliega sus opciones al tocarla (5, más al bajar,
+            coincidencias al escribir). Elegir una: si la pantalla da
+            `onElegir`, lo decide ella; si no, filtra por ese nombre. */}
         {busqueda && (
-          <label className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{ color:'var(--t3)' }}/>
-            <input value={busqueda.value} onChange={e => busqueda.onChange(e.target.value)}
-              placeholder={busqueda.placeholder ?? 'Buscar…'} aria-label={busqueda.placeholder ?? 'Buscar'}
-              className="input-field w-full min-h-11 pl-8 pr-2 text-xs"/>
-          </label>
+          <ComboBusqueda className="flex-1"
+            value={busqueda.value} onChange={busqueda.onChange}
+            opciones={busqueda.coincidencias ?? []}
+            onElegir={(id, o) => busqueda.onElegir ? busqueda.onElegir(id, o) : busqueda.onChange(o.label)}
+            placeholder={busqueda.placeholder ?? 'Buscar…'}/>
         )}
 
         {resumen && (
@@ -111,42 +116,6 @@ export default function BarraFiltros({
 
         {acciones}
       </div>
-
-      {/* Coincidencias en vivo. Se listan sólo mientras hay algo escrito, así
-          que no ocupan sitio cuando no se está buscando. */}
-      {hayBusqueda && busqueda.coincidencias && (
-        <div className="rounded-xl overflow-hidden" style={{ border:'1px solid var(--card-border)' }}>
-          {busqueda.coincidencias.length === 0 ? (
-            <p className="px-3 py-2.5 text-xs" style={{ color:'var(--t3)' }}>
-              Ninguna coincidencia para “{busqueda.value.trim()}”.
-            </p>
-          ) : (
-            <>
-              {busqueda.coincidencias.slice(0, MAX_COINCIDENCIAS).map((c, i) => (
-                <button key={c.id} type="button"
-                  onClick={() => busqueda.onElegir?.(c.id)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-left transition-colors"
-                  style={{
-                    background: 'transparent',
-                    borderTop: i === 0 ? 'none' : '1px solid var(--divider)',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background='var(--soft-bg)'}
-                  onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                  <span className="text-xs font-semibold truncate" style={{ color:'var(--t1)' }}>{c.label}</span>
-                  {c.sub && (
-                    <span className="text-[10px] truncate ml-auto flex-shrink-0" style={{ color:'var(--t3)' }}>{c.sub}</span>
-                  )}
-                </button>
-              ))}
-              {busqueda.coincidencias.length > MAX_COINCIDENCIAS && (
-                <p className="px-3 py-1.5 text-[10px]" style={{ color:'var(--t3)', borderTop:'1px solid var(--divider)' }}>
-                  y {busqueda.coincidencias.length - MAX_COINCIDENCIAS} más — afina la búsqueda
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      )}
 
       {/* Fichas de lo que está puesto. Sólo aparecen si hay algo que mostrar,
           para que la barra no crezca cuando no filtra nada. */}

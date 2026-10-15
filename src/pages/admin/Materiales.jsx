@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Upload, FileText, Image as ImageIcon, Pencil, Trash2, ExternalLink, Clock, Eye, Search, X, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
-import { fetchGroups, fetchColumnasRegistro, fetchNombresColumnas } from '../../lib/supabaseData'
+import { fetchGroups, fetchNombresColumnas } from '../../lib/supabaseData'
 import {
   fetchMateriales, subirMaterial, actualizarMaterial, borrarMaterial, urlMaterial,
   tiempoHasta, tamanoLegible, MAX_BYTES,
@@ -13,6 +13,7 @@ import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { SkeletonBlock } from '../../components/ui/DataTable'
 import ConfirmDialog from '../../components/admin/ConfirmDialog'
 import { BotonAyuda } from '../../components/ui/Ayuda'
+import SelectorActividad from '../../components/admin/SelectorActividad'
 
 /*
  * Gestión de materiales — solucionarios, respuestas y guías ligados a una
@@ -199,23 +200,22 @@ function MaterialModal({ material, grupos, esAdmin, sucursalesPermitidas, nombre
     visibleDesde: aLocal(material?.visibleDesde ?? ahora.toISOString()),
     expiraEn: aLocal(material?.expiraEn ?? new Date(ahora.getTime() + 7 * 864e5).toISOString()),
     grupos: material?.grupos ?? [], sucursales: material?.sucursales ?? [], cursos: material?.cursos ?? [],
-    grupoAct: '', columnaId: material?.columnaId ?? '',
+    columnaId: material?.columnaId ?? '',
   }))
   const [archivo, setArchivo] = useState(null)
-  const [columnas, setColumnas] = useState([])
   const [buscaGrupo, setBuscaGrupo] = useState('')
+  // "Quién lo ve" se despliega al elegir la actividad (o al compartir sin ella).
+  const [sinActividad, setSinActividad] = useState(false)
+  // En Grupos se ven los elegidos; "Mostrar todos" despliega la lista entera.
+  const [verTodos, setVerTodos] = useState(false)
+  // Grupo que se marcó solo por la actividad: si se cambia de actividad, se cambia.
+  const [grupoAuto, setGrupoAuto] = useState(null)
+  const mostrarQuien = editando || !!f.columnaId || sinActividad
+  const gruposElegidos = grupos.filter(g => f.grupos.includes(g.id))
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const alternar = (k, v) => setF(p => ({ ...p, [k]: p[k].includes(v) ? p[k].filter(x => x !== v) : [...p[k], v] }))
-
-  // Actividad: primero el grupo, luego su columna de la hoja.
-  useEffect(() => {
-    if (!f.grupoAct) { setColumnas([]); return }
-    let vivo = true
-    fetchColumnasRegistro(f.grupoAct).then(c => { if (vivo) setColumnas(c) }).catch(() => {})
-    return () => { vivo = false }
-  }, [f.grupoAct])
 
   const plazo = dias => {
     const base = new Date(f.visibleDesde || Date.now())
@@ -276,23 +276,18 @@ function MaterialModal({ material, grupos, esAdmin, sucursalesPermitidas, nombre
         {/* Actividad a la que pertenece (opcional) */}
         <div>
           {etiqueta('Actividad (opcional)')}
-          <div className="grid sm:grid-cols-2 gap-2">
-            <select value={f.grupoAct} onChange={e => { set('grupoAct', e.target.value); set('columnaId', '') }} aria-label="Grupo de la actividad" className="input-field min-h-11">
-              <option value="">{f.columnaId && !f.grupoAct ? 'Actividad ya elegida' : 'Elige el grupo…'}</option>
-              {grupos.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-            <select value={f.columnaId} onChange={e => {
-                set('columnaId', e.target.value)
-                if (e.target.value && f.grupoAct && !f.grupos.includes(f.grupoAct)) alternar('grupos', f.grupoAct)
-              }} disabled={!f.grupoAct} aria-label="Actividad" className="input-field min-h-11 disabled:opacity-50">
-              <option value="">Sin actividad</option>
-              {[...new Set(columnas.map(c => c.materia))].map(mat => (
-                <optgroup key={mat} label={mat}>
-                  {columnas.filter(c => c.materia === mat).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </optgroup>
-              ))}
-            </select>
-          </div>
+          <SelectorActividad grupos={grupos} nombreDe={nombreDe} columnaId={f.columnaId}
+            onElegir={sel => {
+              set('columnaId', sel?.columnaId ?? '')
+              if (!sel?.grupoId) return
+              // Por defecto lo ve el grupo de la actividad. Si antes se había
+              // marcado otro grupo por una actividad anterior, se sustituye.
+              setF(p => {
+                const sinPrevio = grupoAuto && grupoAuto !== sel.grupoId ? p.grupos.filter(x => x !== grupoAuto) : p.grupos
+                return { ...p, grupos: sinPrevio.includes(sel.grupoId) ? sinPrevio : [...sinPrevio, sel.grupoId] }
+              })
+              setGrupoAuto(sel.grupoId)
+            }}/>
         </div>
 
         {/* Ventana de tiempo */}
@@ -315,7 +310,18 @@ function MaterialModal({ material, grupos, esAdmin, sucursalesPermitidas, nombre
         </div>
         <p className="text-[11px] -mt-2" style={{ color: 'var(--bad)' }}>Al llegar "Se borra el", el archivo se elimina por completo y no se puede recuperar.</p>
 
-        {/* Quién lo ve */}
+        {/* Quién lo ve: aparece al elegir la actividad, ya con su grupo marcado. */}
+        {!mostrarQuien ? (
+          <div className="rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-2 justify-between"
+            style={{ background: 'var(--soft-bg)', border: '1px dashed var(--card-border)' }}>
+            <p className="text-xs" style={{ color: 'var(--t3)' }}>
+              Elige la actividad arriba y se compartirá con su grupo. ¿No es de ninguna actividad?
+            </p>
+            <button type="button" onClick={() => setSinActividad(true)} className="btn-secondary min-h-9 text-xs justify-center flex-shrink-0">
+              Compartir sin actividad
+            </button>
+          </div>
+        ) : (
         <div className="rounded-xl p-3 space-y-3" style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>
           {etiqueta('¿Quién lo puede ver?')}
           {esAdmin && (
@@ -337,16 +343,34 @@ function MaterialModal({ material, grupos, esAdmin, sucursalesPermitidas, nombre
             </div>
           )}
           <div>
-            <p className="text-[11px] font-semibold mb-1" style={{ color: 'var(--t2)' }}>Grupos {f.grupos.length > 0 && `(${f.grupos.length})`}</p>
-            <input value={buscaGrupo} onChange={e => setBuscaGrupo(e.target.value)} placeholder="Buscar grupo…" aria-label="Buscar grupo"
-              className="input-field w-full min-h-9 mb-1.5"/>
-            <div className="max-h-40 overflow-y-auto grid sm:grid-cols-2 gap-x-3">
-              {gruposFiltrados.map(g => <NeonCheckbox key={g.id} checked={f.grupos.includes(g.id)} onChange={() => alternar('grupos', g.id)}
-                label={<span className="text-xs">{g.name}<span style={{ color: 'var(--t3)' }}> · {nombreDe(g.sucursal)}</span></span>}/>)}
-              {gruposFiltrados.length === 0 && <p className="text-xs" style={{ color: 'var(--t3)' }}>Sin grupos con ese nombre.</p>}
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p className="text-[11px] font-semibold" style={{ color: 'var(--t2)' }}>Grupos {f.grupos.length > 0 && `(${f.grupos.length})`}</p>
+              <button type="button" onClick={() => { setVerTodos(v => !v); setBuscaGrupo('') }}
+                className="text-[11px] font-semibold min-h-9 px-2 rounded-lg" style={{ color: 'var(--accent)' }}>
+                {verTodos ? 'Mostrar solo los elegidos' : `Mostrar todos (${grupos.length})`}
+              </button>
             </div>
+            {verTodos ? (
+              <>
+                <input value={buscaGrupo} onChange={e => setBuscaGrupo(e.target.value)} placeholder="Buscar grupo…" aria-label="Buscar grupo"
+                  className="input-field w-full min-h-9 mb-1.5"/>
+                <div className="max-h-48 overflow-y-auto grid sm:grid-cols-2 gap-x-3">
+                  {gruposFiltrados.map(g => <NeonCheckbox key={g.id} checked={f.grupos.includes(g.id)} onChange={() => alternar('grupos', g.id)}
+                    label={<span className="text-xs">{g.name}<span style={{ color: 'var(--t3)' }}> · {nombreDe(g.sucursal)}</span></span>}/>)}
+                  {gruposFiltrados.length === 0 && <p className="text-xs" style={{ color: 'var(--t3)' }}>Sin grupos con ese nombre.</p>}
+                </div>
+              </>
+            ) : gruposElegidos.length ? (
+              <div className="grid sm:grid-cols-2 gap-x-3">
+                {gruposElegidos.map(g => <NeonCheckbox key={g.id} checked onChange={() => alternar('grupos', g.id)}
+                  label={<span className="text-xs">{g.name}<span style={{ color: 'var(--t3)' }}> · {nombreDe(g.sucursal)}</span>{g.id === grupoAuto && <span className="text-[10px] font-bold ml-1" style={{ color: 'var(--accent)' }}>· de la actividad</span>}</span>}/>)}
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--t3)' }}>Ningún grupo elegido. Pulsa "Mostrar todos" para elegir.</p>
+            )}
           </div>
         </div>
+        )}
 
         {error && <p role="alert" className="text-xs font-semibold" style={{ color: 'var(--bad)' }}>{error}</p>}
         <div className="flex gap-3">

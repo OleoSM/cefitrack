@@ -132,6 +132,15 @@ export const IconAcceso = make('IconAcceso', <>
   <path d="M13 11h5v2h-2v2h-2v-2h-1" />
 </>)
 
+// Medidor: consumo de la API de IA y de correos.
+export const IconConsumo = make('IconConsumo', <>
+  <path d="M4 17a8 8 0 1 1 16 0" />
+  <path d="M12 17l3.5-5" />
+  <circle cx="12" cy="17" r="1.4" />
+  <path d="M7 14h.01M9 10h.01M12 9h.01" />
+  <path d="M4 21h16" />
+</>)
+
 export const IconCuenta = make('IconCuenta', <>
   <rect x="3" y="4" width="18" height="16" rx="2" />
   <circle cx="8" cy="10" r="2" />

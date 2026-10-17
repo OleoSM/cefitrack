@@ -36,6 +36,9 @@ import StudentDock from '../../components/ui/StudentDock'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { tintaSobre } from '../../lib/color'
 import ConfirmDialog from '../../components/admin/ConfirmDialog'
+import AvisoCorreoModal from '../../components/admin/AvisoCorreoModal'
+import { plantillaActividad } from '../../lib/avisosData'
+import { useAuth } from '../../context/AuthContext'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -1937,6 +1940,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
       }
       setAddColModal(null)
       await cargarHoja()
+      if (nueva?.id) ofrecerAviso({ id: nueva.id, nombre: cfg.nombre, materia: materia.name, tipo: cfg.tipo, descripcion: cfg.descripcion })
       return { ok: true }
     } catch { return { ok: false, message: 'No se pudo crear la columna.' } }
   }
@@ -1959,9 +1963,30 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
 
   /* Bloque de examen: Guía de estudio → Examen → Análisis, ya encadenados. */
   const nuevoExamen = async () => {
-    try { await agregarBloqueExamen(group.id); await cargarHoja(); onDataChange?.() }
+    try {
+      const n = await agregarBloqueExamen(group.id); await cargarHoja(); onDataChange?.()
+      const { data: col } = await supabase.from('registro_columnas').select('id')
+        .eq('group_id', group.id).eq('materia', 'Exámenes').eq('nombre', `Examen ${n}`).maybeSingle()
+      if (col) ofrecerAviso({ id: col.id, nombre: `Examen ${n}`, materia: 'Exámenes', tipo: 'examen',
+        descripcion: `Recuerda entregar la Guía de estudio ${n}: es requisito para que cuente el examen.` })
+    }
     catch { setErrorHoja('No se pudo añadir el examen.') }
   }
+
+  /* Popup "¿Avisar por correo?" al crear una actividad o un examen (solo quien
+     tiene el apartado de correos y si el grupo tiene alumnos). */
+  const { puedeVer } = useAuth()
+  const [aviso, setAviso] = useState(null)
+  const ofrecerAviso = col => {
+    if (!puedeVer('correos') || !groupStudents.length) return
+    setAviso({ ...col, ...plantillaActividad({ ...col, grupo: group.name }) })
+  }
+  const avisoEl = aviso && (
+    <AvisoCorreoModal titulo="¿Avisar a los alumnos por correo?"
+      contexto={`${aviso.nombre} · ${aviso.materia} · ${group.name}`} alumnos={groupStudents}
+      asuntoInicial={aviso.asunto} mensajeInicial={aviso.mensaje}
+      tipo="actividad" refId={aviso.id} groupId={group.id} onClose={() => setAviso(null)}/>
+  )
 
   /* Cuántas celdas con valor se perderían (para decirlo en la confirmación). */
   const contarValores = claves => students.reduce((n, s) => n + claves.filter(k => {
@@ -2604,6 +2629,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
           onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
         {dialogoBorrado}
+        {avisoEl}
       </div>
     </HCCtx.Provider>,
     document.body
@@ -2629,6 +2655,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
           onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
         {dialogoBorrado}
+        {avisoEl}
       </div>
     </HCCtx.Provider>
   )

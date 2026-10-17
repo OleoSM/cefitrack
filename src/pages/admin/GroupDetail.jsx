@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, UserPlus, Eye, BarChart3, RefreshCw } from 'lucide-react'
+import { Users, Clock, MapPin, UserPlus, Eye, BarChart3, RefreshCw, Sparkles } from 'lucide-react'
+import ReporteIA from '../../components/admin/ReporteIA'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
@@ -51,8 +52,9 @@ export default function GroupDetail() {
   const { groupId }   = useParams()
   const navigate      = useNavigate()
   const { getAccent } = useGroupColors()
-  const { currentUser } = useAuth()
+  const { currentUser, puedeVer } = useAuth()
   const isAdmin = currentUser?.role === 'admin'
+  const conIA = puedeVer('ia')
 
   const [grp, setGrp]           = useState(null)
   const [students, setStudents] = useState([])
@@ -169,7 +171,16 @@ export default function GroupDetail() {
           style={{background:detailView==='trend'?'var(--accent)':'var(--soft-bg)',color:detailView==='trend'?'var(--accent-contrast)':'var(--t2)',border:'1px solid var(--card-border)'}}>
           <BarChart3 size={14}/> Evolución
         </button>
+        {conIA && (
+          <button role="tab" aria-selected={detailView === 'ia'} onClick={()=>setDetailView('ia')}
+            className="min-h-11 px-3 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2"
+            style={{background:detailView==='ia'?'var(--accent)':'var(--soft-bg)',color:detailView==='ia'?'var(--accent-contrast)':'var(--t2)',border:'1px solid var(--card-border)'}}>
+            <Sparkles size={14}/> Reporte IA
+          </button>
+        )}
       </div>
+
+      {detailView === 'ia' && conIA && <div className="order-4"><ReporteIA tipo="grupo" id={groupId} nombre={grp.name}/></div>}
 
       {/* Trend chart */}
       {detailView === 'trend' && <div className="card p-4 sm:p-5 order-4">

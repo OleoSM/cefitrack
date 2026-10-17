@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Send, Users, AlertTriangle, CheckCircle2, Mail, History, XCircle, MinusCircle } from 'lucide-react'
+import { Send, Users, AlertTriangle, CheckCircle2, Mail, History, XCircle, MinusCircle, PenLine, BellRing } from 'lucide-react'
 import { fetchStudents, fetchGroups } from '../../lib/supabaseData'
 import { crearNotificaciones, guardarBorradorCorreo, enviarCorreo, fetchCupoCorreos, fetchEnviosRecientes } from '../../lib/comunicacionesData'
 import { useAuth } from '../../context/AuthContext'
@@ -9,6 +9,10 @@ import BarraFiltros from '../../components/ui/BarraFiltros'
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { useSucursales } from '../../hooks/useSucursales'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
+import SelectorAudiencia from '../../components/admin/SelectorAudiencia'
+import AvisoCorreoModal from '../../components/admin/AvisoCorreoModal'
+import AvisosSugeridos from '../../components/admin/AvisosSugeridos'
+import { audienciaDe, fetchSugerencias, descartarAvisos } from '../../lib/avisosData'
 
 export default function EnviarCorreos() {
   const { puedeVer } = useAuth()
@@ -25,8 +29,11 @@ export default function EnviarCorreos() {
   const [selected, setSelected] = useState([])
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
-  const [includeStudent, setIncludeStudent] = useState(true)
-  const [includeTutor, setIncludeTutor] = useState(true)
+  const [audiencia, setAudiencia] = useState('ambos')
+  const { alumno: includeStudent, tutor: includeTutor } = audienciaDe(audiencia)
+  const [pestana, setPestana] = useState('redactar')   // 'redactar' | 'notificaciones'
+  const [sugerencias, setSugerencias] = useState(null) // null = cargando
+  const [avisoAbierto, setAvisoAbierto] = useState(null)
   const [status, setStatus] = useState(null)
   const [saving, setSaving] = useState(false)
   const [cupo, setCupo] = useState(null)          // { enviados, limite } de hoy
@@ -42,6 +49,23 @@ export default function EnviarCorreos() {
       .catch(() => setStatus({ bad:true, text:'No se cargaron los alumnos.' }))
     refrescarEnvios()
   }, [])
+
+  // Sugerencias de la pestaña Notificaciones (se calculan con los alumnos ya cargados).
+  useEffect(() => {
+    if (!students.length || !groups.length) return
+    fetchSugerencias({ students, groups }).then(setSugerencias).catch(() => setSugerencias([]))
+  }, [students, groups])
+  const grupoDe = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups])
+  const sugerenciasVisibles = (sugerencias ?? []).filter(s =>
+    sucursal === TODAS || s.alumnos.some(a => grupoDe[a.groupId]?.sucursal === sucursal))
+  const quitarSugerencias = claves => setSugerencias(v => (v ?? []).filter(s => !claves.includes(s.clave)))
+  const descartar = async lista => {
+    try { await descartarAvisos(lista); quitarSugerencias(lista.map(s => s.clave)) }
+    catch {
+      const message = 'No se pudo descartar. Inténtalo de nuevo.'
+      setStatus({ bad:true, text: message }); return { ok:false, message }
+    }
+  }
 
   /* Cuántos correos saldrían realmente: el del alumno es su correo PERSONAL
      (el de acceso @siga.mx no es un buzón) y el del tutor, el que registró. */
@@ -74,7 +98,6 @@ export default function EnviarCorreos() {
   const submit = async e => {
     e.preventDefault(); setStatus(null)
     if (!selected.length || !subject.trim() || !body.trim()) return setStatus({ bad:true, text:'Selecciona destinatarios, asunto y mensaje.' })
-    if (!includeStudent && !includeTutor) return setStatus({ bad:true, text:'Marca al menos "Alumno" o "Tutor".' })
     setSaving(true)
     try {
       const targets = students.filter(s => selected.includes(s.id))
@@ -103,8 +126,32 @@ export default function EnviarCorreos() {
       <div>
         <h1 className="page-title">Enviar correos</h1>
         <p className="text-sm mt-1" style={{ color:'var(--t3)' }}>
-          Cada envío llega como notificación dentro de SIGA y por correo al alumno (su correo personal) y a su tutor.
+          Cada envío llega como notificación dentro de SIGA y por correo a los alumnos (su correo personal), a sus tutores o a ambos.
         </p>
+      </div>
+
+      {/* Pestañas: redactar un mensaje libre, o avisar de algo nuevo en la hoja o en materiales. */}
+      <div role="tablist" aria-label="Tipo de envío" className="grid grid-cols-2 gap-1 p-1 rounded-xl sm:w-fit"
+        style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
+        {[
+          { id:'redactar', label:'Redactar', Icono: PenLine },
+          { id:'notificaciones', label:'Notificaciones', Icono: BellRing, cuenta: sugerenciasVisibles.length },
+        ].map(({ id, label, Icono, cuenta }) => {
+          const activa = pestana === id
+          return (
+            <button key={id} type="button" role="tab" aria-selected={activa} onClick={() => setPestana(id)}
+              className="flex items-center justify-center gap-2 rounded-lg px-4 min-h-10 text-sm font-semibold transition-colors"
+              style={activa ? { background:'var(--accent)', color:'var(--accent-contrast)' } : { color:'var(--t2)' }}>
+              <Icono size={15}/> {label}
+              {!!cuenta && (
+                <span className="min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold tabular-nums flex items-center justify-center"
+                  style={activa ? { background:'var(--accent-contrast)', color:'var(--accent)' } : { background:'var(--accent)', color:'var(--accent-contrast)' }}>
+                  {cuenta}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* Cupo del día: la capa gratis de Resend permite un número fijo al día. */}
@@ -134,6 +181,21 @@ export default function EnviarCorreos() {
         </div>
       )}
 
+      {pestana === 'notificaciones' && (
+        <AvisosSugeridos sugerencias={sugerencias === null ? null : sugerenciasVisibles} groups={groups}
+          sucursal={sucursal} setSucursal={setSucursal} opcionesSucursal={opcionesConTodas} nombreDe={nombreDe}
+          onEnviar={setAvisoAbierto} onDescartar={descartar}/>
+      )}
+
+      {avisoAbierto && (
+        <AvisoCorreoModal titulo={avisoAbierto.titulo} contexto={avisoAbierto.detalle} alumnos={avisoAbierto.alumnos}
+          asuntoInicial={avisoAbierto.asunto} mensajeInicial={avisoAbierto.mensaje}
+          tipo={avisoAbierto.tipo} refId={avisoAbierto.refId} groupId={avisoAbierto.groupId}
+          onEnviado={() => { quitarSugerencias([avisoAbierto.clave]); refrescarEnvios() }}
+          onClose={() => setAvisoAbierto(null)}/>
+      )}
+
+      {pestana === 'redactar' && <>
       <BarraFiltros
         filtros={[
           { id:'sucursal', label:'Sucursal', value:sucursal, onChange:v => { setSucursal(v); setGrupo('') },
@@ -174,11 +236,10 @@ export default function EnviarCorreos() {
         </section>
 
         <section className="card p-5 space-y-4 min-w-0">
-          <div className="flex flex-wrap gap-5">
-            <NeonCheckbox checked={includeStudent} onChange={e => setIncludeStudent(e.target.checked)}
-              label={<span className="text-sm" style={{ color:'var(--t1)' }}>Alumno</span>}/>
-            <NeonCheckbox checked={includeTutor} onChange={e => setIncludeTutor(e.target.checked)}
-              label={<span className="text-sm" style={{ color:'var(--t1)' }}>Tutor</span>}/>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>¿A quién se le envía?</p>
+            <SelectorAudiencia valor={audiencia} onChange={setAudiencia}
+              conteo={selected.length ? { conAlumno: conCorreoAlumno, conTutor: conCorreoTutor } : undefined}/>
           </div>
           <div>
             <label htmlFor="correo-asunto" className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Asunto</label>
@@ -202,11 +263,12 @@ export default function EnviarCorreos() {
           <button className="btn-primary" disabled={saving}><Send size={14}/>{saving ? 'Enviando…' : 'Confirmar envío'}</button>
         </section>
       </form>
+      </>}
 
       {/* Historial reciente */}
       <section className="card p-5 space-y-3">
         <h2 className="section-title flex items-center gap-2"><History size={16}/> Últimos envíos</h2>
-        <ProgressiveList items={envios} className="space-y-1.5" sizes={{ mobile:5, tablet:10, desktop:15 }}
+        <ProgressiveList items={envios} className="space-y-1.5" sizes={{ mobile:5, tablet:5, desktop:5 }}
           emptyLabel="Todavía no se ha enviado ningún correo.">
           {e => {
             const Icono = e.estado === 'enviado' ? CheckCircle2 : e.estado === 'fallido' ? XCircle : MinusCircle

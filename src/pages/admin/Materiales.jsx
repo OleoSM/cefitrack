@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Upload, FileText, Image as ImageIcon, Pencil, Trash2, ExternalLink, Clock, Eye, Search, X, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
-import { fetchGroups, fetchNombresColumnas } from '../../lib/supabaseData'
+import { fetchGroups, fetchStudents, fetchNombresColumnas } from '../../lib/supabaseData'
+import AvisoCorreoModal from '../../components/admin/AvisoCorreoModal'
+import { alumnosDeMaterial, plantillaMaterialNuevo } from '../../lib/avisosData'
 import {
   fetchMateriales, subirMaterial, actualizarMaterial, borrarMaterial, urlMaterial,
   tiempoHasta, tamanoLegible, MAX_BYTES,
@@ -29,7 +31,7 @@ const aLocal = iso => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d
 const deLocal = v => new Date(v).toISOString()
 
 export default function Materiales() {
-  const { currentUser } = useAuth()
+  const { currentUser, puedeVer } = useAuth()
   const esAdmin = currentUser?.role === 'admin'
   const { sucursales: catalogo, nombreDe } = useSucursales()
   // El sub-admin solo comparte con sucursales que tiene COMPLETAS.
@@ -67,6 +69,17 @@ export default function Materiales() {
   ), [lista, estado, q, nombresAct])
   const conteo = { visible: lista.filter(m => estadoDe(m) === 'visible').length, programado: lista.filter(m => estadoDe(m) === 'programado').length }
   const nombreGrupo = id => grupos.find(g => g.id === id)?.name ?? id
+
+  /* Popup "¿Avisar por correo?" al subir un material nuevo. */
+  const [aviso, setAviso] = useState(null)   // { material, alumnos, asunto, mensaje }
+  const ofrecerAviso = async material => {
+    if (!puedeVer('correos')) return
+    try {
+      const alumnos = alumnosDeMaterial(material, await fetchStudents(), grupos)
+      if (!alumnos.length) return
+      setAviso({ material, alumnos, ...plantillaMaterialNuevo({ ...material, actividad: nombresAct[material.columnaId] }) })
+    } catch { /* sin aviso: el material ya quedó guardado */ }
+  }
 
   const abrir = async m => {
     try { window.open(await urlMaterial(m), '_blank', 'noopener') } catch (e) { setError(e.message) }
@@ -177,7 +190,15 @@ export default function Materiales() {
       {modal && (
         <MaterialModal material={modal.material} grupos={grupos} esAdmin={esAdmin}
           sucursalesPermitidas={sucursalesPermitidas} nombreDe={nombreDe}
-          onClose={() => setModal(null)} onGuardado={() => { setModal(null); cargar() }}/>
+          onClose={() => setModal(null)} onGuardado={nuevo => { setModal(null); cargar(); if (nuevo) ofrecerAviso(nuevo) }}/>
+      )}
+      {aviso && (
+        <AvisoCorreoModal titulo="¿Avisar a los alumnos por correo?"
+          contexto={`${aviso.material.titulo} · ${aviso.alumnos.length} alumno(s) lo pueden ver`} alumnos={aviso.alumnos}
+          asuntoInicial={aviso.asunto} mensajeInicial={aviso.mensaje}
+          tipo="material_nuevo" refId={aviso.material.id}
+          groupId={aviso.material.grupos.length === 1 && !aviso.material.sucursales.length && !aviso.material.cursos.length ? aviso.material.grupos[0] : null}
+          onClose={() => setAviso(null)}/>
       )}
       {borrar && (
         <ConfirmDialog
@@ -239,7 +260,7 @@ function MaterialModal({ material, grupos, esAdmin, sucursalesPermitidas, nombre
     const res = editando ? await actualizarMaterial({ id: material.id, ...datos }) : await subirMaterial({ archivo, ...datos })
     setGuardando(false)
     if (!res.ok) return setError(res.message)
-    onGuardado()
+    onGuardado(editando ? null : res.material)
   }
 
   const gruposFiltrados = grupos.filter(g => `${g.name} ${g.subject ?? ''}`.toLowerCase().includes(buscaGrupo.trim().toLowerCase()))

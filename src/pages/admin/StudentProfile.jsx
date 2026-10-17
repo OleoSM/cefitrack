@@ -3,8 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   Mail, Phone, Calendar,
-  FileText, QrCode, ClipboardList, RefreshCw, Users,
+  FileText, QrCode, ClipboardList, RefreshCw, Users, Sparkles,
 } from 'lucide-react'
+import ReporteIA from '../../components/admin/ReporteIA'
+import { useAuth } from '../../context/AuthContext'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import {
   getStatusConfig, attendanceColors, getAttendanceColor, getSimulacrosByStudent,
@@ -41,6 +43,8 @@ const TABS = [
   { id:'reportes',     label:'Reportes',     icon:IconReporte, desc:'Avance para el tutor' },
   { id:'qr',           label:'Código QR',    icon:IconQrAlumno, desc:'Su código de asistencia' },
 ]
+// Solo con el apartado "ia" (admins y sub-admins a quienes se lo delegaron).
+const TAB_IA = { id:'ia', label:'Reporte IA', icon:Sparkles, desc:'Competencias y habilidades' }
 
 const PIE_COLORS = ['var(--good)','var(--warn)','var(--bad)','var(--info)']
 
@@ -58,6 +62,8 @@ export default function StudentProfile() {
   const { studentId } = useParams()
   const { getAccent } = useGroupColors()
   const [tab, setTab] = useState('resumen')
+  const { puedeVer } = useAuth()
+  const TABS_VISIBLES = puedeVer('ia') ? [...TABS, TAB_IA] : TABS
 
   /* ── Tira de pestañas deslizable ──────────────────────────────
      Con el tabindex móvil del patrón WAI-ARIA el tabulador entra una sola
@@ -73,7 +79,7 @@ export default function StudentProfile() {
   }
 
   const onTabKeyDown = e => {
-    const ids = TABS.map(t => t.id)
+    const ids = TABS_VISIBLES.map(t => t.id)
     const i = ids.indexOf(tab)
     const salto = { ArrowRight: 1, ArrowLeft: -1 }[e.key]
     if (salto !== undefined) {
@@ -369,8 +375,8 @@ export default function StudentProfile() {
           rejilla de tarjetas, cada una con icono y qué contiene. Teclado:
           flechas ← → entre secciones (patrón WAI-ARIA de pestañas). */}
       <div ref={tabsRef} role="tablist" aria-label="Secciones del alumno"
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {TABS.map(t => {
+        className={`grid grid-cols-2 sm:grid-cols-3 gap-2 ${TABS_VISIBLES.length > 5 ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
+        {TABS_VISIBLES.map(t => {
           const activa = tab === t.id
           return (
             <button key={t.id} type="button" onClick={() => setTab(t.id)}
@@ -556,6 +562,8 @@ export default function StudentProfile() {
       {/* ══════════════════════════════════════════════════════════
           TAB: CÓDIGO QR
       ══════════════════════════════════════════════════════════ */}
+      {tab === 'ia' && puedeVer('ia') && <ReporteIA tipo="alumno" id={s.id} nombre={s.name}/>}
+
       {tab === 'qr' && (
         <div className="flex flex-col items-center gap-5 py-4 max-w-sm mx-auto">
           <div className="card p-6 w-full flex flex-col items-center">

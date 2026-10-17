@@ -30,6 +30,7 @@ const TermsManager     = lazy(() => import('./pages/admin/TermsManager'))
 const Registrar        = lazy(() => import('./pages/admin/Registrar'))
 const Settings         = lazy(() => import('./pages/admin/Settings'))
 const AccesoDisposicion = lazy(() => import('./pages/admin/AccesoDisposicion'))
+const UsoConsumo     = lazy(() => import('./pages/admin/UsoConsumo'))
 const Pagos            = lazy(() => import('./pages/admin/Pagos'))
 const EnviarCorreos    = lazy(() => import('./pages/admin/EnviarCorreos'))
 
@@ -97,6 +98,7 @@ export default function App() {
               <Route path="correos"               element={<Apartado clave="correos"><EnviarCorreos /></Apartado>} />
               <Route path="configuracion"         element={<Apartado clave="configuracion"><Settings /></Apartado>} />
               <Route path="configuracion/acceso"  element={<AccesoDisposicion />} />
+              <Route path="uso"                   element={<UsoConsumo />} />
             </Route>
 
             {/* ── Alumno ─────────────────────────────────────── */}

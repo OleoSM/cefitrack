@@ -19,7 +19,7 @@ import { AdminThemeProvider, useAdminTheme } from '../../context/AdminThemeConte
 import MenuPerfil from '../ui/MenuPerfil'
 import {
   IconPanel, IconGrupos2, IconAlumno, IconHojaCalificaciones, IconPasarLista, IconExamen,
-  IconCobros, IconCorreoMasivo, IconFirma, IconAjustes, IconAcceso, IconPodio, IconMateriales,
+  IconCobros, IconCorreoMasivo, IconFirma, IconAjustes, IconAcceso, IconPodio, IconMateriales, IconConsumo,
 } from '../ui/SigaAdminIcons'
 
 /* Once entradas planas mezclaban entidades, tareas, análisis y administración
@@ -43,6 +43,7 @@ const SECCIONES = [
     { to:'/admin/terminos',     label:'T&C / Firmas',           icon:IconFirma },
     { to:'/admin/configuracion',label:'Configuración',          icon:IconAjustes },
     { to:'/admin/configuracion/acceso', label:'Acceso y Disposición', icon:IconAcceso, adminOnly:true },
+    { to:'/admin/uso',          label:'Uso y consumo',          icon:IconConsumo, adminOnly:true },
   ]},
   { titulo: 'Resultados', sectionIcon:IconPodio, items: [
     { to:'/admin/rankings',     label:'Rankings',               icon:IconPodio },
@@ -70,6 +71,7 @@ const pageTitles = {
   '/admin/terminos':     'T&C y Firmas',
   '/admin/configuracion':'Configuración',
   '/admin/configuracion/acceso':'Acceso y Disposición',
+  '/admin/uso':'Uso y consumo',
 }
 
 const activityIcon = {
@@ -636,7 +638,8 @@ function LayoutInner() {
           </Suspense>
         </main>
         {/* Asistente con IA: solo administradores (la función también lo exige). */}
-        {currentUser?.role === 'admin' && <AsistenteIA/>}
+        {/* Admins y sub-admins a quienes un admin les delegó el apartado "ia". */}
+        {puedeVer('ia') && <AsistenteIA/>}
 
         {/* Bottom nav mobile (accesos rápidos + botón "Más" para el resto) */}
         <nav data-bottom-nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex"

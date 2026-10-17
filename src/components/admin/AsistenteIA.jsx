@@ -4,14 +4,14 @@ import { Sparkles, X, Send, Trash2 } from 'lucide-react'
 import { preguntarAsistente, fetchGastoAsistente } from '../../lib/asistenteData'
 
 /*
- * Asistente con IA (Claude Haiku) — solo administradores, solo consultas.
+ * Asistente con IA (Claude Haiku) — admins y sub-admins con el apartado "ia", solo consultas.
  * Botón flotante → panel de chat. La conversación vive en memoria (se borra
  * al recargar) y al servidor solo viajan los últimos mensajes, para gastar poco.
  */
 const SUGERENCIAS = [
-  '¿Qué alumnos tienen asistencia menor a 90 %?',
-  '¿Quién debe pagos?',
   'Resumen de todos los grupos',
+  '¿Qué alumnos están en riesgo y por qué?',
+  '¿Qué alumnos tienen asistencia menor a 90 %?',
   '¿Qué alumnos tienen la garantía pendiente?',
 ]
 
@@ -91,7 +91,7 @@ export default function AsistenteIA() {
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 text-sm">
             {mensajes.length === 0 && (
               <div className="space-y-3">
-                <p style={{ color: 'var(--t2)' }}>Pregúntame sobre alumnos, grupos, asistencia, calificaciones, pagos o garantías. Respondo con los datos de SIGA.</p>
+                <p style={{ color: 'var(--t2)' }}>Pregúntame sobre alumnos, grupos, asistencia, calificaciones, pagos o garantías. Respondo con los datos de SIGA. También analizo competencias: escribe, por ejemplo, «competencias y habilidades de Diego Hernández» o «reporte del grupo 2da V IPN».</p>
                 <div className="flex flex-col gap-1.5">
                   {SUGERENCIAS.map(s => (
                     <button key={s} type="button" onClick={() => preguntar(s)} disabled={agotado}

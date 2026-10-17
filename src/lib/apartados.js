@@ -18,6 +18,8 @@ export const APARTADOS = [
   { clave: 'terminos',       label: 'T&C / Firmas',    ruta: '/admin/terminos',      detalle: 'Términos, firmas y documentos.' },
   { clave: 'configuracion',  label: 'Configuración',   ruta: '/admin/configuracion', detalle: 'Ajustes generales de la plataforma.' },
   { clave: 'rankings',       label: 'Rankings',        ruta: '/admin/rankings',      detalle: 'Tablas de posiciones.' },
+  // Sin ruta propia: el asistente flotante y los botones de reporte del perfil y del grupo.
+  { clave: 'ia',             label: 'Asistente IA',    ruta: null,                   detalle: 'Reportes de competencias y habilidades con IA (consume saldo).', sensible: true },
 ]
 
 /** Lo que recibe un sub-admin si nadie lo ha personalizado. */

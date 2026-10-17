@@ -26,16 +26,34 @@ const correoValido = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)
 // interno @siga.mx: no son buzones reales y Resend los rechaza.
 const esDeEjemplo = (v: string) => /@(.+\.)?(example\.(com|org|net)|test|invalid|example|localhost|siga\.mx)$/i.test(v)
 
+// La plataforma y la ilustración del encabezado (public/correo/ del frontend).
+// PNG y no SVG: Gmail y Outlook no muestran SVG.
+const PLATAFORMA = 'https://siga.cefimat.com'
+const ENCABEZADO = `${PLATAFORMA}/correo/encabezado-aviso.png`
+
 function plantillaHtml(asunto: string, cuerpo: string, saludo: string) {
   const parrafos = escapar(cuerpo).split(/\n{2,}/).map(p => `<p style="margin:0 0 14px">${p.replace(/\n/g, '<br>')}</p>`).join('')
   return `<!doctype html><html><body style="margin:0;background:#f4f5f7;font-family:Arial,Helvetica,sans-serif;color:#0f172a">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px"><tr><td align="center">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0">
-      <tr><td style="background:#4D0B1D;color:#ffffff;padding:16px 24px;font-size:16px;font-weight:bold">SIGA CEFIMAT</td></tr>
+      <tr><td style="background:#1B2F5E;color:#ffffff;padding:14px 24px;font-size:16px;font-weight:bold;letter-spacing:.5px">
+        SIGA <span style="color:#F2B33D">CEFIMAT</span>
+      </td></tr>
+      <tr><td style="padding:0;line-height:0">
+        <a href="${PLATAFORMA}" target="_blank"><img src="${ENCABEZADO}" width="560" alt="SIGA CEFIMAT: tienes un aviso nuevo"
+          style="display:block;width:100%;max-width:560px;height:auto;border:0"></a>
+      </td></tr>
       <tr><td style="padding:24px;font-size:15px;line-height:1.55">
-        <h1 style="font-size:18px;margin:0 0 16px">${escapar(asunto)}</h1>
+        <h1 style="font-size:18px;margin:0 0 16px;color:#1B2F5E">${escapar(asunto)}</h1>
         <p style="margin:0 0 14px">${escapar(saludo)}</p>
         ${parrafos}
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 6px"><tr>
+          <td style="background:#7A1A33;border-radius:10px">
+            <a href="${PLATAFORMA}" target="_blank"
+              style="display:inline-block;padding:13px 26px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none">Entrar a SIGA</a>
+          </td>
+        </tr></table>
+        <p style="margin:8px 0 0;font-size:12px;color:#64748b">O copia este enlace: <a href="${PLATAFORMA}" style="color:#1B2F5E">siga.cefimat.com</a></p>
       </td></tr>
       <tr><td style="padding:14px 24px;background:#f8fafc;color:#64748b;font-size:12px">
         Mensaje enviado por CEFIMAT desde SIGA. Si tienes dudas, comunícate directamente con tu sucursal.
@@ -117,7 +135,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify(lote.map(d => ({
         from, to: [d.destinatario], subject: draft.subject,
         html: plantillaHtml(draft.subject, draft.body, d.saludo),
-        text: `${d.saludo}\n\n${draft.body}\n\n— CEFIMAT (SIGA)`,
+        text: `${d.saludo}\n\n${draft.body}\n\nEntra a SIGA: ${PLATAFORMA}\n\n— CEFIMAT (SIGA)`,
       }))),
     })
     const cuerpo = await resp.json().catch(() => ({}))

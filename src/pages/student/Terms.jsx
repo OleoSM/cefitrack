@@ -430,8 +430,12 @@ export default function Terms() {
 
   const uploadDoc = async (type, file) => {
     if (!file) return false
-    if (file.size > 10 * 1024 * 1024) {
-      setFormError(`"${file.name}" pesa más de 10 MB. Comprímelo o toma la foto con menos resolución.`)
+    // Las fotos se reducen solas al subirlas (hasta 25 MB); un PDF, hasta 10 MB.
+    const esPdf = /.pdf$/i.test(file.name)
+    if (file.size > (esPdf ? 10 : 25) * 1024 * 1024) {
+      setFormError(esPdf
+        ? `"${file.name}" pesa más de 10 MB. Escanéalo con menos resolución o sube fotos.`
+        : `"${file.name}" pesa más de 25 MB. Toma la foto de nuevo.`)
       return false
     }
     setUploading(type)

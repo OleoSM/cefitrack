@@ -177,7 +177,7 @@ export default function Settings() {
       <div className="card p-5 space-y-3">
         <h2 className="section-title flex items-center gap-2"><Send size={16}/> Envío de correos</h2>
         <p className="text-xs -mt-1" style={{ color: 'var(--t3)' }}>
-          Se envían con Resend. En la capa gratis el límite es 100 al día; cuando pases a la de pago, súbelo aquí.
+          Se envían con Resend (plan Pro: 50,000 al mes, sin límite diario). Este tope diario solo protege de un envío por error.
         </p>
         <label className="block">
           <span className="block text-xs font-semibold mb-1" style={{ color: 'var(--t1)' }}>Remitente</span>

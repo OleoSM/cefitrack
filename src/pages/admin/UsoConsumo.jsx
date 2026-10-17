@@ -265,7 +265,7 @@ export default function UsoConsumo() {
             <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Correos máximos por día</span>
             <input type="number" min="1" step="1" inputMode="numeric" className="input-field min-h-11"
               value={topes.correo} onChange={e => setTopes(t => ({ ...t, correo: e.target.value }))}/>
-            <span className="block text-[11px] mt-1" style={{ color: 'var(--t3)' }}>La capa gratis de Resend permite 100 al día y 3,000 al mes.</span>
+            <span className="block text-[11px] mt-1" style={{ color: 'var(--t3)' }}>El plan Pro de Resend permite 50,000 al mes sin límite diario; este tope evita gastar el cupo por un error.</span>
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-3">

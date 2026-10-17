@@ -10,7 +10,7 @@ const AuthContext = createContext(null)
    existen: la nomenclatura oficial los usa para los HORARIOS de Neza 1, no
    para las sucursales. La lista se lee del catalogo, que es la unica fuente
    de verdad desde que `groups.sucursal` es clave foranea. */
-import { fetchSucursales } from '../lib/supabaseData'
+import { fetchSucursales, fetchPermisosAltas } from '../lib/supabaseData'
 import { syncSettings } from '../lib/settings'
 import { supabase } from '../lib/supabaseClient'
 const SESSION_KEY = 'edutrack_session'
@@ -30,6 +30,9 @@ const USAR_LEGACY = import.meta.env.VITE_AUTH_LEGACY === '1'
 /* Si la consulta de apartados falla, el sub-admin no debe quedarse sin panel:
    recibe los de siempre. El servidor sigue protegiendo Pagos y Correos. */
 const apartadosSeguros = () => fetchMisApartados().catch(() => APARTADOS_POR_DEFECTO)
+/* Permiso de altas y bajas de alumnos y si es dueño (Dayan / Mauricio). Ante
+   un fallo, sin permiso: el servidor lo vuelve a comprobar de todos modos. */
+const permisosSeguros = () => fetchPermisosAltas().catch(() => ({ puedeDarAltas: false, esDueno: false }))
 
 function readStoredSession() {
   try {
@@ -80,8 +83,11 @@ export function AuthProvider({ children }) {
         if (!user) { persist(null); return }
         syncSettings().catch(() => {})
         if (user.role === 'sub_admin') {
-          const [access, apartados] = await Promise.all([fetchSubAdminAccess(user.id), apartadosSeguros()])
-          if (vivo) persist({ ...user, access, apartados })
+          const [access, apartados, permisos] = await Promise.all([fetchSubAdminAccess(user.id), apartadosSeguros(), permisosSeguros()])
+          if (vivo) persist({ ...user, access, apartados, ...permisos })
+        } else if (user.role === 'admin') {
+          const permisos = await permisosSeguros()
+          if (vivo) persist({ ...user, ...permisos })
         } else {
           persist(user)
         }
@@ -129,8 +135,10 @@ export function AuthProvider({ children }) {
     let user = res.user
     syncSettings().catch(() => {})
     if (user.role === 'sub_admin') {
-      const [access, apartados] = await Promise.all([fetchSubAdminAccess(user.id), apartadosSeguros()])
-      user = { ...user, access, apartados }
+      const [access, apartados, permisos] = await Promise.all([fetchSubAdminAccess(user.id), apartadosSeguros(), permisosSeguros()])
+      user = { ...user, access, apartados, ...permisos }
+    } else if (user.role === 'admin') {
+      user = { ...user, ...(await permisosSeguros()) }
     }
     persist(user)
     return { ok: true, role: user.role }
@@ -166,9 +174,11 @@ export function AuthProvider({ children }) {
     ? TODOS_LOS_APARTADOS
     : currentUser?.role === 'sub_admin' ? (currentUser.apartados ?? APARTADOS_POR_DEFECTO) : []
   const puedeVer = clave => clave == null || apartados.includes(clave)
+  const puedeDarAltas = !!currentUser?.puedeDarAltas
+  const esDueno = !!currentUser?.esDueno
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, allowedSucursales, canAccess, apartados, puedeVer }}>
+    <AuthContext.Provider value={{ currentUser, login, logout, allowedSucursales, canAccess, apartados, puedeVer, puedeDarAltas, esDueno }}>
       {children}
     </AuthContext.Provider>
   )

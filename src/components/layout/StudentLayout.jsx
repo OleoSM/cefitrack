@@ -2,7 +2,8 @@ import { nombreCanal } from '../../lib/realtime'
 import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../../context/AuthContext'
-import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, FolderOpen, LogOut, Menu, X, ChevronRight, ChevronDown, ScrollText, Settings, Bell, Brush, UserRound, AlertTriangle, Minus, Check, Clock } from 'lucide-react'
+import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, FolderOpen, LogOut, Menu, X, ChevronRight, ChevronDown, ScrollText, Settings, Bell, Brush, UserRound, AlertTriangle, Minus, Check, Clock, Sparkles, Wallet } from 'lucide-react'
+import { fetchPermisosAlumno, PERMISOS_POR_DEFECTO } from '../../lib/permisosAlumno'
 import { useStudentData } from '../../hooks/useStudentData'
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import clsx from 'clsx'
@@ -24,9 +25,11 @@ const STUDENT_SECTIONS = [
     { to:'/student/calificaciones', label:'Calificaciones', icon:BookOpen },
     { to:'/student/asistencias', label:'Asistencias', icon:CalendarCheck },
     { to:'/student/mi-qr', label:'Mi QR', icon:QrCode },
-    { to:'/student/materiales', label:'Materiales', icon:FolderOpen },
+    { to:'/student/materiales', label:'Materiales', icon:FolderOpen, permiso:'verMateriales' },
+    { to:'/student/desempeno', label:'Desempeño', icon:Sparkles, permiso:'verDesempeno' },
   ]},
   { title:'Administración', sectionIcon:Settings, items:[
+    { to:'/student/pagos', label:'Pagos', icon:Wallet, permiso:'verPagos' },
     { to:'/student/terminos', label:'T&C / Firma', icon:ScrollText, badge:'terms' },
     { to:'/student/configuracion', label:'Configuración', icon:Settings },
   ]},
@@ -41,6 +44,8 @@ const PAGE_TITLES = {
   '/student/asistencias':    'Asistencias',
   '/student/mi-qr':          'Mi QR',
   '/student/materiales':     'Mis materiales',
+  '/student/desempeno':      'Mi desempeño',
+  '/student/pagos':          'Mis pagos',
   '/student/terminos':       'T&C / Firma',
   '/student/configuracion':  'Configuración',
   '/student':                'Mi Panel',
@@ -99,8 +104,8 @@ function LayoutInner() {
   const [notifPosition, setNotifPosition] = useState(null)
   const { pathname } = useLocation()
   const [openSections, setOpenSections] = useState(() => ({
-    'Operación académica': ['/student/calificaciones','/student/asistencias','/student/mi-qr','/student/materiales'].some(route => pathname.startsWith(route)),
-    'Administración': ['/student/terminos','/student/configuracion'].some(route => pathname.startsWith(route)),
+    'Operación académica': ['/student/calificaciones','/student/asistencias','/student/mi-qr','/student/materiales','/student/desempeno'].some(route => pathname.startsWith(route)),
+    'Administración': ['/student/pagos','/student/terminos','/student/configuracion'].some(route => pathname.startsWith(route)),
   }))
   const { currentUser, logout } = useAuth()
   const navigate = useNavigate()
@@ -121,6 +126,13 @@ function LayoutInner() {
       .subscribe()
     return () => { vivo = false; supabase.removeChannel(canal) }
   }, [student?.id, pathname])
+  // Apartados que el admin le permite ver (Pagos, Materiales, Desempeño…).
+  const [permisos, setPermisos] = useState(PERMISOS_POR_DEFECTO)
+  useEffect(() => {
+    if (!student?.id) return
+    fetchPermisosAlumno(student.id).then(setPermisos).catch(() => {})
+  }, [student?.id, pathname])
+  const permitido = item => !item.permiso || permisos[item.permiso] !== false
   const { nombreDe } = useSucursales()
   const initials = student?.name.split(' ').slice(0, 2).map(n => n[0]).join('') ?? 'AL'
   const avatarBorder = appearance === 'default' ? '#ffffff' : '#000000'
@@ -300,7 +312,7 @@ function LayoutInner() {
               )}
               <div id={title ? `student-nav-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}
                 hidden={!!title && !openSections[title]} className="space-y-0.5">
-          {items.map(({ to, label, icon: Icon, exact, badge }) => {
+          {items.filter(permitido).map(({ to, label, icon: Icon, exact, badge }) => {
             const showPending = badge === 'terms' && !!student
             return (
               <NavLink key={to} to={to} end={exact} onClick={closeSidebar}
@@ -497,7 +509,7 @@ function LayoutInner() {
             borderTop: `1px solid ${t.sideBorder}`,
             paddingBottom: 'env(safe-area-inset-bottom)',
           }}>
-          {nav.filter(n => n.to !== '/student/configuracion' && n.to !== '/student/materiales').map(({ to, label, icon: Icon, exact, badge }) => (
+          {nav.filter(n => !['/student/configuracion', '/student/materiales', '/student/desempeno', '/student/pagos'].includes(n.to)).map(({ to, label, icon: Icon, exact, badge }) => (
             <NavLink key={to} to={to} end={exact}
               className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors text-[10px] font-medium relative">
               {({ isActive }) => (

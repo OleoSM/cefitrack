@@ -33,6 +33,7 @@ export function estadoExpediente(student, documentos = [], lectura = {}) {
   const e = Object.fromEntries(Object.entries(docs).map(([k, d]) => [k, estadoDoc(d)]))
   // Se añade DESPUÉS de calcular `e`: es opcional y no debe pesar en ningún paso.
   docs.ecoems = doc('comprobante_ecoems')
+  docs.unam = doc('comprobante_unam')
 
   const firmado = student.termsStatus === 'firmado'
   // Firmar a mano y subir el PDF también cuenta como firma entregada.
@@ -41,8 +42,8 @@ export function estadoExpediente(student, documentos = [], lectura = {}) {
 
   const motivoDe = d => d?.rejection_reason || null
   const pasos = [
-    { id: 'tc',   estado: (lectura.tc || firmaOk) ? 'hecho' : 'pendiente' },
     { id: 'priv', estado: (lectura.priv || firmaOk) ? 'hecho' : 'pendiente' },
+    { id: 'tc',   estado: (lectura.tc || firmaOk) ? 'hecho' : 'pendiente' },
     {
       id: 'docs',
       estado: (e.curp === 'rechazado' || e.ine === 'rechazado') ? 'rechazado'

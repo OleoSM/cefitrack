@@ -1,6 +1,10 @@
 import { useState } from 'react'
-import { X, Plus, Save, AlertCircle, RefreshCw, Eye, EyeOff, Building2 } from 'lucide-react'
-import { createStudent, updateStudent } from '../../lib/supabaseData'
+import { useNavigate } from 'react-router-dom'
+import { X, Plus, Save, AlertCircle, RefreshCw, Eye, EyeOff, Building2, Wallet } from 'lucide-react'
+import { altaAlumnoConPago, updateStudent } from '../../lib/supabaseData'
+import { METODOS, METODO_LABEL } from '../../lib/pagosData'
+import { useAuth } from '../../context/AuthContext'
+import { NeonCheckbox } from '../ui/NeonCheckbox'
 import { generarPassword, generarUsuario, DOMINIO_CORREO } from '../../lib/credentials'
 import { useSucursales } from '../../hooks/useSucursales'
 import { areasParaInstituciones } from '../../lib/areas'
@@ -10,11 +14,21 @@ import ModalPortal from '../ui/ModalPortal'
  * Alta y edición de alumnos. En el alta se crea también su cuenta de acceso:
  * el usuario ES el correo (así funciona el login) y la contraseña se puede
  * escribir a mano o generar.
+ *
+ * Alta obligatoria con pago: no se puede crear un alumno sin su plan de pago
+ * y su primer importe (todo se guarda junto en el servidor). Después lleva a
+ * Pagos con el alumno abierto, si quien da el alta tiene ese apartado.
  */
 export default function StudentFormModal({
   student = null, groups, defaultGroupId = null, onClose, onSaved,
 }) {
   const editing = !!student
+  const navigate = useNavigate()
+  const { puedeVer } = useAuth()
+  const hoyMes = new Date().toISOString().slice(0, 7)
+  const [pago, setPago] = useState({ total: '', modalidad: 'mensualidades', mensualidades: '6', inicio: hoyMes,
+    monto: '', metodo: 'efectivo', esInscripcion: false, referencia: '' })
+  const setP = (k, v) => setPago(p => ({ ...p, [k]: v }))
   const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
 
   /* El alumno pertenece a la sucursal DE SU GRUPO: `sucursal` no se elige, se
@@ -64,12 +78,31 @@ export default function StudentFormModal({
       const extra = { personalEmail:form.personalEmail || null, whatsapp:form.whatsapp || null,
         universidadArea:selectedGroup?.curso === 'universidad' ? Number(form.universidadArea)||null : null }
 
+      const pagoListo = {
+        total: Number(pago.total), modalidad: pago.modalidad,
+        mensualidades: pago.modalidad === 'contado' ? 1 : Number(pago.mensualidades) || 1,
+        inicio: pago.inicio ? `${pago.inicio}-01` : null, monto: Number(pago.monto),
+        metodo: pago.metodo, esInscripcion: pago.esInscripcion, referencia: pago.referencia.trim(),
+      }
+      if (!editing) {
+        if (pago.total === '' || !(pagoListo.total >= 0)) { setError('Escribe el total del curso (0 si es beca completa).'); return }
+        if (pago.monto === '' || (pagoListo.total > 0 && !(pagoListo.monto > 0))) { setError('Registra el primer importe: es obligatorio para dar de alta.'); return }
+      }
+
       const res = editing
         ? await updateStudent({ id: student.id, name: form.name, email: form.email, groupId: form.groupId, tutor, sucursal, ...extra })
-        : await createStudent({ name: form.name, email: form.email, groupId: form.groupId, password: form.password, tutor, sucursal, ...extra })
+        : await altaAlumnoConPago({ name: form.name, email: form.email, groupId: form.groupId, password: form.password, tutor, sucursal, ...extra, pago: pagoListo })
 
       if (!res.ok) { setError(res.message); return }
-      await onSaved?.(editing ? null : { nombre: form.name, usuario: form.email, password: form.password })
+      const cred = editing ? null : { nombre: form.name, usuario: form.email, password: form.password }
+      // Tras el alta, a Pagos con el alumno abierto (las credenciales se muestran allá).
+      if (!editing && puedeVer('pagos') && res.student?.id) {
+        await onSaved?.(null)
+        onClose()
+        navigate('/admin/pagos', { state: { abrirAlumno: res.student.id, cred } })
+        return
+      }
+      await onSaved?.(cred)
       onClose()
     } catch (err) {
       setError(err?.message || 'No fue posible guardar el alumno. Intenta nuevamente.')
@@ -206,6 +239,59 @@ export default function StudentFormModal({
             </select>
           </div>}
 
+          {/* Pago inicial: obligatorio en el alta. */}
+          {!editing && (
+            <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>
+              <p className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--t1)' }}>
+                <Wallet size={14} style={{ color: 'var(--accent)' }}/> Pago inicial <span style={{ color: 'var(--bad)' }}>· obligatorio</span>
+              </p>
+              <p className="text-[11px] -mt-1" style={{ color: 'var(--t3)' }}>
+                No se puede dar de alta a un alumno sin registrar su plan de pago y su primer importe.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Total del curso ($)</span>
+                  <input required type="number" min="0" step="0.01" inputMode="decimal" value={pago.total}
+                    onChange={e => setP('total', e.target.value)} className="input-field" placeholder="Ej. 9000"/>
+                </label>
+                <label className="block">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Modalidad</span>
+                  <select value={pago.modalidad} onChange={e => setP('modalidad', e.target.value)} className="input-field">
+                    <option value="mensualidades">Mensualidades</option>
+                    <option value="contado">Contado</option>
+                  </select>
+                </label>
+                {pago.modalidad === 'mensualidades' && (
+                  <label className="block">
+                    <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Número de mensualidades</span>
+                    <input type="number" min="1" max="24" value={pago.mensualidades} onChange={e => setP('mensualidades', e.target.value)} className="input-field"/>
+                  </label>
+                )}
+                <label className="block">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Mes de inicio</span>
+                  <input type="month" value={pago.inicio} onChange={e => setP('inicio', e.target.value)} className="input-field"/>
+                </label>
+                <label className="block">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Primer importe ($)</span>
+                  <input required type="number" min="0" step="0.01" inputMode="decimal" value={pago.monto}
+                    onChange={e => setP('monto', e.target.value)} className="input-field" placeholder="Ej. 1500"/>
+                </label>
+                <label className="block">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Forma de pago</span>
+                  <select value={pago.metodo} onChange={e => setP('metodo', e.target.value)} className="input-field">
+                    {METODOS.map(m => <option key={m} value={m}>{METODO_LABEL[m]}</option>)}
+                  </select>
+                </label>
+              </div>
+              <NeonCheckbox checked={pago.esInscripcion} onChange={e => setP('esInscripcion', e.target.checked)}
+                label={<span className="text-xs" style={{ color: 'var(--t1)' }}>Este primer importe es la inscripción (no cuenta como mensualidad)</span>}/>
+              <label className="block">
+                <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Referencia (opcional)</span>
+                <input value={pago.referencia} onChange={e => setP('referencia', e.target.value)} className="input-field" placeholder="Folio, número de transferencia…"/>
+              </label>
+            </div>
+          )}
+
           <div className="pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-3 mt-2"
               style={{ color: 'var(--t4)' }}>Contacto del tutor (opcional)</p>
@@ -232,7 +318,7 @@ export default function StudentFormModal({
             <button type="button" onClick={onClose} disabled={saving} className="btn-secondary min-h-11 flex-1 justify-center disabled:opacity-40">Cancelar</button>
             <button type="submit" disabled={saving} className="btn-primary min-h-11 flex-1 justify-center">
               {editing ? <Save size={14}/> : <Plus size={14}/>}
-              {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear alumno'}
+              {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear alumno y registrar pago'}
             </button>
           </div>
         </form>

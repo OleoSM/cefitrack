@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import {
   Wallet, Plus, Trash2, Pencil, X,
   CreditCard, WalletCards, Banknote, ArrowLeftRight, CheckCircle2, AlertTriangle,
@@ -111,6 +112,20 @@ export default function Pagos() {
   const [soloAdeudo, setSoloAdeudo] = useState(false)
 
   const [detalle, setDetalle]   = useState(null)   // studentId abierto en el modal
+
+  /* Recién dado de alta (StudentFormModal → aquí): se abre su plan y se
+     muestran sus credenciales una sola vez. El estado de la ruta se limpia
+     para que recargar no vuelva a abrirlo. */
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [credNueva, setCredNueva] = useState(null)
+  useEffect(() => {
+    const st = location.state
+    if (!st?.abrirAlumno) return
+    setDetalle(st.abrirAlumno)
+    if (st.cred) setCredNueva(st.cred)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.state, location.pathname, navigate])
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -354,6 +369,8 @@ export default function Pagos() {
           </ProgressiveList>
         )}
       </DataTable>
+
+      {credNueva && <CredentialsPanel cred={credNueva} onClose={() => setCredNueva(null)}/>}
 
       {filaAbierta && (
         <DetalleAlumno

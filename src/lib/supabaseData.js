@@ -510,29 +510,61 @@ export async function deleteGroup(id) {
 
 /* ── Alumnos (escritura) ── */
 
-/** Crea el alumno y su cuenta de acceso. La contraseña se genera en el cliente. */
-export async function createStudent({ name, email, groupId, password, tutor = {}, sucursal = null, personalEmail = null, whatsapp = null, universidadArea = null }) {
-  const { data, error } = await supabase.rpc('create_student', {
-    p_name: name,
-    p_email: email,
-    p_group_id: groupId,
-    p_password: password,
-    p_tutor_name: tutor.name ?? null,
-    p_tutor_email: tutor.email ?? null,
-    p_tutor_phone: tutor.phone ?? null,
+/* El alta de alumnos va SIEMPRE con su primer pago: altaAlumnoConPago (abajo). */
+const MENSAJES_ALTA_ALUMNO = {
+  sin_permiso_altas: 'No tienes permiso para dar de alta alumnos. Pídeselo a Dayan o a Mauricio.',
+  forbidden: 'No puedes dar de alta alumnos en ese grupo.',
+  email_already_exists: 'Ese correo ya está registrado.',
+  group_not_found: 'El grupo seleccionado no existe.',
+  falta_total: 'Escribe el total del curso.',
+  falta_primer_pago: 'Registra el primer importe: es obligatorio para dar de alta.',
+  pago_mayor_al_total: 'El primer pago no puede ser mayor que el total del curso.',
+  falta_metodo: 'Elige la forma de pago.',
+  modalidad_invalida: 'Elige contado o mensualidades.',
+}
+
+/**
+ * Alta obligatoria con pago: crea el alumno, su plan de pago y el primer
+ * importe en UNA operación (si algo falla no queda nada a medias).
+ * `pago`: { total, modalidad, mensualidades, inicio, concepto, monto, metodo, esInscripcion, referencia }
+ */
+export async function altaAlumnoConPago({ name, email, groupId, password, tutor = {}, sucursal = null, personalEmail = null, whatsapp = null, universidadArea = null, pago }) {
+  const { data, error } = await supabase.rpc('alta_alumno_con_pago', {
+    p_name: name, p_email: email, p_group_id: groupId, p_password: password,
+    p_tutor_name: tutor.name ?? null, p_tutor_email: tutor.email ?? null, p_tutor_phone: tutor.phone ?? null,
     p_sucursal: sucursal,
+    p_total: pago.total, p_modalidad: pago.modalidad, p_mensualidades: pago.mensualidades,
+    p_inicio: pago.inicio || null, p_concepto: pago.concepto || 'Curso',
+    p_monto: pago.monto, p_metodo: pago.metodo, p_es_inscripcion: !!pago.esInscripcion, p_referencia: pago.referencia || null,
   })
   if (error) {
-    const msg = error.message ?? ''
-    if (msg.includes('email_already_exists'))
-      return { ok: false, message: `El correo ${email} ya está registrado.` }
-    if (msg.includes('group_not_found'))
-      return { ok: false, message: 'El grupo seleccionado no existe.' }
-    return { ok: false, message: 'No se pudo crear el alumno.' }
+    const clave = Object.keys(MENSAJES_ALTA_ALUMNO).find(k => (error.message ?? '').includes(k))
+    return { ok: false, message: clave ? MENSAJES_ALTA_ALUMNO[clave] : 'No se pudo dar de alta al alumno.' }
   }
   const row = data?.[0]
-  if (row?.id) await supabase.rpc('actualizar_contacto_alumno', { p_student_id:row.id, p_personal_email:personalEmail, p_whatsapp:whatsapp, p_tutor_whatsapp:tutor.whatsapp, p_universidad_area:universidadArea })
-  return { ok: true, student: row ? { id: row.id, name: row.name, email: row.email, groupId: row.group_id } : null }
+  if (row?.id) await supabase.rpc('actualizar_contacto_alumno', { p_student_id: row.id, p_personal_email: personalEmail, p_whatsapp: whatsapp, p_tutor_whatsapp: tutor.whatsapp, p_universidad_area: universidadArea })
+  return { ok: true, student: row ? { id: row.id, name: row.name, email: row.email, groupId: row.group_id, planId: row.plan_id } : null }
+}
+
+/** ¿Puedo dar de alta / baja alumnos? ¿Soy dueño (Dayan o Mauricio)? */
+export async function fetchPermisosAltas() {
+  const [a, d] = await Promise.all([supabase.rpc('puede_dar_altas'), supabase.rpc('es_dueno')])
+  return { puedeDarAltas: a.data === true, esDueno: d.data === true }
+}
+
+/** Lista del permiso de altas por persona (la ven los admins; la editan los dueños). */
+export async function fetchListaPermisoAltas() {
+  const { data, error } = await supabase.rpc('list_permiso_altas')
+  if (error) throw error
+  return (data ?? []).map(r => ({ userId: r.user_id, nombre: r.nombre, email: r.email, rol: r.rol, puede: r.puede, esDueno: r.es_dueno, personalizado: r.personalizado }))
+}
+
+export async function setPermisoAltas(userId, puede) {
+  const { error } = await supabase.rpc('set_permiso_altas', { p_user: userId, p_puede: puede })
+  if (!error) return { ok: true }
+  const msg = error.message ?? ''
+  return { ok: false, message: msg.includes('solo_duenos') ? 'Solo Dayan y Mauricio pueden cambiar este permiso.'
+    : msg.includes('dueno_no_editable') ? 'A Dayan y a Mauricio no se les puede quitar.' : 'No se pudo guardar el permiso.' }
 }
 
 export async function updateStudent({ id, name, email, groupId, tutor = {}, sucursal = null, personalEmail = null, whatsapp = null, universidadArea = null }) {
@@ -554,6 +586,8 @@ export async function updateStudent({ id, name, email, groupId, tutor = {}, sucu
 
 export async function deleteStudent(id) {
   const { error } = await supabase.rpc('delete_student', { p_id: id })
+  if (error?.message?.includes('sin_permiso_altas'))
+    return { ok: false, message: 'No tienes permiso para dar de baja alumnos. Pídeselo a Dayan o a Mauricio.' }
   if (error) throw error
 }
 
@@ -793,7 +827,16 @@ export async function fetchColumnasRegistro(groupId) {
     requisitoId: c.requisito_id ?? null,
     requisitoMin: c.requisito_min == null ? null : Number(c.requisito_min),
     cuentaGarantia: c.cuenta_garantia !== false,
+    // Fecha de entrega (opcional): recordatorio por correo 2 días antes.
+    fechaEntrega: c.fecha_entrega ?? null,
   }))
+}
+
+/** Fecha de entrega de una columna (null la quita). */
+export async function setFechaEntrega(columnaId, fecha) {
+  const { error } = await supabase.rpc('set_fecha_entrega', { p_columna_id: columnaId, p_fecha: fecha || null })
+  if (error) return { ok: false, message: 'No se pudo guardar la fecha de entrega.' }
+  return { ok: true }
 }
 
 const MENSAJES_REQUISITO = {

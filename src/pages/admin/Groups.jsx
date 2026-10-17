@@ -291,7 +291,7 @@ export default function Groups() {
   const { getAccent, getPaletteId, setGroupPalette, getTintaId, setGroupTinta } = useGroupColors()
   const [qrDe, setQrDe] = useState(null)   // grupo cuyos QR se descargan
   const [masivaDe, setMasivaDe] = useState(null)   // grupo con alta masiva abierta
-  const { currentUser, allowedSucursales, canAccess } = useAuth()
+  const { currentUser, allowedSucursales, canAccess, puedeDarAltas } = useAuth()
   const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
   const isAdmin = currentUser?.role === 'admin'
 
@@ -565,11 +565,16 @@ export default function Groups() {
                         onMouseLeave={e => { e.currentTarget.style.color = 'var(--t2)' }}>
                         <QrCode size={18}/>
                       </button>
-                      {isAdmin && [
-                        { icon: UserPlus, title: 'Añadir alumno a este grupo', hover: 'var(--good)', act: () => setAddStudentTo(g) },
-                        { icon: FileSpreadsheet, title: 'Alta masiva con plantilla de Excel', hover: 'var(--good)', act: () => setMasivaDe(g) },
-                        { icon: Pencil, title: 'Editar grupo',   hover: 'var(--info)', act: () => setFormFor({ group: g }) },
-                        { icon: Trash2, title: 'Eliminar grupo', hover: 'var(--bad)', act: () => setDeleteFor(g) },
+                      {[
+                        // Altas: con el permiso de altas. Editar/eliminar el grupo: solo admin.
+                        ...(puedeDarAltas ? [
+                          { icon: UserPlus, title: 'Añadir alumno a este grupo', hover: 'var(--good)', act: () => setAddStudentTo(g) },
+                          { icon: FileSpreadsheet, title: 'Alta masiva con plantilla de Excel', hover: 'var(--good)', act: () => setMasivaDe(g) },
+                        ] : []),
+                        ...(isAdmin ? [
+                          { icon: Pencil, title: 'Editar grupo',   hover: 'var(--info)', act: () => setFormFor({ group: g }) },
+                          { icon: Trash2, title: 'Eliminar grupo', hover: 'var(--bad)', act: () => setDeleteFor(g) },
+                        ] : []),
                       ].map(({ icon: Icon, title, hover, act }) => (
                         <button key={title} title={title}
                           onClick={e => { e.stopPropagation(); act() }}

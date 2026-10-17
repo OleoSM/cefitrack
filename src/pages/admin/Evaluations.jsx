@@ -308,7 +308,7 @@ export default function Evaluations() {
           ? 'Aún no hay calificaciones de exámenes. Captúralas en la hoja de Calificaciones o con “Agregar evaluación”.'
           : 'No hay exámenes para los filtros seleccionados.'}>
         {loading ? <SkeletonRows/> : (
-        <ProgressiveList items={filtered} emptyLabel="Ninguna evaluación coincide con el filtro.">
+        <ProgressiveList items={filtered} sizes={{ mobile: 5, tablet: 5, desktop: 5 }} emptyLabel="Ninguna evaluación coincide con el filtro.">
         {e => {
           const s  = students.find(st => st.id === e.studentId)
           const base10 = e.calMax ? (e.calificacion / e.calMax) * 10 : e.calificacion

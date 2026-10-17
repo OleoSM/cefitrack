@@ -19,6 +19,7 @@ import { DANGER_BTN_STYLE } from '../../components/admin/ConfirmDialog'
 import CredentialsPanel from '../../components/admin/CredentialsPanel'
 import AccesoCuentaModal from '../../components/admin/AccesoCuentaModal'
 import AltaPersonalModal from '../../components/admin/AltaPersonalModal'
+import PermisoAltasPanel from '../../components/admin/PermisoAltasPanel'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
@@ -317,6 +318,9 @@ export default function AccesoDisposicion() {
           <UserPlus size={14}/> Registrar admin o sub-admin
         </button>
       </div>
+
+      {/* ── Quién puede dar de alta / baja alumnos (lo deciden los dueños) ── */}
+      <PermisoAltasPanel/>
 
       {/* ── Lista de cuentas ────────────────────────────────── */}
       <div className="card p-5 space-y-3">

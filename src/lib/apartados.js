@@ -32,6 +32,8 @@ export const TODOS_LOS_APARTADOS = APARTADOS.map(a => a.clave)
  *  no cae en "configuracion" porque se controla aparte (solo admin). */
 export function apartadoDeRuta(pathname) {
   if (pathname.startsWith('/admin/configuracion/acceso')) return null
+  // Notificaciones es parte del apartado de correos.
+  if (pathname.startsWith('/admin/notificaciones')) return 'correos'
   const a = APARTADOS.find(x => pathname === x.ruta || pathname.startsWith(x.ruta + '/'))
   return a?.clave ?? null
 }

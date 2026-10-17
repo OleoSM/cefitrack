@@ -52,7 +52,7 @@ export default function GroupDetail() {
   const { groupId }   = useParams()
   const navigate      = useNavigate()
   const { getAccent } = useGroupColors()
-  const { currentUser, puedeVer } = useAuth()
+  const { currentUser, puedeVer, puedeDarAltas } = useAuth()
   const isAdmin = currentUser?.role === 'admin'
   const conIA = puedeVer('ia')
 
@@ -203,7 +203,7 @@ export default function GroupDetail() {
         )}
       </div>}
 
-      {isAdmin && showAddStudent && (
+      {puedeDarAltas && showAddStudent && (
         <StudentFormModal
           groups={allGroups}
           defaultGroupId={groupId}
@@ -222,7 +222,7 @@ export default function GroupDetail() {
             <p className="text-[11px] mt-0.5" style={{color:'var(--t3)'}}>{visibleStudents.length} de {students.length} alumno(s)</p>
           </div>
           <div className="flex gap-2">
-            {isAdmin && (
+            {puedeDarAltas && (
               <button onClick={() => setShowAddStudent(true)} className="btn-secondary text-xs py-2">
                 <UserPlus size={14}/> Añadir alumno
               </button>

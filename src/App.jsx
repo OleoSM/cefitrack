@@ -23,6 +23,8 @@ const MyGrades         = lazy(() => import('./pages/student/MyGrades'))
 const MyAttendance     = lazy(() => import('./pages/student/MyAttendance'))
 const MyQR             = lazy(() => import('./pages/student/MyQR'))
 const MisMateriales    = lazy(() => import('./pages/student/MisMateriales'))
+const Desempeno        = lazy(() => import('./pages/student/Desempeno'))
+const MisPagos         = lazy(() => import('./pages/student/MisPagos'))
 const Materiales       = lazy(() => import('./pages/admin/Materiales'))
 const Terms            = lazy(() => import('./pages/student/Terms'))
 const StudentSettings  = lazy(() => import('./pages/student/Settings'))
@@ -31,6 +33,7 @@ const Registrar        = lazy(() => import('./pages/admin/Registrar'))
 const Settings         = lazy(() => import('./pages/admin/Settings'))
 const AccesoDisposicion = lazy(() => import('./pages/admin/AccesoDisposicion'))
 const UsoConsumo     = lazy(() => import('./pages/admin/UsoConsumo'))
+const Notificaciones = lazy(() => import('./pages/admin/Notificaciones'))
 const Pagos            = lazy(() => import('./pages/admin/Pagos'))
 const EnviarCorreos    = lazy(() => import('./pages/admin/EnviarCorreos'))
 
@@ -96,6 +99,7 @@ export default function App() {
               <Route path="registrar"             element={<Apartado clave="calificaciones"><Registrar /></Apartado>} />
               <Route path="pagos"                 element={<Apartado clave="pagos"><Pagos /></Apartado>} />
               <Route path="correos"               element={<Apartado clave="correos"><EnviarCorreos /></Apartado>} />
+              <Route path="notificaciones"        element={<Apartado clave="correos"><Notificaciones /></Apartado>} />
               <Route path="configuracion"         element={<Apartado clave="configuracion"><Settings /></Apartado>} />
               <Route path="configuracion/acceso"  element={<AccesoDisposicion />} />
               <Route path="uso"                   element={<UsoConsumo />} />
@@ -110,6 +114,8 @@ export default function App() {
               <Route path="asistencias"             element={<MyAttendance />} />
               <Route path="mi-qr"                   element={<MyQR />} />
               <Route path="materiales"              element={<MisMateriales />} />
+              <Route path="desempeno"               element={<Desempeno />} />
+              <Route path="pagos"                   element={<MisPagos />} />
               <Route path="terminos"               element={<Terms />} />
               <Route path="configuracion"          element={<StudentSettings />} />
             </Route>

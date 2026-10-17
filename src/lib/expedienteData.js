@@ -7,6 +7,8 @@ export const DOCUMENT_TYPES = [
   { id: 'terminos', label: 'T&C firmados a mano' },
   // Opcional y solo para alumnos de ECOEMS: no bloquea terminar el proceso.
   { id: 'comprobante_ecoems', label: 'Comprobante de inscripción ECOEMS', opcional: true },
+  // Opcional y solo para alumnos de universidad que van a la UNAM.
+  { id: 'comprobante_unam', label: 'Comprobante de examen UNAM', opcional: true },
 ]
 
 export async function fetchDocumentos(studentId) {

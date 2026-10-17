@@ -264,7 +264,7 @@ export default function ListaEvaluaciones({ evaluaciones = [], nombresColumnas =
                 )}
               </div>
             )}
-            <ProgressiveList items={g.items} sizes={{ mobile: 5, tablet: 8, desktop: 12 }} className="space-y-1.5">
+            <ProgressiveList items={g.items} sizes={{ mobile: 5, tablet: 5, desktop: 5 }} className="space-y-1.5">
               {Fila}
             </ProgressiveList>
           </section>

@@ -4,7 +4,10 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, ResponsiveContainer,
 } from 'recharts'
-import { ArrowRight, Target, Zap, Trophy, Settings2, Check, GripHorizontal, ChevronRight } from 'lucide-react'
+import { ArrowRight, Target, Zap, Trophy, Settings2, Check, GripHorizontal, ChevronRight, MessageCircle } from 'lucide-react'
+
+// Contacto de CEFIMAT para dudas que no resuelve el profesor en turno.
+const WHATSAPP = '5572008538'
 import { getLastSimulacro, getTargetSchool, getSimulacrosByStudent, attendanceColors } from '../../data/mockData'
 import { logoInstitucion, tipoDesdeNombre, estiloLogo } from '../../lib/instituciones'
 import { useStudentData } from '../../hooks/useStudentData'
@@ -24,6 +27,8 @@ import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
 import { IconAsistencia, IconPromedio, IconRanking, IconExpediente } from '../../components/ui/SigaKpiIcons'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import { estadoPerfil } from './EstadoPagina'
+import { fetchPermisosAlumno } from '../../lib/permisosAlumno'
+import TarjetaLiga from '../../components/ui/TarjetaLiga'
 
 const KPI_IDS = ['simulacro', 'asistencia', 'tareas', 'promedio', 'ranking']
 const KPI_NOMBRES = {
@@ -69,6 +74,13 @@ export default function StudentDashboard() {
   const [groupMetrics, setGroupMetrics] = useState(null)
   const [kpiSettingsOpen, setKpiSettingsOpen] = useState(false)
   const [visibleKpis, setVisibleKpis] = useState(leerKpis)
+  // Si el admin le ocultó Rankings, no se muestra "Lugar en grupo".
+  const [verRankings, setVerRankings] = useState(true)
+  useEffect(() => {
+    if (!s?.id) return
+    fetchPermisosAlumno(s.id).then(p => setVerRankings(p.verRankings !== false)).catch(() => {})
+  }, [s?.id])
+  const kpiPermitidos = verRankings ? KPI_IDS : KPI_IDS.filter(id => id !== 'ranking')
   const [arrastrando, setArrastrando] = useState(null)
   // Detalle de una calificación de "Lo más reciente" y nombres de asignación.
   const [detalle, setDetalle] = useState(null)
@@ -240,7 +252,7 @@ export default function StudentDashboard() {
     },
   }
   // El orden es el que eligió el alumno (arrastrando), no el del catálogo.
-  const kpisVisibles = visibleKpis.filter(id => KPI_IDS.includes(id)).slice(0, 4)
+  const kpisVisibles = visibleKpis.filter(id => kpiPermitidos.includes(id)).slice(0, 4)
   const KPI_INFO = {
     simulacro: 'Aciertos de tu último examen de simulación sobre el total de preguntas.',
     asistencia: 'Porcentaje de clases a las que asististe. Cada 3 retardos cuentan como 1 falta. Para la garantía necesitas al menos 90 %.',
@@ -284,6 +296,23 @@ export default function StudentDashboard() {
         </div>
       </div>
 
+      {/* ══ Liga y racha (asistencia) ══ */}
+      <TarjetaLiga/>
+
+      {/* ══ Dudas o comentarios ══ */}
+      <div className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'var(--soft-bg)', color: 'var(--accent)' }}>
+          <MessageCircle size={18}/>
+        </span>
+        <p className="text-sm flex-1 min-w-0" style={{ color: 'var(--t1)' }}>
+          <b>¿Dudas o comentarios?</b> Revísalo con tu profesor en turno.
+          <span className="block text-xs mt-0.5" style={{ color: 'var(--t3)' }}>También puedes escribirnos por WhatsApp al {WHATSAPP.replace(/(\d{2})(\d{4})(\d{4})/, '$1 $2 $3')}.</span>
+        </p>
+        <a href={`https://wa.me/52${WHATSAPP}`} target="_blank" rel="noreferrer" className="btn-secondary min-h-11 justify-center text-sm">
+          <MessageCircle size={15}/> Escribir por WhatsApp
+        </a>
+      </div>
+
       {/* ══ Indicadores ══ */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -311,7 +340,7 @@ export default function StudentDashboard() {
               style={{ background: 'var(--panel-bg)', border: '1px solid var(--card-border)', boxShadow: '0 18px 48px rgba(0,0,0,.3)' }}>
               <p className="text-xs font-bold" style={{ color: 'var(--t1)' }}>Tarjetas visibles</p>
               <p className="text-[10px] pb-1" style={{ color: 'var(--t3)' }}>Se muestran hasta cuatro.</p>
-              {KPI_IDS.map(id => (
+              {kpiPermitidos.map(id => (
                 <NeonCheckbox key={id} className="w-full min-h-11"
                   checked={visibleKpis.includes(id)} onChange={() => toggleKpi(id)}
                   label={KPI_NOMBRES[id]}/>

@@ -363,7 +363,13 @@ export default function Attendance() {
       setActionBusy(false)
       return
     }
-    exportExcel()
+    // El respaldo se reconstruye desde lo que quedó en la base (no desde la
+    // pantalla): así el Excel es exactamente lo guardado. Sin red, el de pantalla.
+    try {
+      const guardada = await loadSessionDb(selectedGrp, selectedDate)
+      if (guardada) exportSessionExcel(guardada)
+      else exportExcel()
+    } catch { exportExcel() }
     refreshIndex()
     setActionBusy(false)
     goBack(true)
@@ -480,6 +486,41 @@ export default function Attendance() {
     XLSX.writeFile(wb, `${grupo?.name?.replace(/\s+/g, '') ?? 'Grupo'}_${sesion.date}.xlsx`)
   }
 
+  /**
+   * Respaldo completo de un grupo, reconstruido desde la base: hoja "Resumen"
+   * (alumno × fecha con P / R / F y su porcentaje) y una hoja por lista.
+   * No se guardan archivos: el Excel se arma al pedirlo, siempre al día.
+   */
+  const exportRespaldoGrupo = (groupId) => {
+    const grupo = groups.find(g => g.id === groupId)
+    const alumnos = students.filter(s => s.groupId === groupId)
+    const sesiones = sessionIndex.filter(s => s.groupId === groupId).sort((a, b) => a.date.localeCompare(b.date))
+    if (!sesiones.length) return
+    const wb = XLSX.utils.book_new()
+    const resumen = alumnos.map((s, i) => {
+      const fila = { '#': i + 1, 'Alumno': s.name }
+      let asistio = 0
+      for (const ses of sesiones) {
+        const reg = ses.records.find(r => r.studentId === s.id)
+        fila[ses.date] = !reg ? 'F' : reg.retardo ? 'R' : 'P'
+        if (reg) asistio++
+      }
+      fila['Asistencia %'] = Math.round((asistio / sesiones.length) * 100)
+      return fila
+    })
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Resumen')
+    for (const ses of sesiones) {
+      const porAlumno = Object.fromEntries(ses.records.map(r => [r.studentId, r]))
+      const filas = alumnos.map((s, i) => {
+        const reg = porAlumno[s.id]
+        return { '#': i + 1, 'Nombre del Alumno': s.name, 'Hora de Llegada': reg?.time ?? '—',
+          'Estado': !reg ? 'Ausente' : reg.retardo ? 'Retardo' : 'Presente' }
+      })
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), ses.date)
+    }
+    XLSX.writeFile(wb, `Respaldo_asistencia_${grupo?.name?.replace(/\s+/g, '') ?? 'Grupo'}_${todayISO()}.xlsx`)
+  }
+
   /* ── Modal: historial de listas (compartido por las dos vistas) ── */
   const HistoryModal = showHistoryModal && (
     <ModalPortal maxWidth="max-w-md" onClose={() => setShowHistoryModal(false)}>
@@ -498,6 +539,11 @@ export default function Attendance() {
         </button>
       </div>
       <div className="p-5 space-y-2">
+        {sessionIndex.some(s => s.groupId === historyGroupId) && (
+          <button type="button" onClick={() => exportRespaldoGrupo(historyGroupId)} className="btn-primary w-full justify-center min-h-11 text-sm">
+            <FileSpreadsheet size={15}/> Respaldo completo del grupo (Excel)
+          </button>
+        )}
         {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => {
           const actual = view === 'scan' && s.date === selectedDate
           return (

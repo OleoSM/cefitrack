@@ -6,6 +6,7 @@ import {
   FileText, QrCode, ClipboardList, RefreshCw, Users, Sparkles,
 } from 'lucide-react'
 import ReporteIA from '../../components/admin/ReporteIA'
+import TarjetaLiga from '../../components/ui/TarjetaLiga'
 import { useAuth } from '../../context/AuthContext'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import {
@@ -411,6 +412,7 @@ export default function StudentProfile() {
       {/* ══════════════════════════════════════════════════════════
           TAB: RESUMEN
       ══════════════════════════════════════════════════════════ */}
+      {tab === 'resumen' && <div className="mb-4"><TarjetaLiga studentId={s.id} compacta/></div>}
       {tab === 'resumen' && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 min-w-0">
 

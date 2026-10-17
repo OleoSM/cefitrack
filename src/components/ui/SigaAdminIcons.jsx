@@ -132,6 +132,13 @@ export const IconAcceso = make('IconAcceso', <>
   <path d="M13 11h5v2h-2v2h-2v-2h-1" />
 </>)
 
+// Campana con aviso: historial de notificaciones y correos.
+export const IconNotificaciones = make('IconNotificaciones', <>
+  <path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9" />
+  <path d="M10 20a2 2 0 0 0 4 0" />
+  <circle cx="18.5" cy="5" r="2.5" />
+</>)
+
 // Medidor: consumo de la API de IA y de correos.
 export const IconConsumo = make('IconConsumo', <>
   <path d="M4 17a8 8 0 1 1 16 0" />

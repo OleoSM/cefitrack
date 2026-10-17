@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Upload, FileText, Image as ImageIcon, Pencil, Trash2, ExternalLink, Clock, Eye, Search, X, RefreshCw } from 'lucide-react'
+import { Upload, FileText, Image as ImageIcon, Pencil, Trash2, ExternalLink, Clock, Eye, Search, X, RefreshCw, Mail } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
 import { fetchGroups, fetchStudents, fetchNombresColumnas } from '../../lib/supabaseData'
 import AvisoCorreoModal from '../../components/admin/AvisoCorreoModal'
-import { alumnosDeMaterial, plantillaMaterialNuevo } from '../../lib/avisosData'
+import { alumnosDeMaterial, plantillaMaterialNuevo, plantillaMaterialVence } from '../../lib/avisosData'
 import {
   fetchMateriales, subirMaterial, actualizarMaterial, borrarMaterial, urlMaterial,
   tiempoHasta, tamanoLegible, MAX_BYTES,
@@ -70,14 +70,18 @@ export default function Materiales() {
   const conteo = { visible: lista.filter(m => estadoDe(m) === 'visible').length, programado: lista.filter(m => estadoDe(m) === 'programado').length }
   const nombreGrupo = id => grupos.find(g => g.id === id)?.name ?? id
 
-  /* Popup "¿Avisar por correo?" al subir un material nuevo. */
-  const [aviso, setAviso] = useState(null)   // { material, alumnos, asunto, mensaje }
-  const ofrecerAviso = async material => {
+  /* Popup "¿Avisar por correo?": al subir un material nuevo y con el botón
+     "Enviar correo" de cada material. Si se borra en menos de 2 días, el
+     mensaje es de "último aviso". */
+  const [aviso, setAviso] = useState(null)   // { material, alumnos, asunto, mensaje, tipo }
+  const ofrecerAviso = async (material, manual = false) => {
     if (!puedeVer('correos')) return
     try {
       const alumnos = alumnosDeMaterial(material, await fetchStudents(), grupos)
-      if (!alumnos.length) return
-      setAviso({ material, alumnos, ...plantillaMaterialNuevo({ ...material, actividad: nombresAct[material.columnaId] }) })
+      if (!alumnos.length) { if (manual) setError('Ningún alumno puede ver este material todavía.'); return }
+      const vence = new Date(material.expiraEn).getTime() - Date.now() < 2 * 864e5
+      setAviso({ material, alumnos, tipo: vence ? 'material_vence' : 'material_nuevo',
+        ...(vence ? plantillaMaterialVence(material) : plantillaMaterialNuevo({ ...material, actividad: nombresAct[material.columnaId] })) })
     } catch { /* sin aviso: el material ya quedó guardado */ }
   }
 
@@ -178,6 +182,7 @@ export default function Materiales() {
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1" style={{ borderTop: '1px solid var(--divider)' }}>
                   <button type="button" onClick={() => abrir(m)} className="btn-secondary min-h-9 text-xs mt-2"><ExternalLink size={13}/> Abrir</button>
+                  {puedeVer('correos') && <button type="button" onClick={() => ofrecerAviso(m, true)} className="btn-secondary min-h-9 text-xs mt-2"><Mail size={13}/> Enviar correo</button>}
                   {propio && <button type="button" onClick={() => setModal({ material: m })} className="btn-secondary min-h-9 text-xs mt-2"><Pencil size={13}/> Editar</button>}
                   {propio && <button type="button" onClick={() => setBorrar(m)} className="btn-danger min-h-9 text-xs mt-2 sm:ml-auto"><Trash2 size={13}/> Borrar ya</button>}
                 </div>
@@ -196,7 +201,7 @@ export default function Materiales() {
         <AvisoCorreoModal titulo="¿Avisar a los alumnos por correo?"
           contexto={`${aviso.material.titulo} · ${aviso.alumnos.length} alumno(s) lo pueden ver`} alumnos={aviso.alumnos}
           asuntoInicial={aviso.asunto} mensajeInicial={aviso.mensaje}
-          tipo="material_nuevo" refId={aviso.material.id}
+          tipo={aviso.tipo} refId={aviso.material.id}
           groupId={aviso.material.grupos.length === 1 && !aviso.material.sucursales.length && !aviso.material.cursos.length ? aviso.material.grupos[0] : null}
           onClose={() => setAviso(null)}/>
       )}

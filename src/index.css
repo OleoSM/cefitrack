@@ -957,3 +957,12 @@ html[data-movimiento='reducido'] .celda-foco { animation: none; }
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+
+/* Estrella animada de "Leyenda ★" (más allá de las 10 ligas): gira y late. */
+@keyframes estrellaLeyenda {
+  0%   { transform: rotate(0deg) scale(1);    filter: drop-shadow(0 0 2px rgba(242,179,61,.6)); }
+  50%  { transform: rotate(18deg) scale(1.18); filter: drop-shadow(0 0 8px rgba(242,179,61,.95)); }
+  100% { transform: rotate(0deg) scale(1);    filter: drop-shadow(0 0 2px rgba(242,179,61,.6)); }
+}
+.estrella-leyenda { animation: estrellaLeyenda 1.8s ease-in-out infinite; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { .estrella-leyenda { animation: none; } }

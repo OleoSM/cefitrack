@@ -15,7 +15,7 @@ import {
   fetchColumnasRegistro, fetchCeldasRegistro, fetchAsistenciaRegistro,
   setCeldaRegistro, crearColumnaRegistro, borrarColumnaRegistro, setRegistroAdmin,
   actualizarContactoAlumno, reordenarRegistro, configurarColumnaRegistro,
-  configurarRequisitoColumna, agregarBloqueExamen, fetchOrdenBloques, guardarOrdenBloques,
+  configurarRequisitoColumna, agregarBloqueExamen, fetchOrdenBloques, guardarOrdenBloques, setFechaEntrega,
 } from '../../lib/supabaseData'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { useGroupColors } from '../../hooks/useGroupColors'
@@ -612,6 +612,7 @@ function ColumnaModal({ titulo, inicial, onGuardar, onClose, columnas = [], solo
     opcionesTxt: (inicial?.opciones ?? []).join(', '), descripcion: inicial?.descripcion ?? '',
     requisitoId: inicial?.requisitoId ?? '', requisitoMin: inicial?.requisitoMin ?? '',
     cuentaGarantia: inicial?.cuentaGarantia ?? true,
+    fechaEntrega: inicial?.fechaEntrega ?? '',
   }))
   const candidatos = columnas.filter(c => c.id !== inicial?.id)
   const reqElegido = candidatos.find(c => c.id === f.requisitoId)
@@ -634,6 +635,7 @@ function ColumnaModal({ titulo, inicial, onGuardar, onClose, columnas = [], solo
       requisitoId: f.requisitoId || null,
       requisitoMin: f.requisitoId && reqElegido?.formato === 'calificacion' && f.requisitoMin !== '' ? Number(f.requisitoMin) : null,
       cuentaGarantia: f.cuentaGarantia,
+      fechaEntrega: f.fechaEntrega || null,
     })
     setGuardando(false)
     if (res?.conValores) { setConfirmar(res.conValores); return }
@@ -693,6 +695,14 @@ function ColumnaModal({ titulo, inicial, onGuardar, onClose, columnas = [], solo
             ))}
           </div>
         </div>
+
+        <label className="block">
+          <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>Fecha de entrega (opcional)</span>
+          <input type="date" value={f.fechaEntrega} onChange={e => set('fechaEntrega', e.target.value)} className="input-field w-full min-h-11"/>
+          <span className="block text-[11px] mt-1" style={{ color:'var(--t3)' }}>
+            Con fecha, a los alumnos que no la hayan entregado les llega un recordatorio por correo 2 días antes.
+          </span>
+        </label>
 
         <div>
           <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color:'var(--t3)' }}>¿Qué se captura?</span>
@@ -1477,7 +1487,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
         }
         porMateria.get(c.materia).cols.push({ id: c.id, name: c.nombre, t: c.tipo, calMax: c.calMax, esFija:c.esFija,
           formato: c.formato, cuenta: c.cuenta, opciones: c.opciones, descripcion: c.descripcion,
-          materia: c.materia, requisitoId: c.requisitoId, requisitoMin: c.requisitoMin, cuentaGarantia: c.cuentaGarantia })
+          materia: c.materia, requisitoId: c.requisitoId, requisitoMin: c.requisitoMin, cuentaGarantia: c.cuentaGarantia,
+          fechaEntrega: c.fechaEntrega })
       }
       setSubjects([...porMateria.values()])
 
@@ -1938,6 +1949,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
         const res = await configurarRequisitoColumna({ id: nueva.id, ...cfg })
         if (!res.ok) return res
       }
+      if (nueva?.id && cfg.fechaEntrega) {
+        const res = await setFechaEntrega(nueva.id, cfg.fechaEntrega)
+        if (!res.ok) return res
+      }
       setAddColModal(null)
       await cargarHoja()
       if (nueva?.id) ofrecerAviso({ id: nueva.id, nombre: cfg.nombre, materia: materia.name, tipo: cfg.tipo, descripcion: cfg.descripcion })
@@ -1955,6 +1970,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
       || (cfg.requisitoMin ?? null) !== (col.requisitoMin ?? null) || cfg.cuentaGarantia !== col.cuentaGarantia
     if (cambiaExtras) {
       const res = await configurarRequisitoColumna({ id: col.id, ...cfg })
+      if (!res.ok) return res
+    }
+    if ((cfg.fechaEntrega ?? null) !== (col.fechaEntrega ?? null)) {
+      const res = await setFechaEntrega(col.id, cfg.fechaEntrega)
       if (!res.ok) return res
     }
     setConfigCol(null); await cargarHoja(); onDataChange?.()
@@ -1975,7 +1994,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
 
   /* Popup "¿Avisar por correo?" al crear una actividad o un examen (solo quien
      tiene el apartado de correos y si el grupo tiene alumnos). */
-  const { puedeVer } = useAuth()
+  const { puedeVer, puedeDarAltas } = useAuth()
   const [aviso, setAviso] = useState(null)
   const ofrecerAviso = col => {
     if (!puedeVer('correos') || !groupStudents.length) return
@@ -2153,9 +2172,11 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
       <div className="flex-1"/>
 
       {/* Acciones */}
-      <button onClick={() => setShowAddStudent(true)} className="btn-secondary text-xs py-2 gap-1.5">
-        <UserPlus size={13}/> Alumno
-      </button>
+      {puedeDarAltas && (
+        <button onClick={() => setShowAddStudent(true)} className="btn-secondary text-xs py-2 gap-1.5">
+          <UserPlus size={13}/> Alumno
+        </button>
+      )}
       <button onClick={() => setAddSubjModal(true)} className="btn-secondary text-xs py-2 gap-1.5">
         <Plus size={13}/> Sección
       </button>

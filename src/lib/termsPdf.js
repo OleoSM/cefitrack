@@ -39,16 +39,17 @@ function buildBaseDoc({ studentName, tcText, privText }) {
   doc.text(`Alumno: ${studentName}`, MARGIN, 30)
   doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}`, MARGIN, 35)
 
+  // Mismo orden que el asistente del alumno: primero privacidad, luego términos.
   let y = 45
-  doc.setFont('helvetica', 'bold')
-  y = addWrappedText(doc, 'TÉRMINOS Y CONDICIONES', y, { fontSize: 11, color: '#0f172a' })
-  doc.setFont('helvetica', 'normal')
-  y = addWrappedText(doc, tcText, y + 2, { fontSize: 9 }) + 6
-
   doc.setFont('helvetica', 'bold')
   y = addWrappedText(doc, 'AVISO DE PRIVACIDAD', y, { fontSize: 11, color: '#0f172a' })
   doc.setFont('helvetica', 'normal')
-  y = addWrappedText(doc, privText, y + 2, { fontSize: 9 }) + 10
+  y = addWrappedText(doc, privText, y + 2, { fontSize: 9 }) + 6
+
+  doc.setFont('helvetica', 'bold')
+  y = addWrappedText(doc, 'TÉRMINOS Y CONDICIONES', y, { fontSize: 11, color: '#0f172a' })
+  doc.setFont('helvetica', 'normal')
+  y = addWrappedText(doc, tcText, y + 2, { fontSize: 9 }) + 10
 
   return { doc, y }
 }

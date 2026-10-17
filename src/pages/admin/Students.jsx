@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Pencil, Trash2, KeyRound, AlertCircle, RefreshCw } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, KeyRound, AlertCircle, RefreshCw, ShieldCheck } from 'lucide-react'
+import PermisosAlumnoModal from '../../components/admin/PermisosAlumnoModal'
 import { statusConfig, getStatusConfig } from '../../data/mockData'
 import { fetchStudents, fetchGroups, deleteStudent, fetchAttendanceStats } from '../../lib/supabaseData'
 import {
@@ -35,7 +36,7 @@ const COLUMNS = [
 export default function Students() {
   const navigate = useNavigate()
   const { getAccent } = useGroupColors()
-  const { currentUser, allowedSucursales, canAccess } = useAuth()
+  const { currentUser, allowedSucursales, canAccess, puedeDarAltas } = useAuth()
   const isAdmin = currentUser?.role === 'admin'
   const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
 
@@ -64,6 +65,7 @@ export default function Students() {
   const [formFor, setFormFor]     = useState(null)   // { student } | { student:null } para alta
   const [resetFor, setResetFor]   = useState(null)
   const [deleteFor, setDeleteFor] = useState(null)
+  const [permisosFor, setPermisosFor] = useState(null)   // alumno cuyos permisos del portal se editan
   const [lastCred, setLastCred]   = useState(null)
 
   const [loadError, setLoadError] = useState(null)
@@ -161,6 +163,7 @@ export default function Students() {
       )}
 
       {lastCred && <CredentialsPanel cred={lastCred} onClose={() => setLastCred(null)}/>}
+      {permisosFor && <PermisosAlumnoModal student={permisosFor} groups={groups} onClose={() => setPermisosFor(null)}/>}
 
       {/* ── Filtros ─────────────────────────────────────────── */}
       <BarraFiltros
@@ -182,12 +185,12 @@ export default function Students() {
             id: s.id, label: s.name, sub: groups.find(g => g.id === s.groupId)?.name ?? '' })),
           onElegir: id => navigate(`/admin/alumnos/${id}`) }}
         resumen={`${filtered.length} de ${students.length}`}
-        acciones={
+        acciones={puedeDarAltas && (
           <button onClick={() => setFormFor({ student: null })} disabled={visibleGroups.length === 0}
             className="btn-primary flex-shrink-0">
             <Plus size={14}/> <span className="hidden sm:inline">Nuevo alumno</span>
           </button>
-        }/>
+        )}/>
 
       {loadError && (
         <div role="alert" className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
@@ -331,8 +334,10 @@ export default function Students() {
                     <div className="flex items-center gap-1">
                       {[
                         { icon: Pencil,   title: 'Editar alumno',           hover: 'var(--info)', act: () => setFormFor({ student: s }) },
+                        { icon: ShieldCheck, title: 'Permisos del portal',  hover: 'var(--accent)', act: () => setPermisosFor(s) },
                         { icon: KeyRound, title: 'Restablecer contraseña',  hover: 'var(--warn)', act: () => setResetFor(s) },
-                        { icon: Trash2,   title: 'Eliminar alumno',         hover: 'var(--bad)', act: () => setDeleteFor(s) },
+                        // Dar de baja: solo con el permiso de altas (lo deciden Dayan y Mauricio).
+                        ...(puedeDarAltas ? [{ icon: Trash2, title: 'Eliminar alumno', hover: 'var(--bad)', act: () => setDeleteFor(s) }] : []),
                       ].map(({ icon: Icon, title, hover, act }) => (
                         <button key={title} title={title}
                           onClick={e => { e.stopPropagation(); act() }}

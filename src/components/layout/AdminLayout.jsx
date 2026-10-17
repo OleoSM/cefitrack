@@ -19,7 +19,7 @@ import { AdminThemeProvider, useAdminTheme } from '../../context/AdminThemeConte
 import MenuPerfil from '../ui/MenuPerfil'
 import {
   IconPanel, IconGrupos2, IconAlumno, IconHojaCalificaciones, IconPasarLista, IconExamen,
-  IconCobros, IconCorreoMasivo, IconFirma, IconAjustes, IconAcceso, IconPodio, IconMateriales, IconConsumo,
+  IconCobros, IconCorreoMasivo, IconFirma, IconAjustes, IconAcceso, IconPodio, IconMateriales, IconConsumo, IconNotificaciones,
 } from '../ui/SigaAdminIcons'
 
 /* Once entradas planas mezclaban entidades, tareas, análisis y administración
@@ -40,6 +40,7 @@ const SECCIONES = [
   { titulo: 'Administración', sectionIcon:IconAcceso, items: [
     { to:'/admin/pagos',        label:'Pagos',                  icon:IconCobros },
     { to:'/admin/correos',      label:'Enviar correos',         icon:IconCorreoMasivo },
+    { to:'/admin/notificaciones', label:'Notificaciones',       icon:IconNotificaciones },
     { to:'/admin/terminos',     label:'T&C / Firmas',           icon:IconFirma },
     { to:'/admin/configuracion',label:'Configuración',          icon:IconAjustes },
     { to:'/admin/configuracion/acceso', label:'Acceso y Disposición', icon:IconAcceso, adminOnly:true },
@@ -72,6 +73,7 @@ const pageTitles = {
   '/admin/configuracion':'Configuración',
   '/admin/configuracion/acceso':'Acceso y Disposición',
   '/admin/uso':'Uso y consumo',
+  '/admin/notificaciones':'Notificaciones',
 }
 
 const activityIcon = {

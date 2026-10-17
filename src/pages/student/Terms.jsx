@@ -279,10 +279,11 @@ Tus datos no serán transferidos a terceros sin tu consentimiento previo, salvo 
    el paso actual, cada uno dice qué hacer, al completarlo aparece un aviso con
    el siguiente y al final un aviso de "en espera de validación". */
 const PASOS = [
-  { id:'tc',       titulo:'Leer los Términos y Condiciones', corto:'Términos',   icon:FileText,
-    explica:'Lee el documento oficial de CEFIMAT. Explica la garantía del curso, la regla de retardos y tus obligaciones.' },
+  // Primero el Aviso de Privacidad y luego los Términos (pedido de CEFIMAT).
   { id:'priv',     titulo:'Leer el Aviso de Privacidad',     corto:'Privacidad', icon:Shield,
     explica:'Te dice qué datos tuyos guarda CEFIMAT, para qué y cuáles son tus derechos.' },
+  { id:'tc',       titulo:'Leer los Términos y Condiciones', corto:'Términos',   icon:FileText,
+    explica:'Lee el documento oficial de CEFIMAT. Explica la garantía del curso, la regla de retardos y tus obligaciones.' },
   { id:'docs',     titulo:'Subir tus documentos',            corto:'Documentos', icon:Upload,
     explica:'Sube tu CURP y la identificación (INE) de tu tutor. Sirve una foto clara o un PDF.' },
   { id:'garantia', titulo:'Firmar la garantía del curso',    corto:'Garantía',   icon:FileSignature,
@@ -357,6 +358,8 @@ export default function Terms() {
   const { student: s, group, loading, error } = useStudentData()
   // El comprobante de inscripción solo existe para ECOEMS.
   const esEcoems = (group?.curso ?? (group?.institucion === 'ecoems' ? 'ecoems' : null)) === 'ecoems'
+  // Universidad con UNAM entre sus instituciones: puede subir su comprobante de examen (opcional).
+  const esUnam = !esEcoems && ((group?.instituciones ?? []).includes('unam') || group?.institucion === 'unam')
 
   const [documents, setDocuments]         = useState([])
   const [termsDocument, setTermsDocument] = useState(null)
@@ -452,6 +455,7 @@ export default function Terms() {
       return d && d.status !== 'rechazado'
     }
     if (type === 'comprobante_ecoems') { setNota('✓ Comprobante de inscripción ECOEMS recibido.'); return }
+    if (type === 'comprobante_unam') { setNota('✓ Comprobante de examen UNAM recibido.'); return }
     if (tiene('curp') && tiene('ine_tutor')) completar('docs')
     else setNota(tiene('curp') ? '✓ CURP recibida. Ahora sube la INE de tu tutor.' : '✓ INE recibida. Ahora sube tu CURP.')
   }
@@ -466,8 +470,8 @@ export default function Terms() {
   }
 
   const requisitosFirma = [
-    { ok: estadoDe('tc').estado === 'hecho',   label:'Leíste los Términos y Condiciones', paso:'tc' },
     { ok: estadoDe('priv').estado === 'hecho', label:'Leíste el Aviso de Privacidad',     paso:'priv' },
+    { ok: estadoDe('tc').estado === 'hecho',   label:'Leíste los Términos y Condiciones', paso:'tc' },
     { ok: estadoDe('docs').estado === 'hecho', label:'Subiste tu CURP y la INE de tu tutor', paso:'docs' },
     // Sin esto se podía "enviar" con la garantía pendiente y el alumno creía
     // haber terminado cuando su expediente seguía incompleto.
@@ -663,6 +667,20 @@ export default function Terms() {
                   icon={FileText} fileName={docs.ecoems?.file_name} estado={docs.ecoems?.status}
                   motivo={docs.ecoems?.rejection_reason}
                   onChange={f => subirDocDePaso('comprobante_ecoems', f)} disabled={!!uploading}/>
+              </div>
+            )}
+            {/* Comprobante de examen UNAM: igual de opcional que el de ECOEMS. */}
+            {esUnam && (
+              <div className="pt-3 mt-1 space-y-2" style={{ borderTop:'1px dashed var(--divider)' }}>
+                <p className="text-xs" style={{ color:'var(--t3)' }}>
+                  <b style={{ color:'var(--t2)' }}>Opcional:</b> si ya tienes tu comprobante del examen de la UNAM, súbelo aquí.
+                  Si aún no lo tienes, puedes subirlo después: no te impide terminar.
+                </p>
+                <DocUpload
+                  label={uploading === 'comprobante_unam' ? 'Subiendo comprobante…' : 'Comprobante de examen UNAM'}
+                  icon={FileText} fileName={docs.unam?.file_name} estado={docs.unam?.status}
+                  motivo={docs.unam?.rejection_reason}
+                  onChange={f => subirDocDePaso('comprobante_unam', f)} disabled={!!uploading}/>
               </div>
             )}
           </>

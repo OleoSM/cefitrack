@@ -317,6 +317,7 @@ export default function TermsManager() {
           const gar  = s.documents?.find(d => d.document_type === 'garantia')
           const tyc  = s.documents?.find(d => d.document_type === 'terminos')
           const ecoems = s.documents?.find(d => d.document_type === 'comprobante_ecoems')
+          const unam = s.documents?.find(d => d.document_type === 'comprobante_unam')
           const accesoActivo = s.accesoEstado === 'activo'
 
           /* Firma T&C — validarla es verla y, si no procede, resetearla.
@@ -392,8 +393,9 @@ export default function TermsManager() {
             onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
           const celdaIne = <CeldaDocumento etiqueta="INE tutor" doc={ine} onVer={verDocumento}
             onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
-          /* Comprobante ECOEMS: opcional, solo aparece cuando el alumno lo subió. */
-          const celdaEcoems = ecoems && <CeldaDocumento etiqueta="Comprobante ECOEMS" doc={ecoems} onVer={verDocumento}
+          /* Comprobantes de examen (ECOEMS o UNAM): opcionales, solo aparecen cuando el alumno los subió. */
+          const comprobante = ecoems ?? unam
+          const celdaEcoems = comprobante && <CeldaDocumento etiqueta={ecoems ? 'Comprobante ECOEMS' : 'Comprobante UNAM'} doc={comprobante} onVer={verDocumento}
             onAprobar={aprobarDocumento} onRechazar={setRechazo} ocupado={ocupado}/>
 
           return (

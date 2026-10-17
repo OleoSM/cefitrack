@@ -12,17 +12,19 @@
  */
 import { supabase } from './supabaseClient'
 
+// `color`: sobre fondo claro (IPN/UNAM); `oscuro`: sobre el tema oscuro. Ambos
+// con contraste ≥3:1 para que la barra de avance no se pierda en la tarjeta.
 export const LIGAS = [
-  { id: 'bronce',    nombre: 'Bronce',    color: '#B87333' },
-  { id: 'plata',     nombre: 'Plata',     color: '#A8B4C2' },
-  { id: 'oro',       nombre: 'Oro',       color: '#E0A526' },
-  { id: 'platino',   nombre: 'Platino',   color: '#8EA3B8' },
-  { id: 'esmeralda', nombre: 'Esmeralda', color: '#1F9D63' },
-  { id: 'rubi',      nombre: 'Rubí',      color: '#C8304A' },
-  { id: 'zafiro',    nombre: 'Zafiro',    color: '#2F6FD6' },
-  { id: 'diamante',  nombre: 'Diamante',  color: '#4FB8E0' },
-  { id: 'maestro',   nombre: 'Maestro',   color: '#7B4FC2' },
-  { id: 'leyenda',   nombre: 'Leyenda',   color: '#7A1A33' },
+  { id: 'bronce',    nombre: 'Bronce',    color: '#B87333', oscuro: '#C98545' },
+  { id: 'plata',     nombre: 'Plata',     color: '#7C8A99', oscuro: '#A8B4C2' },
+  { id: 'oro',       nombre: 'Oro',       color: '#B07A0A', oscuro: '#E0A526' },
+  { id: 'platino',   nombre: 'Platino',   color: '#5F7A94', oscuro: '#8EA3B8' },
+  { id: 'esmeralda', nombre: 'Esmeralda', color: '#1F9D63', oscuro: '#2DB877' },
+  { id: 'rubi',      nombre: 'Rubí',      color: '#C8304A', oscuro: '#E04F68' },
+  { id: 'zafiro',    nombre: 'Zafiro',    color: '#2F6FD6', oscuro: '#5B8FE8' },
+  { id: 'diamante',  nombre: 'Diamante',  color: '#1F8FBF', oscuro: '#4FB8E0' },
+  { id: 'maestro',   nombre: 'Maestro',   color: '#7B4FC2', oscuro: '#9F7AE0' },
+  { id: 'leyenda',   nombre: 'Leyenda',   color: '#7A1A33', oscuro: '#C0405F' },
 ]
 export const NIVELES_POR_LIGA = 10
 export const NIVEL_MAXIMO = LIGAS.length * NIVELES_POR_LIGA   // 100

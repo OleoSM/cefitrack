@@ -965,4 +965,13 @@ html[data-movimiento='reducido'] .celda-foco { animation: none; }
   100% { transform: rotate(0deg) scale(1);    filter: drop-shadow(0 0 2px rgba(242,179,61,.6)); }
 }
 .estrella-leyenda { animation: estrellaLeyenda 1.8s ease-in-out infinite; transform-origin: center; }
+/* En IPN y UNAM, sin resplandor: solo gira y late, con una sombra neutra. */
+@keyframes estrellaLeyendaMate {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  50%      { transform: rotate(18deg) scale(1.18); }
+}
+[data-theme-light] .estrella-leyenda { animation-name: estrellaLeyendaMate; filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
+/* Barra de avance de la liga: tono propio para fondo oscuro y para fondo claro. */
+.barra-liga { background: var(--liga-oscuro); }
+[data-theme-light] .barra-liga { background: var(--liga-claro); }
 @media (prefers-reduced-motion: reduce) { .estrella-leyenda { animation: none; } }

@@ -70,7 +70,7 @@ export default function TarjetaLiga({ studentId = null, compacta = false }) {
           <div>
             <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--soft-bg)' }} role="progressbar"
               aria-valuenow={Math.round(l.progreso * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Avance hacia la siguiente división">
-              <div className="h-full rounded-full" style={{ width: `${l.progreso * 100}%`, background: l.liga.color }}/>
+              <div className="barra-liga h-full rounded-full" style={{ width: `${l.progreso * 100}%`, '--liga-claro': l.liga.color, '--liga-oscuro': l.liga.oscuro }}/>
             </div>
             <p className="text-[11px] mt-1" style={{ color: 'var(--t3)' }}>
               {l.faltan === 1 ? 'Te falta 1 clase' : `Te faltan ${l.faltan} clases`} para {l.siguiente}
@@ -86,7 +86,7 @@ export default function TarjetaLiga({ studentId = null, compacta = false }) {
               <Trophy size={13}/> Mejor racha: {r.mejorRacha}
             </span>
           )}
-          <button type="button" onClick={() => setVerLigas(true)} className="flex items-center gap-1 font-semibold underline min-h-6" style={{ color: 'var(--t2)' }}>
+          <button type="button" onClick={() => setVerLigas(true)} className="flex items-center gap-1 font-semibold underline min-h-11 px-1 -my-3" style={{ color: 'var(--t2)' }}>
             <Layers size={13}/> Ver ligas
           </button>
         </div>

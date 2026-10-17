@@ -625,6 +625,7 @@ export async function resetStudentPassword(studentId, password) {
     p_student_id: studentId,
     p_password: password,
   })
+  if (error?.message?.includes('contrasena_corta')) return { ok: false, message: 'La contraseña debe tener al menos 6 caracteres.' }
   if (error) return { ok: false, message: 'No se pudo restablecer la contraseña.' }
   return { ok: true, email: data?.[0]?.email ?? null }
 }

@@ -544,7 +544,9 @@ export default function Attendance() {
             <FileSpreadsheet size={15}/> Respaldo completo del grupo (Excel)
           </button>
         )}
-        {sessionIndex.filter(s => s.groupId === historyGroupId).map(s => {
+        <ProgressiveList items={sessionIndex.filter(s => s.groupId === historyGroupId)} className="space-y-2"
+          sizes={{ mobile: 5, tablet: 8, desktop: 12 }} emptyLabel="Este grupo aún no tiene listas guardadas.">
+        {s => {
           const actual = view === 'scan' && s.date === selectedDate
           return (
             <div key={s.date}
@@ -580,10 +582,8 @@ export default function Attendance() {
               </div>
             </div>
           )
-        })}
-        {sessionIndex.every(s => s.groupId !== historyGroupId) && (
-          <p className="text-sm py-6 text-center" style={{ color:'var(--t3)' }}>Este grupo aún no tiene listas guardadas.</p>
-        )}
+        }}
+        </ProgressiveList>
       </div>
     </ModalPortal>
   )

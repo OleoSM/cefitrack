@@ -129,7 +129,7 @@ export default function ResetPasswordModal({ student, onClose, onDone }) {
                   <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5"
                     style={{ color: 'var(--t3)' }}>Nueva contraseña</label>
                   <div className="flex gap-2">
-                    <input required value={password} onChange={e => setPassword(e.target.value)}
+                    <input required minLength={6} value={password} onChange={e => setPassword(e.target.value)}
                       className="input-field flex-1 font-mono" autoFocus/>
                     <button type="button" onClick={() => setPassword(generarPassword())}
                       className="btn-secondary px-3" title="Sugerir otra">
@@ -137,7 +137,7 @@ export default function ResetPasswordModal({ student, onClose, onDone }) {
                     </button>
                   </div>
                   <p className="text-[11px] mt-1.5" style={{ color:'var(--t3)' }}>
-                    Puedes escribir la que quieras; el botón sólo sugiere una.
+                    Puedes escribir la que quieras (mínimo 6 caracteres); el botón sólo sugiere una. Al guardarla se cierra su sesión en otros dispositivos.
                   </p>
                 </div>
 

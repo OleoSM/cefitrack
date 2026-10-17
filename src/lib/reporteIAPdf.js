@@ -239,5 +239,5 @@ export async function descargarReporteIAPdf({ reporte, tipo, nombre, vistaPrevia
 
   // `vistaPrevia`: devuelve la URL del PDF en vez de descargarlo.
   if (vistaPrevia) return doc.output('bloburl')
-  doc.save(`reporte_ia_${slug(nombre)}_${new Date(reporte.created_at).toISOString().slice(0, 10)}.pdf`)
+  doc.save(`reporte_ia_${slug(nombre)}_${new Date(reporte.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })}.pdf`)
 }

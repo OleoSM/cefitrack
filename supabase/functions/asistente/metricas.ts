@@ -20,10 +20,11 @@ const NOMBRE_TIPO: Record<string, string> = {
   simulacro: 'simulacros', examen: 'exámenes',
 }
 
-/** Valor de una celda en escala 0-10; NP cuenta como 0 y "no entregado". */
+/** Valor de una celda en escala 0-10. NP ("no presentó") NO entra al promedio
+ *  —igual que en la hoja y en students.avg_grade—, solo se cuenta aparte. */
 function nota(c: Col, v: string | undefined): { n: number | null, np: boolean } {
   if (v == null || v === '') return { n: null, np: false }
-  if (v === 'NP') return { n: 0, np: true }
+  if (v === 'NP') return { n: null, np: true }
   const x = Number(v)
   if (Number.isNaN(x)) return { n: null, np: false }
   return { n: (x / (Number(c.cal_max) || 10)) * 10, np: false }
@@ -44,9 +45,12 @@ async function hojaDelGrupo(db: SupabaseClient, groupId: string) {
       .eq('group_id', groupId),
     db.from('registro_valores').select('student_id, columna_id, valor, registro_columnas!inner(group_id)')
       .eq('registro_columnas.group_id', groupId),
-    db.from('attendance_sessions').select('id').eq('group_id', groupId),
+    db.from('attendance_sessions').select('id, session_date, finished').eq('group_id', groupId),
   ])
-  const ids = (sesiones ?? []).map((s: any) => s.id)
+  // Solo sesiones terminadas o de días pasados: la clase en curso no cuenta
+  // como falta para quien todavía no llega (mismo criterio que las rachas).
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+  const ids = (sesiones ?? []).filter((s: any) => s.finished || s.session_date < hoy).map((s: any) => s.id)
   const { data: registros } = ids.length
     ? await db.from('attendance_records').select('student_id, session_id, status').in('session_id', ids)
     : { data: [] }
@@ -54,11 +58,18 @@ async function hojaDelGrupo(db: SupabaseClient, groupId: string) {
     .sort((a, b) => a.materia_orden - b.materia_orden || a.orden - b.orden || a.created_at.localeCompare(b.created_at))
   const celda: Record<string, Record<string, string>> = {}
   for (const v of (vals ?? []) as Valor[]) (celda[v.student_id] ??= {})[v.columna_id] = v.valor
-  return { columnas, celda, sesiones: ids.length, registros: (registros ?? []) as any[] }
+  // Calificaciones que el servidor SÍ cuenta para el promedio (evaluations):
+  // excluye NP y las que no cumplen su prerrequisito. Así el promedio del
+  // reporte es el mismo que el de la app.
+  const { data: evals } = columnas.length
+    ? await db.from('evaluations').select('student_id, columna_id').in('columna_id', columnas.map(c => c.id))
+    : { data: [] }
+  const cuentan = new Set((evals ?? []).map((e: any) => `${e.student_id}:${e.columna_id}`))
+  return { columnas, celda, cuentan, sesiones: ids.length, registros: (registros ?? []) as any[] }
 }
 
 /** Indicadores de UN alumno con su hoja (sin comparación con el grupo). */
-function calcular(columnas: Col[], celda: Record<string, string>) {
+function calcular(columnas: Col[], celda: Record<string, string>, cuentan: Set<string>, studentId: string) {
   const porMateria: Record<string, { notas: number[], serie: number[], np: number, sin: number, total: number,
     porTipo: Record<string, number[]>, checks: { hechos: number, total: number } }> = {}
   const porTipo: Record<string, number[]> = {}
@@ -77,7 +88,7 @@ function calcular(columnas: Col[], celda: Record<string, string>) {
     if (np) m.np++
     if (n == null) { m.sin++; continue }
     m.serie.push(n)
-    if (!c.cuenta_en_promedio) continue
+    if (!c.cuenta_en_promedio || !cuentan.has(`${studentId}:${c.id}`)) continue
     m.notas.push(n); todas.push(n)
     ;(m.porTipo[c.tipo] ??= []).push(n)
     ;(porTipo[c.tipo] ??= []).push(n)
@@ -114,8 +125,8 @@ export async function metricasAlumno(db: SupabaseClient, studentId: string) {
   const yo = ctx.alumnos.find((x: any) => x.id === studentId)
   if (!yo || !ctx.grupo) return null
 
-  const mio = calcular(hoja.columnas, hoja.celda[studentId] ?? {})
-  const delGrupo = ctx.alumnos.map((x: any) => ({ id: x.id, ...calcular(hoja.columnas, hoja.celda[x.id] ?? {}) }))
+  const mio = calcular(hoja.columnas, hoja.celda[studentId] ?? {}, hoja.cuentan, studentId)
+  const delGrupo = ctx.alumnos.map((x: any) => ({ id: x.id, ...calcular(hoja.columnas, hoja.celda[x.id] ?? {}, hoja.cuentan, x.id) }))
   const conPromedio = delGrupo.filter(x => x.promedio != null).sort((p, q) => (q.promedio ?? 0) - (p.promedio ?? 0))
   const posicion = conPromedio.findIndex(x => x.id === studentId)
   const mediaGrupo = (f: (x: ReturnType<typeof calcular>) => number[] | undefined) =>
@@ -161,7 +172,7 @@ export async function metricasGrupo(db: SupabaseClient, groupId: string) {
   const [ctx, hoja] = await Promise.all([contexto(db, groupId), hojaDelGrupo(db, groupId)])
   if (!ctx.grupo) return null
   const filas = ctx.alumnos.map((x: any) => {
-    const c = calcular(hoja.columnas, hoja.celda[x.id] ?? {})
+    const c = calcular(hoja.columnas, hoja.celda[x.id] ?? {}, hoja.cuentan, x.id)
     const asis = asistenciaDe(hoja.registros, x.id, hoja.sesiones)
     const mats = Object.entries(c.porMateria).map(([m, v]) => ({ m, p: media(v.notas) })).filter(v => v.p != null)
     const debil = mats.sort((p, q) => (p.p ?? 0) - (q.p ?? 0))[0]

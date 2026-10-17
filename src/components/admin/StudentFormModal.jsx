@@ -5,6 +5,7 @@ import { altaAlumnoConPago, updateStudent } from '../../lib/supabaseData'
 import { METODOS, METODO_LABEL } from '../../lib/pagosData'
 import { useAuth } from '../../context/AuthContext'
 import { NeonCheckbox } from '../ui/NeonCheckbox'
+import { todayISO } from '../../lib/fecha'
 import { generarPassword, generarUsuario, DOMINIO_CORREO } from '../../lib/credentials'
 import { useSucursales } from '../../hooks/useSucursales'
 import { areasParaInstituciones } from '../../lib/areas'
@@ -25,7 +26,7 @@ export default function StudentFormModal({
   const editing = !!student
   const navigate = useNavigate()
   const { puedeVer } = useAuth()
-  const hoyMes = new Date().toISOString().slice(0, 7)
+  const hoyMes = todayISO().slice(0, 7)   // mes actual en hora de México
   const [pago, setPago] = useState({ total: '', modalidad: 'mensualidades', mensualidades: '6', inicio: hoyMes,
     monto: '', metodo: 'efectivo', esInscripcion: false, referencia: '' })
   const setP = (k, v) => setPago(p => ({ ...p, [k]: v }))

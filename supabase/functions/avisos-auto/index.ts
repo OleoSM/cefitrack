@@ -96,7 +96,7 @@ Deno.serve(async (req: Request) => {
 
   if (accion === 'recordatorios') {
     const hoy = hoyMx(); const en2 = new Date(hoy); en2.setDate(hoy.getDate() + 2)
-    const { data: cols } = await admin.from('registro_columnas').select('id, group_id, materia, nombre, tipo, fecha_entrega')
+    const { data: cols } = await admin.from('registro_columnas').select('id, group_id, materia, nombre, tipo, formato, fecha_entrega')
       .gte('fecha_entrega', isoDia(hoy)).lte('fecha_entrega', isoDia(en2))
     for (const c of cols ?? []) {
       if (yaAvisado.has(`recordatorio_actividad:${c.id}`)) continue
@@ -105,7 +105,9 @@ Deno.serve(async (req: Request) => {
         admin.from('registro_valores').select('student_id, valor').eq('columna_id', c.id),
         admin.from('groups').select('name').eq('id', c.group_id).maybeSingle(),
       ])
-      const entregaron = new Set((valores ?? []).filter((v: any) => v.valor !== null && v.valor !== '').map((v: any) => v.student_id))
+      // En columnas de casilla (sí/no) solo "1" es entregado; un "0" es "no entregó".
+      const entregado = (v: any) => v.valor !== null && v.valor !== '' && !(c.formato === 'check' && v.valor !== '1')
+      const entregaron = new Set((valores ?? []).filter(entregado).map((v: any) => v.student_id))
       const pendientes = (alumnos ?? []).filter((a: any) => !entregaron.has(a.id)) as Alumno[]
       if (!pendientes.length) continue
       const asunto = `Recordatorio: «${c.nombre}» se entrega el ${diaLargo(c.fecha_entrega)}`

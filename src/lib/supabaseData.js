@@ -586,9 +586,13 @@ export async function updateStudent({ id, name, email, groupId, tutor = {}, sucu
 
 export async function deleteStudent(id) {
   const { error } = await supabase.rpc('delete_student', { p_id: id })
-  if (error?.message?.includes('sin_permiso_altas'))
+  if (!error) return { ok: true }
+  const msg = error.message ?? ''
+  if (msg.includes('sin_permiso_altas'))
     return { ok: false, message: 'No tienes permiso para dar de baja alumnos. Pídeselo a un administrador.' }
-  if (error) throw error
+  if (msg.includes('forbidden'))
+    return { ok: false, message: 'No puedes eliminar a un alumno que no es de tus grupos.' }
+  return { ok: false, message: 'No se pudo eliminar al alumno. Inténtalo de nuevo; si sigue fallando, avísanos.' }
 }
 
 /**

@@ -81,7 +81,9 @@ export async function enviarAviso({ alumnos, asunto, mensaje, audiencia = 'ambos
   })
   await crearNotificaciones({ students: alumnos, title: asunto.trim(), body: mensaje.trim() })
   const r = await enviarCorreo(draft.id)
-  if (tipo && refId) {
+  // Solo se marca como avisado si el envío se procesó; si falló, la sugerencia
+  // sigue disponible para reintentar.
+  if (tipo && refId && r?.ok) {
     await supabase.from('avisos_enviados').insert({ tipo, ref_id: String(refId), group_id: groupId, draft_id: draft.id, audiencia })
   }
   return r?.ok ? r : { ok: false, message: r?.message ?? 'No se pudo enviar el correo.' }

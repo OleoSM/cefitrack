@@ -512,7 +512,7 @@ export async function deleteGroup(id) {
 
 /* El alta de alumnos va SIEMPRE con su primer pago: altaAlumnoConPago (abajo). */
 const MENSAJES_ALTA_ALUMNO = {
-  sin_permiso_altas: 'No tienes permiso para dar de alta alumnos. Pídeselo a Dayan o a Mauricio.',
+  sin_permiso_altas: 'No tienes permiso para dar de alta alumnos. Pídeselo a un administrador.',
   forbidden: 'No puedes dar de alta alumnos en ese grupo.',
   email_already_exists: 'Ese correo ya está registrado.',
   group_not_found: 'El grupo seleccionado no existe.',
@@ -546,13 +546,13 @@ export async function altaAlumnoConPago({ name, email, groupId, password, tutor 
   return { ok: true, student: row ? { id: row.id, name: row.name, email: row.email, groupId: row.group_id, planId: row.plan_id } : null }
 }
 
-/** ¿Puedo dar de alta / baja alumnos? ¿Soy dueño (Dayan o Mauricio)? */
+/** ¿Puedo dar de alta / baja alumnos? ¿Puedo cambiar ese permiso a otros? */
 export async function fetchPermisosAltas() {
   const [a, d] = await Promise.all([supabase.rpc('puede_dar_altas'), supabase.rpc('es_dueno')])
   return { puedeDarAltas: a.data === true, esDueno: d.data === true }
 }
 
-/** Lista del permiso de altas por persona (la ven los admins; la editan los dueños). */
+/** Lista del permiso de altas por persona (la ven los admins; solo algunos la editan). */
 export async function fetchListaPermisoAltas() {
   const { data, error } = await supabase.rpc('list_permiso_altas')
   if (error) throw error
@@ -563,8 +563,8 @@ export async function setPermisoAltas(userId, puede) {
   const { error } = await supabase.rpc('set_permiso_altas', { p_user: userId, p_puede: puede })
   if (!error) return { ok: true }
   const msg = error.message ?? ''
-  return { ok: false, message: msg.includes('solo_duenos') ? 'Solo Dayan y Mauricio pueden cambiar este permiso.'
-    : msg.includes('dueno_no_editable') ? 'A Dayan y a Mauricio no se les puede quitar.' : 'No se pudo guardar el permiso.' }
+  return { ok: false, message: msg.includes('solo_duenos') ? 'No tienes permiso para cambiar esto.'
+    : msg.includes('dueno_no_editable') ? 'Este permiso no se puede modificar.' : 'No se pudo guardar el permiso.' }
 }
 
 export async function updateStudent({ id, name, email, groupId, tutor = {}, sucursal = null, personalEmail = null, whatsapp = null, universidadArea = null }) {
@@ -587,7 +587,7 @@ export async function updateStudent({ id, name, email, groupId, tutor = {}, sucu
 export async function deleteStudent(id) {
   const { error } = await supabase.rpc('delete_student', { p_id: id })
   if (error?.message?.includes('sin_permiso_altas'))
-    return { ok: false, message: 'No tienes permiso para dar de baja alumnos. Pídeselo a Dayan o a Mauricio.' }
+    return { ok: false, message: 'No tienes permiso para dar de baja alumnos. Pídeselo a un administrador.' }
   if (error) throw error
 }
 

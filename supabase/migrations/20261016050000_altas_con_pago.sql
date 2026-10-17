@@ -170,3 +170,23 @@ grant execute on function public.es_dueno(), public.puede_dar_altas(), public.li
   to authenticated;
 -- Aplicado el 2026-10-16 tras publicar el frontend nuevo (commit 5a5f183):
 revoke execute on function public.create_student(text, text, text, text, text, text, text, text) from public, anon, authenticated;
+
+-- 2026-10-16: nadie debe ver que los dueños tienen privilegios extra. La lista
+-- ya no los ordena primero y solo otro dueño recibe es_dueno = true.
+create or replace function public.list_permiso_altas()
+returns table(user_id uuid, nombre text, email text, rol text, puede boolean, es_dueno boolean, personalizado boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare v_soy_dueno boolean := public.es_dueno();
+begin
+  if not public.es_admin() then raise exception 'solo_admin'; end if;
+  return query
+  select p.id, p.name, p.email, p.role,
+         (d.user_id is not null) or coalesce(pa.puede, p.role = 'admin'),
+         v_soy_dueno and d.user_id is not null,
+         pa.user_id is not null
+  from profiles p
+  left join duenos d on d.user_id = p.id
+  left join permiso_altas pa on pa.user_id = p.id
+  where p.role in ('admin', 'sub_admin') and coalesce(p.activo, true)
+  order by p.role, p.name;
+end $$;

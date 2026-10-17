@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { UserCheck, Crown, Lock, Search } from 'lucide-react'
+import { UserCheck, Crown, Search } from 'lucide-react'
 import { fetchListaPermisoAltas, setPermisoAltas } from '../../lib/supabaseData'
 import { useAuth } from '../../context/AuthContext'
 import { NeonCheckbox } from '../ui/NeonCheckbox'
@@ -8,8 +8,9 @@ import { SkeletonBlock } from '../ui/DataTable'
 
 /*
  * "Altas y bajas de alumnos" en Acceso y Disposición.
- * Quién puede dar de alta o de baja alumnos. Solo los dueños (Dayan y
- * Mauricio) cambian el permiso; los demás admins lo ven en solo lectura.
+ * Quién puede dar de alta o de baja alumnos. Solo algunos admins pueden
+ * cambiarlo; el resto lo ve en solo lectura. Nadie aparece con privilegios
+ * extra: todos los super admins llevan la misma corona.
  * Los super admins lo tienen por defecto; los sub-admins, solo si se lo dan.
  */
 export default function PermisoAltasPanel() {
@@ -44,8 +45,7 @@ export default function PermisoAltasPanel() {
         <h2 className="section-title flex items-center gap-2"><UserCheck size={16}/> Altas y bajas de alumnos</h2>
         <p className="text-xs mt-1" style={{ color: 'var(--t3)' }}>
           Quién puede dar de alta o de baja alumnos. Toda alta exige registrar el primer pago.
-          {esDueno ? ' Como dueño, puedes cambiar este permiso a cualquier admin o sub-admin.'
-            : ' Solo Dayan y Mauricio pueden cambiar este permiso.'}
+          {esDueno ? ' Puedes cambiar este permiso a cualquier admin o sub-admin.' : ''}
         </p>
       </div>
 
@@ -74,15 +74,13 @@ export default function PermisoAltasPanel() {
             <div key={p.userId} className="flex items-center gap-3 rounded-xl px-3 py-2 min-w-0" style={{ border: '1px solid var(--divider)' }}>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold truncate flex items-center gap-1.5" style={{ color: 'var(--t1)' }}>
-                  {p.esDueno && <Crown size={13} style={{ color: 'var(--warn)' }}/>} {p.nombre}
+                  {p.rol === 'admin' && <Crown size={13} style={{ color: 'var(--warn)' }}/>} {p.nombre}
                 </p>
                 <p className="text-[11px] truncate" style={{ color: 'var(--t3)' }}>
-                  {p.rol === 'admin' ? 'Super admin' : 'Sub-admin'}{p.esDueno ? ' · dueño' : ''} · {p.email}
+                  {p.rol === 'admin' ? 'Super admin' : 'Sub-admin'} · {p.email}
                 </p>
               </div>
-              {p.esDueno ? (
-                <span className="text-xs font-semibold flex items-center gap-1" style={{ color: 'var(--good)' }}><Lock size={12}/> Siempre</span>
-              ) : esDueno ? (
+              {esDueno && !p.esDueno ? (
                 <NeonCheckbox checked={p.puede} disabled={guardando === p.userId}
                   onChange={e => cambiar(p, e.target.checked)}
                   label={<span className="text-xs" style={{ color: 'var(--t2)' }}>{p.puede ? 'Puede' : 'No puede'}</span>}/>

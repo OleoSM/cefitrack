@@ -319,7 +319,7 @@ export default function AccesoDisposicion() {
         </button>
       </div>
 
-      {/* ── Quién puede dar de alta / baja alumnos (lo deciden los dueños) ── */}
+      {/* ── Quién puede dar de alta / baja alumnos ── */}
       <PermisoAltasPanel/>
 
       {/* ── Lista de cuentas ────────────────────────────────── */}

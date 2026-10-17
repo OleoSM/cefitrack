@@ -30,7 +30,7 @@ const USAR_LEGACY = import.meta.env.VITE_AUTH_LEGACY === '1'
 /* Si la consulta de apartados falla, el sub-admin no debe quedarse sin panel:
    recibe los de siempre. El servidor sigue protegiendo Pagos y Correos. */
 const apartadosSeguros = () => fetchMisApartados().catch(() => APARTADOS_POR_DEFECTO)
-/* Permiso de altas y bajas de alumnos y si es dueño (Dayan / Mauricio). Ante
+/* Permiso de altas y bajas de alumnos y si puede cambiarlo a otros. Ante
    un fallo, sin permiso: el servidor lo vuelve a comprobar de todos modos. */
 const permisosSeguros = () => fetchPermisosAltas().catch(() => ({ puedeDarAltas: false, esDueno: false }))
 

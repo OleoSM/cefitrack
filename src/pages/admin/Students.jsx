@@ -336,7 +336,7 @@ export default function Students() {
                         { icon: Pencil,   title: 'Editar alumno',           hover: 'var(--info)', act: () => setFormFor({ student: s }) },
                         { icon: ShieldCheck, title: 'Permisos del portal',  hover: 'var(--accent)', act: () => setPermisosFor(s) },
                         { icon: KeyRound, title: 'Restablecer contraseña',  hover: 'var(--warn)', act: () => setResetFor(s) },
-                        // Dar de baja: solo con el permiso de altas (lo deciden Dayan y Mauricio).
+                        // Dar de baja: solo con el permiso de altas.
                         ...(puedeDarAltas ? [{ icon: Trash2, title: 'Eliminar alumno', hover: 'var(--bad)', act: () => setDeleteFor(s) }] : []),
                       ].map(({ icon: Icon, title, hover, act }) => (
                         <button key={title} title={title}

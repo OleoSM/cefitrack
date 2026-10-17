@@ -168,6 +168,5 @@ grant execute on function public.es_dueno(), public.puede_dar_altas(), public.li
   public.set_permiso_altas(uuid, boolean), public.alta_alumno_con_pago(text, text, text, text, text, text, text, text, numeric, text, integer, date, text, numeric, text, boolean, text),
   public.delete_student(text)
   to authenticated;
--- PENDIENTE al publicar el frontend nuevo (el de producción aún llama create_student):
---   revoke execute on function public.create_student(text, text, text, text, text, text, text, text) from authenticated;
--- Mientras tanto create_student ya exige el permiso de altas.
+-- Aplicado el 2026-10-16 tras publicar el frontend nuevo (commit 5a5f183):
+revoke execute on function public.create_student(text, text, text, text, text, text, text, text) from public, anon, authenticated;

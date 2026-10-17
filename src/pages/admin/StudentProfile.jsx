@@ -273,6 +273,12 @@ export default function StudentProfile() {
                 <h1 className="text-xl font-bold tracking-tight min-w-0" style={{ color:'var(--t1)' }}>
                   {s.name}
                 </h1>
+                {s.matricula && (
+                  <span className="badge font-mono mt-1" title="Matrícula (no cambia aunque cambie de grupo o sucursal)"
+                    style={{ background:'var(--soft-bg)', color:'var(--t1)', border:'1px solid var(--card-border)' }}>
+                    Matrícula {s.matricula}
+                  </span>
+                )}
                 <span className={`badge ${cfg.bg} ${cfg.color} border ${cfg.border} mt-1`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}/>{cfg.label}
                 </span>

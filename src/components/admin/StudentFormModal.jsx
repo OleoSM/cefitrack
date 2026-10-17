@@ -232,6 +232,21 @@ export default function StudentFormModal({
             </p>
           )}
 
+          {/* La matrícula se asigna sola al dar de alta y no cambia nunca. */}
+          {editing ? (
+            <div className="rounded-xl px-3 py-2.5 text-xs space-y-1" style={{ background:'var(--soft-bg)', border:'1px solid var(--card-border)', color:'var(--t2)' }}>
+              <p>Matrícula <strong className="font-mono" style={{ color:'var(--t1)' }}>{student.matricula ?? '—'}</strong> · se conserva aunque cambies su grupo o sucursal.</p>
+              {form.groupId && form.groupId !== student.groupId && (
+                <p style={{ color:'var(--t3)' }}>
+                  Al cambiarlo de grupo, su promedio se calcula con la hoja del grupo nuevo. Sus calificaciones y asistencias
+                  del grupo anterior quedan guardadas y vuelven a aparecer si regresa.
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[10px]" style={{ color:'var(--t4)' }}>La matrícula (4 dígitos) se asigna automáticamente al guardar.</p>
+          )}
+
           {grupoElegido?.curso === 'universidad' && <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--t3)'}}>Área universitaria</label>
             <select required value={form.universidadArea} onChange={e=>set('universidadArea',e.target.value)} className="input-field">

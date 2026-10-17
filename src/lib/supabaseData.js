@@ -111,6 +111,7 @@ export async function fetchStudents() {
   if (error) throw error
   return data.map(s => ({
     id: s.id,
+    matricula: s.matricula ?? null,
     name: s.name,
     email: s.email,
     personalEmail: s.personal_email,
@@ -152,6 +153,7 @@ export async function fetchStudentById(id) {
   if (!data) return null
   return {
     id: data.id,
+    matricula: data.matricula ?? null,
     name: data.name,
     email: data.email,
     personalEmail: data.personal_email,

@@ -20,7 +20,8 @@ const FONT = "'Plus Jakarta Sans', Manrope, system-ui, -apple-system, sans-serif
 const CW = 600, CH = 950   // canvas dimensions (portrait)
 const cycleStart = new Date().getMonth() >= 7 ? new Date().getFullYear() : new Date().getFullYear() - 1
 const SCHOOL_CYCLE = `${cycleStart} – ${cycleStart + 1}`
-const studentFolio = id => `CEF-${String(id ?? '').replace(/-/g,'').slice(-8).toUpperCase().padStart(8,'0')}`
+// Folio de la credencial: la matrícula del alumno (4 dígitos, permanente).
+const studentFolio = s => s?.matricula ? `MATRÍCULA ${s.matricula}` : `CEF-${String(s?.id ?? '').replace(/-/g,'').slice(-8).toUpperCase().padStart(8,'0')}`
 
 /* ════════════════════════════════════════════════════════════════
    TEMA DE LA CREDENCIAL — derivado del color que eligió el alumno
@@ -229,7 +230,7 @@ async function buildFront(student, grp, svgString, theme, avatarSrc, branchName)
   wrapText(ctx, RESP, CW / 2, ftY + 30, CW - 64, 18)
   ctx.fillStyle = theme.labelColor
   ctx.font = `700 9px ${FONT}`
-  ctx.fillText(studentFolio(student.id), CW / 2, CH - 14)
+  ctx.fillText(studentFolio(student), CW / 2, CH - 14)
 
   return canvas
 }
@@ -324,7 +325,7 @@ async function buildBack(student, grp, theme, avatarSrc, targetSchool, branchNam
   ctx.font = `500 9.5px ${FONT}`
   ctx.fillText('Imprimir · Recortar · Enmicar', CW / 2, CH - 34)
   ctx.font = `700 9px ${FONT}`
-  ctx.fillText(studentFolio(student.id), CW / 2, CH - 17)
+  ctx.fillText(studentFolio(student), CW / 2, CH - 17)
 
   return canvas
 }
@@ -372,7 +373,7 @@ function FrontCard({ student, grp, branchName, qrValue, theme, avatar }) {
       {/* Footer */}
       <div style={{ background: theme.footerBg, padding: '7px 11px', borderTop: `1px solid ${theme.accent}28`, marginTop:'auto' }}>
         <p style={{ color: theme.footerText, fontSize: 6.8, textAlign: 'center', lineHeight: 1.55, margin: 0 }}>{RESP}</p>
-        <p style={{ color:theme.labelColor, fontSize:6.5, textAlign:'center', fontWeight:800, letterSpacing:'.1em', margin:'4px 0 0' }}>{studentFolio(student.id)}</p>
+        <p style={{ color:theme.labelColor, fontSize:6.5, textAlign:'center', fontWeight:800, letterSpacing:'.1em', margin:'4px 0 0' }}>{studentFolio(student)}</p>
       </div>
     </div>
   )
@@ -422,7 +423,7 @@ function BackCard({ student, grp, branchName, theme, avatar, targetSchool }) {
       <div style={{ background: theme.footerBg, padding: '7px 11px', borderTop: `1px solid ${theme.accent}28`, marginTop:'auto' }}>
         <p style={{ color: theme.labelColor, fontSize: 8.5, textAlign: 'center', fontWeight: 700, margin: '0 0 3px' }}>⚠</p>
         <p style={{ color: theme.footerText, fontSize: 6.8, textAlign: 'center', lineHeight: 1.55, margin: 0 }}>{RESP}</p>
-        <p style={{ color:theme.labelColor, fontSize:6.5, textAlign:'center', fontWeight:800, letterSpacing:'.1em', margin:'4px 0 0' }}>{studentFolio(student.id)}</p>
+        <p style={{ color:theme.labelColor, fontSize:6.5, textAlign:'center', fontWeight:800, letterSpacing:'.1em', margin:'4px 0 0' }}>{studentFolio(student)}</p>
       </div>
     </div>
   )

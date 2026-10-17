@@ -115,7 +115,7 @@ export default function Students() {
     .filter(s => {
       const q = query.toLowerCase()
       const grp = groups.find(g => g.id === s.groupId)
-      return (s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q))
+      return (s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q) || String(s.matricula ?? '').includes(q))
         && (sucursalFilter === TODAS || grp?.sucursal === sucursalFilter)
         && (groupFilter === 'all' || s.groupId === groupFilter)
         && (statusFilter === 'all' || s.status === statusFilter)
@@ -180,7 +180,7 @@ export default function Students() {
             options:[{ value:'name', label:'Nombre A-Z' }, { value:'grade', label:'Mayor promedio' },
               { value:'attend', label:'Mayor asistencia' }] },
         ]}
-        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar alumno…',
+        busqueda={{ value: query, onChange: setQuery, placeholder:'Buscar por nombre, correo o matrícula…',
           coincidencias: students.filter(s => visibleGroupIds.has(s.groupId)).map(s => ({
             id: s.id, label: s.name, sub: groups.find(g => g.id === s.groupId)?.name ?? '' })),
           onElegir: id => navigate(`/admin/alumnos/${id}`) }}
@@ -242,6 +242,7 @@ export default function Students() {
                       avatarSrc={s.avatarSrc}
                       name={s.name}
                       sub={<>
+                        {s.matricula && <span className="font-mono font-semibold" style={{ color:'var(--t2)' }}>#{s.matricula} · </span>}
                         <span className="sm:hidden">{grp?.name}</span>
                         <span className="hidden sm:inline">{s.email}</span>
                       </>}

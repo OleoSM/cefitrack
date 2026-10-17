@@ -498,7 +498,7 @@ export default function Attendance() {
     if (!sesiones.length) return
     const wb = XLSX.utils.book_new()
     const resumen = alumnos.map((s, i) => {
-      const fila = { '#': i + 1, 'Alumno': s.name }
+      const fila = { '#': i + 1, 'Matrícula': s.matricula ?? '', 'Alumno': s.name }
       let asistio = 0
       for (const ses of sesiones) {
         const reg = ses.records.find(r => r.studentId === s.id)

@@ -4,16 +4,16 @@ import AvatarAlumno from '../../components/ui/AvatarAlumno'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import {
-  Plus, Minus, Check, ChevronDown, ChevronRight,
+  Plus, Check, ChevronDown, ChevronRight,
   UserPlus, X, Maximize2, SlidersHorizontal,
   ArrowLeft, Calendar, Shield, Users, Clock,
-  Save, RotateCw, Download, Pencil, Search, Columns2, Rows3, GripVertical, AlertTriangle,
+  Save, RotateCw, Download, Pencil, Search, Columns2, Rows3, GripVertical, AlertTriangle, Trash2, Undo2,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
   fetchGroups, fetchStudents,
   fetchColumnasRegistro, fetchCeldasRegistro, fetchAsistenciaRegistro,
-  setCeldaRegistro, crearColumnaRegistro, borrarColumnaRegistro, setRegistroAdmin,
+  setCeldaRegistro, crearColumnaRegistro, borrarColumnasRegistro, setRegistroAdmin,
   actualizarContactoAlumno, reordenarRegistro, configurarColumnaRegistro,
   configurarRequisitoColumna, agregarBloqueExamen, fetchOrdenBloques, guardarOrdenBloques, setFechaEntrega,
 } from '../../lib/supabaseData'
@@ -935,12 +935,12 @@ function SectionHeader({ label, cols, color, collapsed, onToggle, onAdd, onRemov
             <Plus size={9}/>{tituloAdd !== 'Añadir' && <span style={{ fontSize:9, letterSpacing:0 }}>{tituloAdd}</span>}
           </button>
         )}
-        {/* Quitar último ítem */}
+        {/* Eliminar la sección entera (pide confirmación y da 3 s para deshacer) */}
         {onRemoveItem && !collapsed && (
-          <button onClick={e=>{ e.stopPropagation(); onRemoveItem() }}
-            className="w-4 h-4 rounded flex items-center justify-center hover:bg-red-500/30 transition-colors active:scale-90"
-            title="Quitar último">
-            <Minus size={9}/>
+          <button type="button" onClick={e=>{ e.stopPropagation(); onRemoveItem() }}
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/20 transition-colors active:scale-90"
+            title={`Eliminar la sección ${label}`} aria-label={`Eliminar la sección ${label}`}>
+            <Trash2 size={10}/>
           </button>
         )}
       </span>
@@ -984,8 +984,9 @@ function AreaCell({ value, onChange, bg, sc }) {
 
 /* `locked` marca las columnas del esqueleto de la hoja —documentos, pago,
    garantía, área, asistencia y las secciones de la plantilla base—. No se
-   renombran ni se borran: renombrarlas rompe el significado de la columna para
-   quien la lea después, y borrarlas por accidente se lleva las notas. */
+   renombran: cambiarles el nombre rompe su significado para quien la lea
+   después. Las de la plantilla base (Tareas, Simulacros…) sí se pueden borrar
+   con `onRemove`: hay confirmación y 3 segundos para deshacer. */
 /* `arrastre` (columnas de materia): { id, materia, activo, onDown, onKey } —
    asa para mover la columna dentro de su materia. */
 function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52, rowSpan, style: extraStyle, locked, arrastre, onConfigurar, formato, cuenta, requisito, garantia = true, bloque }) {
@@ -1036,6 +1037,12 @@ function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52,
             <SlidersHorizontal size={10}/>
           </button>
         )}
+        {onRemove && (
+          <button type="button" onClick={onRemove} title={`Eliminar ${value}`} aria-label={`Eliminar ${value}`}
+            className="shrink-0 rounded flex items-center justify-center hover:opacity-70" style={{ color:textColor, width:22, height:22 }}>
+            <Trash2 size={10}/>
+          </button>
+        )}
       </span>
     </th>
   )
@@ -1081,9 +1088,9 @@ function EditableColumnHeader({ value, onChange, onRemove, light, minWidth = 52,
           {onRemove && (
             <button type="button" onClick={onRemove} title={`Eliminar ${value}`}
               aria-label={`Eliminar ${value}`}
-              className="shrink-0 rounded flex items-center justify-center"
-              style={{ color:'var(--bad)', width:22, height:22 }}>
-              <X size={11}/>
+              className="shrink-0 rounded flex items-center justify-center transition-opacity hover:opacity-70"
+              style={{ color:textColor, width:22, height:22 }}>
+              <Trash2 size={10}/>
             </button>
           )}
         </span>
@@ -1460,6 +1467,10 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
   }, [])
 
+  /* Columnas en la cuenta regresiva de "Deshacer": ya no se pintan aunque la
+     hoja se recargue, pero todavía no se han borrado en la base. */
+  const ocultas = useRef(new Set())
+
   /* ── Carga de la hoja desde la BD ───────────────────────────── */
   const cargarHoja = useCallback(async () => {
     setErrorHoja(null)
@@ -1479,6 +1490,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
       // Las columnas llegan planas; la hoja las dibuja agrupadas por materia.
       const porMateria = new Map()
       for (const c of cols) {
+        if (ocultas.current.has(c.id)) continue
         if (!porMateria.has(c.materia)) {
           porMateria.set(c.materia, {
             id: c.materia, name: c.materia,
@@ -1663,9 +1675,8 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
   const resetCollapsed = () => setCollapsed({})
 
   /* Las secciones que crea `asegurar_plantilla_base` son el esqueleto de la
-     hoja: se distinguen porque sus columnas vienen marcadas `es_fija`. Ni se
-     renombran ni se borran —el error que se quiere evitar es quedarse sin la
-     sección de documentos o de exámenes por un clic de más—. */
+     hoja: se distinguen porque sus columnas vienen marcadas `es_fija`. No se
+     renombran; borrarlas sí se puede, con confirmación y 3 s para deshacer. */
   const esSeccionFija = subj => subj.cols.some(c => c.esFija)
   const esUniversidad = (group.curso ?? (group.institucion === 'ecoems' ? 'ecoems' : 'universidad')) === 'universidad'
 
@@ -1917,17 +1928,6 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
     } catch { return { ok: false, message: 'No se pudo guardar la sección. Revisa tu conexión.' } }
   }
 
-  const removeSubject = async subjId => {
-    const materia = subjects.find(s => s.id === subjId)
-    if (!materia) return
-    try {
-      await Promise.all(materia.cols.map(c => borrarColumnaRegistro(c.id)))
-      await cargarHoja()
-      onDataChange?.()
-    } catch { setErrorHoja('No se pudo eliminar la sección.') }
-    setSubjects(p => p.filter(s => s.id !== subjId))
-  }
-
   // Crear: primero la columna y, si no es la configuración por defecto, se
   // configura en el acto. Devuelve { ok, message } a la ventana.
   const addCol = async (subjId, cfg) => {
@@ -2011,38 +2011,94 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
   const contarValores = claves => students.reduce((n, s) => n + claves.filter(k => {
     const v = cells[s.id]?.[k]; return v !== undefined && v !== null && v !== ''
   }).length, 0)
-  const pedirBorrarColumna = (subjId, col) => setBorrarPend({
-    tipo: 'columna', subjId, colId: col.id, nombre: col.name, valores: contarValores([`${subjId}_${col.id}`]),
-  })
+  /* Guía, examen y análisis del mismo número van juntos: borrar solo el
+     examen dejaría la guía y el análisis sueltos. */
+  const TIPOS_BLOQUE = ['guia', 'examen', 'analisis']
+  const numeroBloque = c => (c.materia === 'Exámenes' && TIPOS_BLOQUE.includes(c.t)) ? c.name.match(/(\d+)$/)?.[1] ?? null : null
+  const pedirBorrarColumna = (subjId, col) => {
+    const n = numeroBloque(col)
+    const bloque = n ? (subjects.find(s => s.id === subjId)?.cols ?? []).filter(c => numeroBloque(c) === n) : []
+    const cols = bloque.length > 1 ? bloque : [col]
+    setBorrarPend({
+      tipo: bloque.length > 1 ? 'examen' : 'columna', nombre: bloque.length > 1 ? `Examen ${n}` : col.name,
+      ids: cols.map(c => c.id), columnas: cols.length, valores: contarValores(cols.map(c => `${subjId}_${c.id}`)),
+    })
+  }
   const pedirBorrarSeccion = subjId => {
     const materia = subjects.find(s => s.id === subjId)
     if (!materia) return
-    setBorrarPend({ tipo: 'seccion', subjId, nombre: materia.name, columnas: materia.cols.length,
+    setBorrarPend({ tipo: 'seccion', nombre: materia.name, ids: materia.cols.map(c => c.id), columnas: materia.cols.length,
       valores: contarValores(materia.cols.map(c => `${subjId}_${c.id}`)) })
   }
-  const confirmarBorrado = async () => {
+
+  /* Borrado con 3 segundos para deshacer: lo borrado desaparece de la hoja en
+     el acto, pero el borrado real se manda al terminar la cuenta. "Deshacer"
+     solo cancela el envío, así que no hay nada que reconstruir. */
+  const SEGUNDOS_DESHACER = 3
+  const [deshacer, setDeshacer] = useState(null)   // { etiqueta, restante }
+  const pendiente = useRef(null)                   // { ids, timer, tick }
+  const enviarBorrado = async p => {
+    clearTimeout(p.timer); clearInterval(p.tick)
+    if (pendiente.current === p) { pendiente.current = null; setDeshacer(null) }
+    try { await borrarColumnasRegistro(p.ids) }
+    catch { setErrorHoja('No se pudo eliminar. Vuelve a intentarlo.') }
+    p.ids.forEach(id => ocultas.current.delete(id))
+    await cargarHoja()
+    onDataChange?.()   // borrar columnas cambia promedios
+  }
+  const programarBorrado = (ids, etiqueta) => {
+    if (pendiente.current) enviarBorrado(pendiente.current)   // el anterior ya no se puede deshacer
+    ids.forEach(id => ocultas.current.add(id))
+    setSubjects(prev => prev.map(s => ({ ...s, cols: s.cols.filter(c => !ids.includes(c.id)) })).filter(s => s.cols.length))
+    const p = { ids }
+    let restante = SEGUNDOS_DESHACER
+    p.tick = setInterval(() => { restante -= 1; setDeshacer(d => d && { ...d, restante: Math.max(1, restante) }) }, 1000)
+    p.timer = setTimeout(() => enviarBorrado(p), SEGUNDOS_DESHACER * 1000)
+    pendiente.current = p
+    setDeshacer({ etiqueta, restante })
+  }
+  const deshacerBorrado = () => {
+    const p = pendiente.current
+    if (!p) return
+    clearTimeout(p.timer); clearInterval(p.tick)
+    pendiente.current = null; setDeshacer(null)
+    p.ids.forEach(id => ocultas.current.delete(id))
+    cargarHoja()
+  }
+  // Si se sale de la hoja durante la cuenta, el borrado se envía igual.
+  const enviarAlSalir = useRef(enviarBorrado)
+  enviarAlSalir.current = enviarBorrado
+  useEffect(() => () => { if (pendiente.current) enviarAlSalir.current(pendiente.current) }, [])
+
+  const confirmarBorrado = () => {
     const p = borrarPend
-    if (p.tipo === 'columna') await removeCol(p.subjId, p.colId)
-    else await removeSubject(p.subjId)
+    const etiqueta = p.tipo === 'seccion' ? `la sección «${p.nombre}»` : p.tipo === 'examen' ? `el bloque «${p.nombre}»` : `«${p.nombre}»`
+    programarBorrado(p.ids, etiqueta)
   }
   const dialogoBorrado = borrarPend && (
     <ConfirmDialog
-      title={borrarPend.tipo === 'columna' ? `¿Eliminar la columna "${borrarPend.nombre}"?` : `¿Eliminar la sección "${borrarPend.nombre}"?`}
-      message={borrarPend.tipo === 'columna'
-        ? `Se borra la columna y ${borrarPend.valores} calificación(es) capturada(s) en ella.`
-        : `Se borran sus ${borrarPend.columnas} columna(s) y ${borrarPend.valores} calificación(es) capturada(s).`}
-      detail="Los promedios del grupo se recalculan. Esta acción no se puede deshacer."
+      title={borrarPend.tipo === 'seccion' ? `¿Eliminar la sección "${borrarPend.nombre}"?`
+        : borrarPend.tipo === 'examen' ? `¿Eliminar el "${borrarPend.nombre}"?` : `¿Eliminar "${borrarPend.nombre}"?`}
+      message={borrarPend.tipo === 'seccion'
+        ? `Se borran sus ${borrarPend.columnas} columna(s) y ${borrarPend.valores} calificación(es) capturada(s).`
+        : borrarPend.tipo === 'examen'
+          ? `Se borran juntos su guía de estudio, el examen y el análisis de resultados, con ${borrarPend.valores} calificación(es) capturada(s).`
+          : `Se borra la columna y ${borrarPend.valores} calificación(es) capturada(s) en ella.`}
+      detail={`Los promedios del grupo se recalculan. Tendrás ${SEGUNDOS_DESHACER} segundos para deshacerlo.`}
       onConfirm={confirmarBorrado}
       onClose={() => setBorrarPend(null)}/>
   )
-
-  const removeCol = async (subjId, colId) => {
-    try {
-      await borrarColumnaRegistro(colId)
-      await cargarHoja()
-      onDataChange?.()   // borrar una columna cambia promedios
-    } catch { setErrorHoja('No se pudo eliminar la columna.') }
-  }
+  const avisoDeshacer = deshacer && createPortal(
+    <div role="status" aria-live="polite"
+      className="fixed left-1/2 -translate-x-1/2 bottom-4 z-[80] flex items-center gap-3 rounded-xl pl-4 pr-2 py-2 max-w-[calc(100vw-32px)]"
+      style={{ background:'var(--panel-bg)', border:'1px solid var(--card-border)', boxShadow:'0 10px 30px rgba(0,0,0,.35)', color:'var(--t1)' }}>
+      <Trash2 size={14} className="flex-shrink-0" style={{ color:'var(--bad)' }}/>
+      <span className="text-sm min-w-0 truncate">Se eliminó {deshacer.etiqueta}</span>
+      <button type="button" onClick={deshacerBorrado}
+        className="btn-secondary text-xs min-h-9 px-3 flex items-center gap-1.5 flex-shrink-0">
+        <Undo2 size={13}/> Deshacer ({deshacer.restante})
+      </button>
+    </div>, document.body)
 
   /* ── Save evaluation ────────────────────────────────────────── */
   /* Exporta la lista completa a Excel con la misma estructura de la tabla */
@@ -2329,7 +2385,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
         onToggle={() => toggleSection(subj.id)}
         onAdd={esExamen ? nuevoExamen : () => setAddColModal(subj.id)}
         tituloAdd={esExamen ? 'Añadir examen' : 'Añadir'}
-        onRemoveItem={fija ? undefined : () => pedirBorrarSeccion(subj.id)}
+        onRemoveItem={() => pedirBorrarSeccion(subj.id)}
         arrastre={asaBloque(t)}/>
     )
   }
@@ -2358,7 +2414,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
             onConfigurar={() => setConfigCol({ subjId: subj.id, col })}
             formato={col.formato} cuenta={col.cuenta}
             requisito={colsPorId[col.requisitoId]?.name} garantia={col.cuentaGarantia}
-            onRemove={col.esFija ? undefined : () => pedirBorrarColumna(subj.id, col)}
+            onRemove={() => pedirBorrarColumna(subj.id, col)}
             arrastre={{ id: col.id, materia: subj.id, activo: arrastre?.tipo === 'col' && arrastre.id === col.id,
               onDown: e => empezarArrastre('col', col.id, subj.id, e),
               onKey: e => moverConTeclado('col', col.id, subj.id, e) }}/>
@@ -2650,6 +2706,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
           onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
         {dialogoBorrado}
+        {avisoDeshacer}
         {avisoEl}
       </div>
     </HCCtx.Provider>,
@@ -2676,6 +2733,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
           onClose={()=>setShowAddStudent(false)} onSaved={async cred=>{await onDataChange?.();if(cred)setLastCred(cred)}}/>}
         {lastCred && <CredentialsPanel cred={lastCred} onClose={()=>setLastCred(null)}/>}
         {dialogoBorrado}
+        {avisoDeshacer}
         {avisoEl}
       </div>
     </HCCtx.Provider>

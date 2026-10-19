@@ -964,6 +964,12 @@ export async function borrarColumnaRegistro(columnaId) {
   if (error) throw error
 }
 
+/** Borra varias columnas a la vez (un bloque de examen o una sección): todas o ninguna. */
+export async function borrarColumnasRegistro(ids) {
+  const { error } = await supabase.rpc('borrar_columnas_registro', { p_ids: ids })
+  if (error) throw error
+}
+
 /** Pago, garantía y firmas: campos administrativos de la hoja. */
 export async function setRegistroAdmin(studentId, campo, valor) {
   const { error } = await supabase.rpc('set_registro_admin', {

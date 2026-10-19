@@ -21,6 +21,9 @@ import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
 import { IconAsistencia, IconRetardos, IconFaltas, IconAlumnos } from '../../components/ui/SigaKpiIcons'
 import { DANGER_BTN_STYLE } from '../../components/admin/ConfirmDialog'
 import { tintaSobre } from '../../lib/color'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { IconHojaCalificaciones } from '../../components/ui/SigaAdminIcons'
 import {
   ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
   FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
@@ -43,6 +46,8 @@ const COLUMNS_LISTA = [
 ]
 
 export default function Attendance() {
+  const navigate = useNavigate()
+  const { puedeVer } = useAuth()
   const { sucursales, nombreDe } = useSucursales()
   const { getAccent } = useGroupColors()
 
@@ -648,13 +653,28 @@ export default function Attendance() {
             return (
               <GroupShaderCard
                 key={g.id} group={g} onClick={() => selectGroup(g.id)} showPicker
-                footer={hasHistory && (
-                  <button
-                    onClick={() => openHistory(g.id)}
-                    className="btn-secondary text-xs py-2">
-                    <FolderClock size={14}/> Ver historial de listas
-                  </button>
-                )}>
+                footer={
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-3"
+                    style={{ borderTop: '1px solid var(--divider)' }}>
+                    {/* Calificaciones abre directo la hoja de este grupo. */}
+                    {puedeVer('calificaciones') ? (
+                      <button type="button" onClick={() => navigate('/admin/registrar', { state: { groupId: g.id } })}
+                        className="btn-secondary text-xs min-h-9 gap-1.5">
+                        <IconHojaCalificaciones size={14}/> Ir a calificaciones
+                      </button>
+                    ) : <span/>}
+                    <div className="flex flex-wrap items-center gap-2 ml-auto">
+                      {hasHistory && (
+                        <button type="button" onClick={() => openHistory(g.id)} className="btn-secondary text-xs min-h-9 gap-1.5">
+                          <FolderClock size={14}/> Historial
+                        </button>
+                      )}
+                      <button type="button" onClick={() => selectGroup(g.id)} className="btn-primary text-xs min-h-9 gap-1.5">
+                        Abrir lista <ChevronRight size={13}/>
+                      </button>
+                    </div>
+                  </div>
+                }>
                 <div>
                   <p className="font-bold text-base" style={{ color: 'var(--t1)' }}>{g.name}</p>
                   <p className="text-sm" style={{ color: 'var(--t3)' }}>{g.subject}</p>

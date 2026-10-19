@@ -181,7 +181,11 @@ function GroupPicker({ groups, students, loading, onSelect }) {
                       grises que no llevaban a ninguna parte. */}
                   <StudentDock students={grpStudents} accent={accent}
                     onOpenStudent={id => navigate(`/admin/alumnos/${id}`)}/>
-                  <button className="btn-secondary text-xs py-2 gap-1.5 pointer-events-none" tabIndex={-1}>
+                  {/* El pie queda fuera de la zona clicable de la tarjeta: el
+                      botón necesita su propio onClick (antes era decorativo y
+                      no hacía nada). */}
+                  <button type="button" onClick={e => { e.stopPropagation(); onSelect(g) }}
+                    className="btn-secondary text-xs min-h-9 gap-1.5 flex-shrink-0">
                     Abrir lista <ChevronRight size={13}/>
                   </button>
                 </div>

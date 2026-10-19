@@ -383,7 +383,7 @@ export default function Dashboard() {
           value={sucursal === TODAS ? '—' : promedioGeneral}
           sub={sucursal === TODAS ? 'Selecciona una sucursal' : notas.length ? `${notas.length} alumno(s) con calificación` : 'Sin calificaciones aún'}
           pill={sucursal !== TODAS && notas.length
-            ? { icon: Star, text: promedioNum >= 8.5 ? '¡Muy bien!' : promedioNum >= 7 ? 'Aceptable' : 'Requiere atención' }
+            ? { icon: Star, text: promedioNum >= 8.5 ? 'Sobresaliente' : promedioNum >= 7 ? 'Aceptable' : 'Requiere atención' }
             : null}
           onClick={() => navigate('/admin/rankings')} />
 

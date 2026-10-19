@@ -72,6 +72,7 @@ const MENSAJES_AUTO = {
   solo_admin: 'Solo un administrador puede disparar los avisos automáticos.',
   sin_sesion: 'Tu sesión caducó. Vuelve a entrar.',
   falta_api_key: 'Falta la API key de Resend en Supabase.',
+  correos_deshabilitados: 'El envío de correos está desactivado. Un administrador puede activarlo en Configuración.',
 }
 
 /** accion: 'recordatorios' | 'top_mensual'. vistaPrevia=true no manda nada. */

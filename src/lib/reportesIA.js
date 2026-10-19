@@ -9,7 +9,7 @@ import { supabase } from './supabaseClient'
 const MENSAJES = {
   falta_api_key: 'El asistente aún no está activado: falta guardar la API key de Anthropic en Supabase (secreto ANTHROPIC_API_KEY).',
   limite_alcanzado: 'Se alcanzó el tope de gasto de IA de este mes. Un admin puede subirlo en Configuración.',
-  sin_permiso: 'No tienes acceso al asistente de IA. Pídeselo a un administrador.',
+  sin_permiso: 'No tienes acceso al asistente de IA. Solicítalo a un administrador.',
   sin_sesion: 'Tu sesión caducó. Vuelve a entrar.',
   api_key_invalida: 'La API key de Anthropic no es válida. Revisa el secreto ANTHROPIC_API_KEY en Supabase.',
   sin_saldo: 'La cuenta de Anthropic se quedó sin saldo. Recárgala en console.anthropic.com.',

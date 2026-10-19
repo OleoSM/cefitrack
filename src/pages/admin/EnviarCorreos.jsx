@@ -3,6 +3,8 @@ import { Navigate } from 'react-router-dom'
 import { Send, Users, AlertTriangle, CheckCircle2, Mail, History, XCircle, MinusCircle, PenLine, BellRing } from 'lucide-react'
 import { fetchStudents, fetchGroups } from '../../lib/supabaseData'
 import { crearNotificaciones, guardarBorradorCorreo, enviarCorreo, fetchCupoCorreos, fetchEnviosRecientes } from '../../lib/comunicacionesData'
+import { useCorreosHabilitados } from '../../hooks/useCorreosHabilitados'
+import AvisoCorreosApagados from '../../components/admin/AvisoCorreosApagados'
 import { useAuth } from '../../context/AuthContext'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 import BarraFiltros from '../../components/ui/BarraFiltros'
@@ -37,6 +39,7 @@ export default function EnviarCorreos() {
   const [status, setStatus] = useState(null)
   const [saving, setSaving] = useState(false)
   const [cupo, setCupo] = useState(null)          // { enviados, limite } de hoy
+  const correosHabilitados = useCorreosHabilitados()
   const [envios, setEnvios] = useState([])        // historial reciente
 
   const refrescarEnvios = () => {
@@ -98,6 +101,7 @@ export default function EnviarCorreos() {
   const submit = async e => {
     e.preventDefault(); setStatus(null)
     if (!selected.length || !subject.trim() || !body.trim()) return setStatus({ bad:true, text:'Selecciona destinatarios, asunto y mensaje.' })
+    if (correosHabilitados === false) return setStatus({ bad:true, text:'El envío de correos está desactivado. Un administrador puede activarlo en Configuración.' })
     setSaving(true)
     try {
       const targets = students.filter(s => selected.includes(s.id))
@@ -154,7 +158,9 @@ export default function EnviarCorreos() {
         })}
       </div>
 
-      {/* Cupo del día: la capa gratis de Resend permite un número fijo al día. */}
+      {correosHabilitados === false && <AvisoCorreosApagados/>}
+
+      {/* Cupo del día: tope de seguridad diario (Configuración). */}
       {cupo && (
         <div className="card p-3 sm:p-4 flex items-center gap-3">
           <Mail size={18} style={{ color:'var(--accent)' }} className="flex-shrink-0"/>

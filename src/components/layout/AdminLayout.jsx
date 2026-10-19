@@ -629,7 +629,7 @@ function LayoutInner() {
             {bloqueado && (
               <div role="alert" className="mb-4 flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm"
                 style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--t1)' }}>
-                <span className="flex-1">No tienes acceso a <b>{bloqueado}</b>. Pídeselo a un administrador.</span>
+                <span className="flex-1">No tienes acceso a <b>{bloqueado}</b>. Solicítalo a un administrador.</span>
                 <button type="button" onClick={() => setBloqueado(null)} aria-label="Cerrar aviso"
                   className="w-8 h-8 -my-1 flex items-center justify-center rounded-lg" style={{ color:'var(--t3)' }}><X size={14}/></button>
               </div>

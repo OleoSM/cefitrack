@@ -74,7 +74,7 @@ export default function AltaMasivaModal({ grupo, nombreSucursal = '', correosUsa
                     <Download size={14}/> {descargando ? 'Generando…' : 'Descargar plantilla'}</button> },
                 { n: 2, Icono: Share2, titulo: 'Compártela con tu grupo',
                   texto: 'Súbela a Google Drive, ábrela con Google Sheets y comparte el enlace con permiso de edición. Cada alumno llena una fila.' },
-                { n: 3, Icono: Upload, titulo: 'Descárgala llena y súbela aquí',
+                { n: 3, Icono: Upload, titulo: 'Carga el archivo completo',
                   texto: 'En Google Sheets: Archivo → Descargar → Microsoft Excel (.xlsx) o CSV. Revisarás cada fila antes de dar de alta.',
                   accion: (
                     <label className="btn-secondary min-h-11 cursor-pointer">

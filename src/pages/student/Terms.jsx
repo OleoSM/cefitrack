@@ -515,7 +515,7 @@ export default function Terms() {
 
   /* Banner de estado general: los mismos 4 estados que el menú lateral. */
   const BANNER = {
-    aceptado: { tono:'good', icon:CheckCircle2,  titulo:'¡Todo en orden!', texto:'Administración validó tu expediente. Tu acceso está activo.' },
+    aceptado: { tono:'good', icon:CheckCircle2,  titulo:'Expediente validado', texto:'Administración validó tu expediente. Tu acceso está activo.' },
     error:    { tono:'bad',  icon:XCircle,       titulo:'Debes volver a subir algo', texto:'Administración rechazó uno o más documentos. Los pasos marcados en rojo te dicen cuál y por qué.' },
     revision: { tono:'info', icon:Clock,         titulo:'Expediente enviado: en espera de validación', texto:'Ya entregaste todo. Administración lo revisará y te avisará con una notificación.' },
     alerta:   { tono:'warn', icon:AlertTriangle, titulo:`Te faltan ${exp.total - exp.hechos} de ${exp.total} pasos`, texto:'Sigue los pasos en orden. Cuando termines, tu expediente se enviará a revisión.' },
@@ -817,9 +817,9 @@ export default function Terms() {
                   <PartyPopper size={30}/>
                 </span>
                 <div>
-                  <h2 className="text-lg font-bold" style={{ color:'var(--t1)' }}>¡Terminaste! Tu expediente fue enviado</h2>
+                  <h2 className="text-lg font-bold" style={{ color:'var(--t1)' }}>Tu expediente fue enviado</h2>
                   <p className="text-sm mt-2" style={{ color:'var(--t2)' }}>
-                    Ya no tienes que hacer nada más. Ahora está <b>en espera de validación</b>: administración revisará tus documentos
+                    No necesitas hacer nada más. Ahora está <b>en espera de validación</b>: administración revisará tus documentos
                     y te avisará con una notificación. Si algo no es válido, te diremos exactamente qué corregir.
                   </p>
                 </div>
@@ -831,7 +831,7 @@ export default function Terms() {
                   <Check size={28} strokeWidth={3}/>
                 </span>
                 <div>
-                  <h2 className="text-base font-bold" style={{ color:'var(--t1)' }}>¡Listo! {pasoInfo(aviso)?.corto} completado</h2>
+                  <h2 className="text-base font-bold" style={{ color:'var(--t1)' }}>{pasoInfo(aviso)?.corto} completado</h2>
                   <p className="text-sm mt-2" style={{ color:'var(--t2)' }}>
                     Llevas {exp.hechos} de {exp.total} pasos. Sigue: <b>{pasoInfo(pendienteTrasAviso.id)?.titulo}</b>.
                   </p>

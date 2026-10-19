@@ -21,7 +21,7 @@ import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
 import { IconAsistencia, IconRetardos, IconFaltas, IconAlumnos } from '../../components/ui/SigaKpiIcons'
 import { DANGER_BTN_STYLE } from '../../components/admin/ConfirmDialog'
 import { tintaSobre } from '../../lib/color'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { IconHojaCalificaciones } from '../../components/ui/SigaAdminIcons'
 import {
@@ -47,6 +47,7 @@ const COLUMNS_LISTA = [
 
 export default function Attendance() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { puedeVer } = useAuth()
   const { sucursales, nombreDe } = useSucursales()
   const { getAccent } = useGroupColors()
@@ -283,6 +284,17 @@ export default function Attendance() {
     setShowTolModal(true)   // pop-up de tolerancia antes de comenzar
     setView('scan')
   }
+
+  /* "Abrir lista" desde la tarjeta de Grupos llega con { abrirGrupo }: se abre
+     ese grupo en cuanto cargan los grupos, y se limpia el estado para que
+     recargar la página no lo vuelva a abrir. */
+  const grupoPedido = location.state?.abrirGrupo
+  useEffect(() => {
+    if (!grupoPedido || !groups.some(g => g.id === grupoPedido)) return
+    navigate(location.pathname, { replace: true, state: null })
+    selectGroup(grupoPedido)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupoPedido, groups])
 
   const openHistory = (groupId) => { setHistoryGroupId(groupId); setShowHistoryModal(true) }
 

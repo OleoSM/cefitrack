@@ -8,7 +8,9 @@
 //    aunque meta sus ids a mano.
 //  · La API key (RESEND_API_KEY) solo existe aquí, como secreto.
 //
-// Cupo: respeta `configuracion.correo_limite_diario` (capa gratis: 100/día).
+// Interruptor general: si `configuracion.correos_habilitados` está apagado
+// (lo controla un admin en Configuración), no sale ningún correo.
+// Cupo: respeta `configuracion.correo_limite_diario` (tope de seguridad diario).
 // Lo que no cabe se registra como "omitido" para mandarlo otro día.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -80,6 +82,8 @@ Deno.serve(async (req: Request) => {
   if (!user) return json({ ok: false, error: 'sin_sesion' }, 401)
   const { data: permitido } = await usuario.rpc('tiene_apartado', { p_apartado: 'correos' })
   if (permitido !== true) return json({ ok: false, error: 'sin_permiso' }, 403)
+  const { data: interruptor } = await admin.from('configuracion').select('correos_habilitados').limit(1).maybeSingle()
+  if (interruptor?.correos_habilitados !== true) return json({ ok: false, error: 'correos_deshabilitados' }, 423)
 
   let draftId = ''
   try { draftId = (await req.json())?.draftId ?? '' } catch { /* cuerpo inválido */ }

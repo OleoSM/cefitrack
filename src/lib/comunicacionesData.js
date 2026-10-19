@@ -39,6 +39,23 @@ const MENSAJES_ENVIO = {
   borrador_no_encontrado: 'No se encontró el mensaje a enviar.',
   ya_enviado: 'Este mensaje ya se había enviado.',
   no_se_leyeron_alumnos: 'No se pudieron leer los destinatarios.',
+  correos_deshabilitados: 'El envío de correos está desactivado. Un administrador puede activarlo en Configuración.',
+}
+
+/** Interruptor general del envío de correos (Configuración). */
+export async function fetchCorreosHabilitados() {
+  const { data, error } = await supabase.from('configuracion').select('correos_habilitados').limit(1).maybeSingle()
+  if (error) throw error
+  return data?.correos_habilitados === true
+}
+
+/** Activa o desactiva el envío de correos para todos (solo admin; lo exige la RLS). */
+export async function setCorreosHabilitados(habilitados) {
+  const { data, error } = await supabase.from('configuracion')
+    .update({ correos_habilitados: habilitados, updated_at: new Date().toISOString() })
+    .eq('id', true).select('correos_habilitados').maybeSingle()
+  if (error || !data) throw new Error('No se pudo cambiar el envío de correos. Solo un administrador puede hacerlo.')
+  return data.correos_habilitados
 }
 
 /** Envía por correo un borrador ya guardado. Devuelve { ok, enviados, fallidos, omitidos, cupo, message? }. */

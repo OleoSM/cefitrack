@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Clock, MapPin, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, Star, Columns2, Rows3, Check, ChevronDown, ChevronUp, RefreshCw, QrCode, FileSpreadsheet } from 'lucide-react'
+import { Users, Clock, MapPin, Plus, X, AlertCircle, Pencil, Trash2, UserPlus, Star, Columns2, Rows3, Check, ChevronDown, ChevronUp, ChevronRight, RefreshCw, QrCode, FileSpreadsheet } from 'lucide-react'
+import { IconHojaCalificaciones } from '../../components/ui/SigaAdminIcons'
 import DescargarQRModal from '../../components/admin/DescargarQRModal'
 import AltaMasivaModal from '../../components/admin/AltaMasivaModal'
 import {
@@ -291,7 +292,7 @@ export default function Groups() {
   const { getAccent, getPaletteId, setGroupPalette, getTintaId, setGroupTinta } = useGroupColors()
   const [qrDe, setQrDe] = useState(null)   // grupo cuyos QR se descargan
   const [masivaDe, setMasivaDe] = useState(null)   // grupo con alta masiva abierta
-  const { currentUser, allowedSucursales, canAccess, puedeDarAltas } = useAuth()
+  const { currentUser, allowedSucursales, canAccess, puedeDarAltas, puedeVer } = useAuth()
   const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
   const isAdmin = currentUser?.role === 'admin'
 
@@ -472,7 +473,7 @@ export default function Groups() {
           tone={globalAvg === '—' ? 'neutral' : Number(globalAvg) >= 7 ? 'good' : 'warn'} value={globalAvg}
           sub={globalAvg === '—' ? 'Sin calificaciones aún' : `${globalGrades.length} alumno(s) con calificación`}
           pill={globalAvg === '—' ? null
-            : { icon: Star, text: Number(globalAvg) >= 8.5 ? '¡Muy bien!' : Number(globalAvg) >= 7 ? 'Aceptable' : 'Requiere atención' }} />
+            : { icon: Star, text: Number(globalAvg) >= 8.5 ? 'Sobresaliente' : Number(globalAvg) >= 7 ? 'Aceptable' : 'Requiere atención' }} />
       </KpiGrid>
 
       {/* Group cards */}
@@ -545,8 +546,8 @@ export default function Groups() {
                       style={{ background:'var(--soft-bg)', border:'1px dashed var(--card-border)', color:'var(--t1)' }}>
                       <FileSpreadsheet size={18} className="flex-shrink-0"/>
                       <span className="min-w-0">
-                        <span className="block text-sm font-bold">Grupo vacío: da de alta a todos de golpe</span>
-                        <span className="block text-[11px]" style={{ color:'var(--t2)' }}>Descarga la plantilla, que la llenen en Google Sheets y súbela.</span>
+                        <span className="block text-sm font-bold">Grupo sin alumnos: alta masiva con plantilla</span>
+                        <span className="block text-[11px]" style={{ color:'var(--t2)' }}>Descarga la plantilla de Excel, compártela con el grupo para que cada alumno registre sus datos y cárgala en SIGA.</span>
                       </span>
                     </button>
                   )}
@@ -587,6 +588,24 @@ export default function Groups() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Accesos directos: Calificaciones (abajo a la izquierda) y Pasar Lista. */}
+                  {(puedeVer('calificaciones') || puedeVer('asistencias')) && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3" style={{ borderTop:'1px solid var(--divider)' }}>
+                      {puedeVer('calificaciones') ? (
+                        <button type="button" onClick={e => { e.stopPropagation(); navigate('/admin/registrar', { state: { groupId: g.id } }) }}
+                          className="btn-secondary text-xs min-h-9 gap-1.5">
+                          <IconHojaCalificaciones size={14}/> Ir a calificaciones
+                        </button>
+                      ) : <span/>}
+                      {puedeVer('asistencias') && (
+                        <button type="button" onClick={e => { e.stopPropagation(); navigate('/admin/asistencias', { state: { abrirGrupo: g.id } }) }}
+                          className="btn-primary text-xs min-h-9 gap-1.5 ml-auto">
+                          Abrir lista <ChevronRight size={13}/>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </>
               }>
 

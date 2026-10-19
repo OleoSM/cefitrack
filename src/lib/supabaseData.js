@@ -514,7 +514,7 @@ export async function deleteGroup(id) {
 
 /* El alta de alumnos va SIEMPRE con su primer pago: altaAlumnoConPago (abajo). */
 const MENSAJES_ALTA_ALUMNO = {
-  sin_permiso_altas: 'No tienes permiso para dar de alta alumnos. Pídeselo a un administrador.',
+  sin_permiso_altas: 'No tienes permiso para dar de alta alumnos. Solicítalo a un administrador.',
   forbidden: 'No puedes dar de alta alumnos en ese grupo.',
   email_already_exists: 'Ese correo ya está registrado.',
   group_not_found: 'El grupo seleccionado no existe.',
@@ -591,10 +591,10 @@ export async function deleteStudent(id) {
   if (!error) return { ok: true }
   const msg = error.message ?? ''
   if (msg.includes('sin_permiso_altas'))
-    return { ok: false, message: 'No tienes permiso para dar de baja alumnos. Pídeselo a un administrador.' }
+    return { ok: false, message: 'No tienes permiso para dar de baja alumnos. Solicítalo a un administrador.' }
   if (msg.includes('forbidden'))
     return { ok: false, message: 'No puedes eliminar a un alumno que no es de tus grupos.' }
-  return { ok: false, message: 'No se pudo eliminar al alumno. Inténtalo de nuevo; si sigue fallando, avísanos.' }
+  return { ok: false, message: 'No se pudo eliminar al alumno. Inténtalo de nuevo; si el problema continúa, contacta a un administrador.' }
 }
 
 /**

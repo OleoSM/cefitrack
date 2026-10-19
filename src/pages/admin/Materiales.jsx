@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useSucursales } from '../../hooks/useSucursales'
 import { fetchGroups, fetchStudents, fetchNombresColumnas } from '../../lib/supabaseData'
 import AvisoCorreoModal from '../../components/admin/AvisoCorreoModal'
+import { useCorreosHabilitados } from '../../hooks/useCorreosHabilitados'
 import { alumnosDeMaterial, plantillaMaterialNuevo, plantillaMaterialVence } from '../../lib/avisosData'
 import {
   fetchMateriales, subirMaterial, actualizarMaterial, borrarMaterial, urlMaterial,
@@ -74,8 +75,11 @@ export default function Materiales() {
      "Enviar correo" de cada material. Si se borra en menos de 2 días, el
      mensaje es de "último aviso". */
   const [aviso, setAviso] = useState(null)   // { material, alumnos, asunto, mensaje, tipo }
+  const correosHabilitados = useCorreosHabilitados()
   const ofrecerAviso = async (material, manual = false) => {
-    if (!puedeVer('correos')) return
+    // Con los correos apagados no sale solo; con el botón "Enviar correo" sí
+    // abre, para mostrar el aviso de que están desactivados.
+    if (!puedeVer('correos') || (!manual && correosHabilitados === false)) return
     try {
       const alumnos = alumnosDeMaterial(material, await fetchStudents(), grupos)
       if (!alumnos.length) { if (manual) setError('Ningún alumno puede ver este material todavía.'); return }

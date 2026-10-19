@@ -3,6 +3,8 @@ import { Mail, X, CheckCircle2, AlertTriangle, BellRing } from 'lucide-react'
 import ModalPortal from '../ui/ModalPortal'
 import SelectorAudiencia from './SelectorAudiencia'
 import { enviarAviso, correosPrevistos } from '../../lib/avisosData'
+import { useCorreosHabilitados } from '../../hooks/useCorreosHabilitados'
+import AvisoCorreosApagados from './AvisoCorreosApagados'
 
 /**
  * Popup "¿Avisar por correo?" — sale al crear una actividad o subir un
@@ -19,12 +21,13 @@ export default function AvisoCorreoModal({ titulo, contexto, alumnos, asuntoInic
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState(null)   // { ok, texto }
   const conteo = correosPrevistos(alumnos, audiencia)
+  const habilitados = useCorreosHabilitados()
 
   const enviar = async () => {
     setEnviando(true)
     try {
       const r = await enviarAviso({ alumnos, asunto, mensaje, audiencia, tipo, refId, groupId })
-      if (!r.ok) setResultado({ ok: false, texto: `Se avisó dentro de SIGA, pero no por correo: ${r.message}` })
+      if (!r.ok) setResultado({ ok: false, texto: r.apagado ? r.message : `Se avisó dentro de SIGA, pero no por correo: ${r.message}` })
       else {
         const partes = [`${r.enviados} correo(s) enviado(s)`]
         if (r.omitidos) partes.push(`${r.omitidos} sin enviar (sin correo o sin cupo)`)
@@ -65,6 +68,7 @@ export default function AvisoCorreoModal({ titulo, contexto, alumnos, asuntoInic
           </>
         ) : (
           <>
+            {habilitados === false && <AvisoCorreosApagados/>}
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>
                 ¿A quién se le envía? · {alumnos.length} alumno(s)
@@ -86,7 +90,7 @@ export default function AvisoCorreoModal({ titulo, contexto, alumnos, asuntoInic
             </label>
             <div className="flex flex-col-reverse sm:flex-row gap-2">
               <button type="button" onClick={onClose} disabled={enviando} className="btn-secondary flex-1 justify-center min-h-11">Ahora no</button>
-              <button type="button" onClick={enviar} disabled={enviando || !asunto.trim() || !mensaje.trim()}
+              <button type="button" onClick={enviar} disabled={enviando || habilitados === false || !asunto.trim() || !mensaje.trim()}
                 className="btn-primary flex-1 justify-center min-h-11">
                 <Mail size={14}/> {enviando ? 'Enviando…' : 'Enviar aviso'}
               </button>

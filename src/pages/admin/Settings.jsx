@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import {
   SlidersHorizontal, Timer, Mail, Save, CheckCircle2,
-  Scale, ClipboardList, CalendarCheck, Send, Palette,
+  Scale, ClipboardList, CalendarCheck, Send, Palette, MailX, MailCheck,
 } from 'lucide-react'
+import ConfirmDialog, { DANGER_BTN_STYLE } from '../../components/admin/ConfirmDialog'
+import { setCorreosHabilitados } from '../../lib/comunicacionesData'
+import { useCorreosHabilitados, avisarCambioCorreos } from '../../hooks/useCorreosHabilitados'
 import { loadSettings, saveSettings, syncSettings, DEFAULT_SETTINGS, calcularScore } from '../../lib/settings'
 import { useAuth } from '../../context/AuthContext'
 import { sendNotification, NOTIF_EVENTS } from '../../lib/notifications'
@@ -25,6 +28,61 @@ function Toggle({ checked, onChange, disabled = false }) {
       <span className="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white transition-transform duration-200"
         style={{ transform: checked ? 'translateX(18px)' : 'translateX(0)' }}/>
     </button>
+  )
+}
+
+/* Interruptor general del envío de correos. Se aplica en el acto (no espera
+   al botón "Guardar") y lo respeta el servidor: apagado, no sale ningún correo,
+   ni manual ni automático. Activarlo pide confirmación. */
+function InterruptorCorreos({ isAdmin }) {
+  const habilitados = useCorreosHabilitados()
+  const [cambiando, setCambiando] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
+  const [error, setError] = useState('')
+  const cambiar = async v => {
+    setCambiando(true); setError('')
+    try { avisarCambioCorreos(await setCorreosHabilitados(v)) }
+    catch (e) { setError(e?.message ?? 'No se pudo cambiar el envío de correos.') }
+    setCambiando(false)
+  }
+  if (habilitados === null) return null
+  const Icono = habilitados ? MailCheck : MailX
+  return (
+    <div className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+      style={{ background: habilitados ? 'var(--good-soft)' : 'var(--warn-soft)', border: `1px solid ${habilitados ? 'var(--good-line)' : 'var(--warn-line)'}` }}>
+      <Icono size={22} className="flex-shrink-0" style={{ color: habilitados ? 'var(--good)' : 'var(--warn)' }}/>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
+          Envío de correos: {habilitados ? 'activado' : 'desactivado'}
+        </p>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--t2)' }}>
+          {habilitados
+            ? 'SIGA puede enviar correos a alumnos y tutores: mensajes, avisos y recordatorios.'
+            : 'No se envía ningún correo, ni manual ni automático, hasta que se active.'}
+        </p>
+        {error && <p role="alert" className="text-xs mt-1" style={{ color: 'var(--bad)' }}>{error}</p>}
+      </div>
+      {isAdmin && (habilitados ? (
+        <button type="button" onClick={() => cambiar(false)} disabled={cambiando}
+          className="flex items-center justify-center gap-2 text-sm font-bold px-4 min-h-11 rounded-xl flex-shrink-0 disabled:opacity-50"
+          style={DANGER_BTN_STYLE}>
+          <MailX size={15}/> {cambiando ? 'Desactivando…' : 'Desactivar envío de correos'}
+        </button>
+      ) : (
+        <button type="button" onClick={() => setConfirmar(true)} disabled={cambiando}
+          className="btn-primary min-h-11 justify-center flex-shrink-0 disabled:opacity-50">
+          <MailCheck size={15}/> {cambiando ? 'Activando…' : 'Activar envío de correos'}
+        </button>
+      ))}
+      {confirmar && (
+        <ConfirmDialog title="¿Activar el envío de correos?"
+          message="A partir de este momento SIGA podrá enviar correos a alumnos y tutores."
+          detail="Puedes desactivarlo de nuevo en cualquier momento desde aquí."
+          confirmLabel="Activar" busyLabel="Activando…"
+          onConfirm={async () => { await cambiar(true) }}
+          onClose={() => setConfirmar(false)}/>
+      )}
+    </div>
   )
 }
 
@@ -176,6 +234,7 @@ export default function Settings() {
       {/* ── Envío de correos (Resend) ── */}
       <div className="card p-5 space-y-3">
         <h2 className="section-title flex items-center gap-2"><Send size={16}/> Envío de correos</h2>
+        <InterruptorCorreos isAdmin={isAdmin}/>
         <p className="text-xs -mt-1" style={{ color: 'var(--t3)' }}>
           Se envían con Resend (plan Pro: 50,000 al mes, sin límite diario). Este tope diario solo protege de un envío por error.
         </p>

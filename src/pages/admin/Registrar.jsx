@@ -28,6 +28,7 @@ import { folioEX, folioEXD } from '../../lib/folios'
 import { supabase } from '../../lib/supabaseClient'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import { fetchDocumentosAlumnos } from '../../lib/expedienteData'
+import { useCorreosHabilitados } from '../../hooks/useCorreosHabilitados'
 import { fetchPagosDeAlumnos, estadoPagoExamenes } from '../../lib/pagosData'
 import { AREAS_UNIVERSIDAD } from '../../lib/areas'
 import StudentFormModal from '../../components/admin/StudentFormModal'
@@ -2000,8 +2001,9 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
      tiene el apartado de correos y si el grupo tiene alumnos). */
   const { puedeVer, puedeDarAltas } = useAuth()
   const [aviso, setAviso] = useState(null)
+  const correosHabilitados = useCorreosHabilitados()
   const ofrecerAviso = col => {
-    if (!puedeVer('correos') || !groupStudents.length) return
+    if (!puedeVer('correos') || !groupStudents.length || correosHabilitados === false) return
     setAviso({ ...col, ...plantillaActividad({ ...col, grupo: group.name }) })
   }
   const avisoEl = aviso && (
@@ -2302,7 +2304,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
       <button onClick={handleSaveEval}
         className="btn-primary text-xs py-2 gap-1.5 transition-all duration-300"
         style={saveFlash ? { background:'var(--good-solid)', color:'#fff' } : {}}>
-        <Save size={13}/> {saveFlash ? '¡Guardado!' : 'Guardar'}
+        <Save size={13}/> {saveFlash ? 'Guardado' : 'Guardar'}
       </button>
       {/* En pantalla completa la salida es la "X" de la esquina, siempre a la
           vista; repetirla aquí sólo duplicaba el mismo mando. */}

@@ -8,7 +8,7 @@
  * Edge Function `enviar-correo` (Resend), igual que un mensaje libre.
  */
 import { supabase } from './supabaseClient'
-import { crearNotificaciones, guardarBorradorCorreo, enviarCorreo } from './comunicacionesData'
+import { crearNotificaciones, guardarBorradorCorreo, enviarCorreo, fetchCorreosHabilitados } from './comunicacionesData'
 
 export const AUDIENCIAS = [
   { id: 'ambos',   label: 'Alumnos y tutores', alumno: true,  tutor: true },
@@ -74,6 +74,8 @@ export function plantillaMaterialVence({ titulo, expiraEn }) {
 export async function enviarAviso({ alumnos, asunto, mensaje, audiencia = 'ambos', tipo = null, refId = null, groupId = null }) {
   if (!alumnos?.length) return { ok: false, message: 'No hay alumnos a quienes avisar.' }
   if (!asunto?.trim() || !mensaje?.trim()) return { ok: false, message: 'Escribe el asunto y el mensaje.' }
+  if (!(await fetchCorreosHabilitados().catch(() => false)))
+    return { ok: false, apagado: true, message: 'El envío de correos está desactivado. Un administrador puede activarlo en Configuración.' }
   const a = audienciaDe(audiencia)
   const draft = await guardarBorradorCorreo({
     subject: asunto.trim(), body: mensaje.trim(), studentIds: alumnos.map(s => s.id),

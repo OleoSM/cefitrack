@@ -5,6 +5,8 @@ import ProgressiveList from '../../components/ui/ProgressiveList'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { SkeletonBlock } from '../../components/ui/DataTable'
 import ConfirmDialog from '../../components/admin/ConfirmDialog'
+import AvisoCorreosApagados from '../../components/admin/AvisoCorreosApagados'
+import { useCorreosHabilitados } from '../../hooks/useCorreosHabilitados'
 import { TIPO_AVISO, fetchAvisosEnviados, fetchProximosAVencer, fetchHistorialCorreos, ejecutarAvisosAuto } from '../../lib/notificacionesData'
 
 /*
@@ -36,6 +38,7 @@ function Fila({ icono: Icono, color, titulo, detalle, derecha }) {
 export default function Notificaciones() {
   const { currentUser } = useAuth()
   const esAdmin = currentUser?.role === 'admin'
+  const correosHabilitados = useCorreosHabilitados()
   const [pestana, setPestana] = useState('enviados')
   const [avisos, setAvisos] = useState(null)
   const [proximos, setProximos] = useState(null)
@@ -58,6 +61,7 @@ export default function Notificaciones() {
           <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>Todo lo que se ha avisado, lo que está por vencer y los correos enviados.</p>
         </div>
         <button type="button" onClick={cargar} className="btn-secondary min-h-10"><RefreshCw size={14}/> Actualizar</button>
+        {correosHabilitados === false && <AvisoCorreosApagados className="w-full"/>}
       </div>
 
       <div role="tablist" aria-label="Secciones" className="flex gap-1 p-1 rounded-xl overflow-x-auto" style={{ background: 'var(--soft-bg)', border: '1px solid var(--card-border)' }}>

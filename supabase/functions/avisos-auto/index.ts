@@ -85,6 +85,9 @@ Deno.serve(async (req: Request) => {
   // La tarea programada siempre envía; un admin puede pedir solo la vista previa.
   const vistaPrevia = !secreto && entrada.vistaPrevia === true
   const accion = entrada.accion
+  // Interruptor general de correos (Configuración): apagado, solo se permite la vista previa.
+  const { data: interruptor } = await admin.from('configuracion').select('correos_habilitados').limit(1).maybeSingle()
+  if (!vistaPrevia && interruptor?.correos_habilitados !== true) return json({ ok: false, error: 'correos_deshabilitados' }, 423)
 
   const { data: avisados } = await admin.from('avisos_enviados').select('tipo, ref_id')
   const yaAvisado = new Set((avisados ?? []).map((a: any) => `${a.tipo}:${a.ref_id}`))

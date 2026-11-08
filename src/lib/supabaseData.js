@@ -512,32 +512,35 @@ export async function deleteGroup(id) {
 
 /* ── Alumnos (escritura) ── */
 
-/* El alta de alumnos va SIEMPRE con su primer pago: altaAlumnoConPago (abajo). */
+/* El alta de alumnos pasa por altaAlumnoConPago (abajo); el pago es opcional. */
 const MENSAJES_ALTA_ALUMNO = {
   sin_permiso_altas: 'No tienes permiso para dar de alta alumnos. Solicítalo a un administrador.',
   forbidden: 'No puedes dar de alta alumnos en ese grupo.',
   email_already_exists: 'Ese correo ya está registrado.',
   group_not_found: 'El grupo seleccionado no existe.',
-  falta_total: 'Escribe el total del curso.',
-  falta_primer_pago: 'Registra el primer importe: es obligatorio para dar de alta.',
+  falta_total: 'Para registrar un importe escribe también el total del curso.',
+  monto_invalido: 'El importe no puede ser negativo.',
   pago_mayor_al_total: 'El primer pago no puede ser mayor que el total del curso.',
   falta_metodo: 'Elige la forma de pago.',
   modalidad_invalida: 'Elige contado o mensualidades.',
 }
 
 /**
- * Alta obligatoria con pago: crea el alumno, su plan de pago y el primer
- * importe en UNA operación (si algo falla no queda nada a medias).
- * `pago`: { total, modalidad, mensualidades, inicio, concepto, monto, metodo, esInscripcion, referencia }
+ * Crea el alumno y, si se dan, su plan de pago y el primer importe, en UNA
+ * operación (si algo falla no queda nada a medias). El pago es opcional: sin
+ * `pago.total` no se crea plan; sin `pago.monto` no se registra movimiento.
+ * La cuenta de acceso se crea igual con o sin pago.
+ * `pago`: { total, modalidad, mensualidades, inicio, concepto, monto, metodo, esInscripcion, referencia } | null
  */
-export async function altaAlumnoConPago({ name, email, groupId, password, tutor = {}, sucursal = null, personalEmail = null, whatsapp = null, universidadArea = null, pago }) {
+export async function altaAlumnoConPago({ name, email, groupId, password, tutor = {}, sucursal = null, personalEmail = null, whatsapp = null, universidadArea = null, pago = null }) {
+  const p = pago ?? {}
   const { data, error } = await supabase.rpc('alta_alumno_con_pago', {
     p_name: name, p_email: email, p_group_id: groupId, p_password: password,
     p_tutor_name: tutor.name ?? null, p_tutor_email: tutor.email ?? null, p_tutor_phone: tutor.phone ?? null,
     p_sucursal: sucursal,
-    p_total: pago.total, p_modalidad: pago.modalidad, p_mensualidades: pago.mensualidades,
-    p_inicio: pago.inicio || null, p_concepto: pago.concepto || 'Curso',
-    p_monto: pago.monto, p_metodo: pago.metodo, p_es_inscripcion: !!pago.esInscripcion, p_referencia: pago.referencia || null,
+    p_total: p.total ?? null, p_modalidad: p.total == null ? null : p.modalidad, p_mensualidades: p.mensualidades ?? null,
+    p_inicio: p.inicio || null, p_concepto: p.concepto || 'Curso',
+    p_monto: p.monto || null, p_metodo: p.monto ? p.metodo : null, p_es_inscripcion: !!p.esInscripcion, p_referencia: p.referencia || null,
   })
   if (error) {
     const clave = Object.keys(MENSAJES_ALTA_ALUMNO).find(k => (error.message ?? '').includes(k))

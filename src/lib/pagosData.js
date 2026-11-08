@@ -109,6 +109,25 @@ export async function fetchResumenPagos() {
 }
 
 /**
+ * Ids de los alumnos que todavía no han pagado nada (ni curso ni inscripción).
+ *
+ * El alta ya no exige pago, así que la lista de Alumnos los marca. Una beca
+ * completa (plan con total 0) no cuenta como adeudo. La política de `pagos`
+ * solo deja leer a quien tiene el apartado Pagos: quien no lo tiene recibiría
+ * a todos como "sin pagos", por eso la pantalla solo lo pide en ese caso.
+ */
+export async function fetchAlumnosSinPagos() {
+  const { data, error } = await supabase
+    .from('v_pagos_resumen')
+    .select('student_id, plan_id, total, pagado, inscripcion_pagada')
+  if (error) throw error
+  return new Set(data
+    .filter(r => (num(r.pagado) ?? 0) + (num(r.inscripcion_pagada) ?? 0) <= 0
+      && !(r.plan_id && num(r.total) === 0))
+    .map(r => r.student_id))
+}
+
+/**
  * Movimientos de los planes indicados.
  *
  * Se piden por lote y no de uno en uno: la pantalla necesita saber con qué

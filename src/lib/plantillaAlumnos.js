@@ -8,8 +8,9 @@
  * 3. Se dan de alta una por una (mismo camino que el alta manual) y se
  *    entrega un Excel con las credenciales generadas.
  *
- * Alta obligatoria con pago: cada fila trae el total del curso, el primer
- * importe y la forma de pago; sin ellos la fila no se da de alta.
+ * El pago es opcional: cada fila puede traer el total del curso, el primer
+ * importe y la forma de pago. Sin importe la fila se da de alta igual (con un
+ * aviso) y el alumno queda marcado "sin pagos".
  *
  * El usuario de acceso (correo @siga.mx) y la contraseña los genera el
  * sistema: el alumno nunca los elige.
@@ -33,10 +34,10 @@ export function columnasPlantilla(grupo) {
     { clave: 'tutorTelefono', titulo: 'Teléfono del tutor',       ancho: 18, alias: ['telefono tutor', 'celular tutor'] },
     { clave: 'tutorWhatsapp', titulo: 'WhatsApp del tutor',       ancho: 18, alias: ['whatsapp tutor'] },
     ...(universidad ? [{ clave: 'area', titulo: 'Área (1 a 4)', ancho: 12, alias: ['area', 'area de examen'] }] : []),
-    { clave: 'total',         titulo: 'Total del curso *',        ancho: 16, alias: ['total', 'costo', 'costo del curso', 'precio'] },
+    { clave: 'total',         titulo: 'Total del curso',        ancho: 16, alias: ['total', 'costo', 'costo del curso', 'precio'] },
     { clave: 'mensualidades', titulo: 'Mensualidades (vacío = contado)', ancho: 16, alias: ['mensualidades', 'meses', 'numero de mensualidades'] },
-    { clave: 'primerPago',    titulo: 'Primer pago *',            ancho: 14, alias: ['primer pago', 'anticipo', 'pago inicial', 'primer importe'] },
-    { clave: 'formaPago',     titulo: 'Forma de pago *',          ancho: 20, alias: ['forma de pago', 'metodo', 'metodo de pago'] },
+    { clave: 'primerPago',    titulo: 'Primer pago',            ancho: 14, alias: ['primer pago', 'anticipo', 'pago inicial', 'primer importe'] },
+    { clave: 'formaPago',     titulo: 'Forma de pago',          ancho: 20, alias: ['forma de pago', 'metodo', 'metodo de pago'] },
   ]
 }
 
@@ -62,7 +63,8 @@ export async function descargarPlantilla(grupo, nombreSucursal = '') {
     ['Cómo llenarla'],
     ['1. Sube este archivo a Google Drive y ábrelo con Google Sheets (o compártelo así como está).'],
     ['2. Cada alumno escribe sus datos en UNA fila de la hoja "Alumnos". No cambies los títulos de la primera fila.'],
-    ['3. Son obligatorios "Nombre completo", "Total del curso", "Primer pago" y "Forma de pago": sin el pago no se puede dar de alta.'],
+    ['3. Solo "Nombre completo" es obligatorio. El pago es opcional: si alguien aún no paga, deja vacíos "Primer pago" y "Forma de pago".'],
+    ['   Si escribes un primer pago, escribe también el total del curso y la forma de pago.'],
     ['   Forma de pago: efectivo, transferencia, tarjeta de crédito o tarjeta de débito. Mensualidades: número (vacío = pago de contado).'],
     ['4. Cuando estén todos, descarga el archivo (Archivo → Descargar → Microsoft Excel o CSV).'],
     ['5. En SIGA: Grupos → tarjeta del grupo → "Alta masiva" → sube el archivo.'],
@@ -137,17 +139,23 @@ export async function leerArchivoAlumnos(file, grupo) {
       if (!areasValidas.includes(n)) { avisos.push('Área no válida: se dejará sin área'); datos.area = '' }
       else datos.area = String(n)
     }
-    // Pago inicial obligatorio.
+    // Pago inicial opcional: si viene, se valida; si no, solo se avisa.
     const num = v => Number(String(v).replace(/[^\d.]/g, ''))
-    if (datos.total === '' || !(num(datos.total) >= 0)) errores.push('Falta el total del curso')
-    else datos.total = String(num(datos.total))
-    if (datos.primerPago === '' || (num(datos.total) > 0 && !(num(datos.primerPago) > 0))) errores.push('Falta el primer pago')
-    else if (num(datos.primerPago) > num(datos.total) && num(datos.total) > 0) errores.push('El primer pago es mayor que el total')
-    else datos.primerPago = String(num(datos.primerPago))
+    const conTotal = datos.total !== '' && num(datos.total) >= 0
+    const conPago = datos.primerPago !== '' && num(datos.primerPago) > 0
+    if (datos.total !== '' && !conTotal) errores.push('Total del curso no válido')
+    datos.total = conTotal ? String(num(datos.total)) : ''
+    datos.primerPago = conPago ? String(num(datos.primerPago)) : ''
     const forma = normalizar(datos.formaPago)
     datos.metodo = forma.includes('transf') ? 'transferencia' : forma.includes('debito') ? 'tarjeta_debito'
       : forma.includes('credito') || forma.includes('tarjeta') ? 'tarjeta_credito' : forma.includes('efectivo') ? 'efectivo' : ''
-    if (!datos.metodo) errores.push('Forma de pago no válida (efectivo, transferencia, tarjeta de crédito o débito)')
+    if (conPago) {
+      if (!conTotal) errores.push('Hay primer pago pero falta el total del curso')
+      else if (num(datos.primerPago) > num(datos.total) && num(datos.total) > 0) errores.push('El primer pago es mayor que el total')
+      if (!datos.metodo) errores.push('Forma de pago no válida (efectivo, transferencia, tarjeta de crédito o débito)')
+    } else {
+      avisos.push('Sin pago: se dará de alta y quedará marcado "sin pagos"')
+    }
     const meses = Number(String(datos.mensualidades).replace(/\D/g, ''))
     datos.modalidad = meses > 1 ? 'mensualidades' : 'contado'
     datos.meses = meses > 1 ? Math.min(meses, 24) : 1
@@ -178,8 +186,8 @@ export async function importarAlumnos(grupo, filas, { correosUsados = [], alAvan
       email = `${generarUsuario(datos.nombre, usados)}@${DOMINIO_CORREO}`
       res = await altaAlumnoConPago({
         name: datos.nombre, email, groupId: grupo.id, password, sucursal: grupo.sucursal ?? null,
-        pago: { total: Number(datos.total), modalidad: datos.modalidad, mensualidades: datos.meses, inicio: null,
-                monto: Number(datos.primerPago), metodo: datos.metodo, esInscripcion: false, referencia: null },
+        pago: datos.total === '' ? null : { total: Number(datos.total), modalidad: datos.modalidad, mensualidades: datos.meses, inicio: null,
+                monto: datos.primerPago === '' ? null : Number(datos.primerPago), metodo: datos.metodo, esInscripcion: false, referencia: null },
         tutor: { name: datos.tutorNombre || null, email: datos.tutorCorreo || null,
                  phone: datos.tutorTelefono || null, whatsapp: datos.tutorWhatsapp || datos.tutorTelefono || null },
         personalEmail: datos.correoPersonal || null, whatsapp: datos.whatsapp || null,

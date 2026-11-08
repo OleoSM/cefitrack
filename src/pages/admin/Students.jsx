@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Pencil, Trash2, KeyRound, AlertCircle, RefreshCw, ShieldCheck } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, KeyRound, AlertCircle, RefreshCw, ShieldCheck, Flag } from 'lucide-react'
 import PermisosAlumnoModal from '../../components/admin/PermisosAlumnoModal'
 import { statusConfig, getStatusConfig } from '../../data/mockData'
 import { fetchStudents, fetchGroups, deleteStudent, fetchAttendanceStats } from '../../lib/supabaseData'
+import { fetchAlumnosSinPagos } from '../../lib/pagosData'
 import {
   DataTable, DataTableRow,
   DataTableAvatar, DataTableBadge, DataTableBar, SkeletonRows,
@@ -22,21 +23,30 @@ import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 const attColor   = r => r >= 90 ? 'var(--good)' : r >= 75 ? 'var(--info)' : 'var(--bad)'
 const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
+/* Qué columna aparece en cada ancho. Medido el 2026-11-08: con la barra
+   lateral (desde lg) la fila mide ~715 px a 1024, ~971 a 1280 y ~1230 a 1536.
+   Las columnas fijas se suman de forma que a "Alumno" le queden siempre
+   ~170 px o más; antes, a 1024–1440 se quedaba en 0–127 px y el nombre se
+   montaba sobre las demás columnas. "action" cabe 4 botones (con el de
+   eliminar): 4×28+3×2 en teléfono y 4×32+3×4 desde sm. */
 const COLUMNS = [
-  { key:'name',    label:'Alumno',     className:'flex-grow min-w-0 sm:min-w-[140px]' },
+  { key:'name',    label:'Alumno',     className:'flex-grow min-w-0' },
   { key:'group',   label:'Grupo',      className:'w-28 hidden md:flex' },
-  { key:'att',     label:'Asistencia', className:'w-36 hidden lg:flex' },
+  { key:'att',     label:'Asistencia', className:'w-36 hidden xl:flex' },
   { key:'grade',   label:'Promedio',   className:'w-12 sm:w-24' },
-  { key:'tasks',   label:'Tareas',     className:'w-32 hidden xl:flex' },
-  { key:'status',  label:'Estado',     className:'w-28 hidden md:flex' },
-  { key:'contact', label:'Contacto',   className:'w-40 hidden xl:flex' },
-  { key:'action',  label:'',           className:'w-[6.5rem] md:w-32 flex justify-end' },
+  { key:'tasks',   label:'Tareas',     className:'w-32 hidden min-[1800px]:flex' },
+  { key:'status',  label:'Estado',     className:'w-28 hidden xl:flex' },
+  { key:'contact', label:'Contacto',   className:'w-40 hidden 2xl:flex flex-col' },
+  { key:'action',  label:'',           className:'w-[7.5rem] sm:w-[9rem] flex justify-end' },
 ]
+const COL = Object.fromEntries(COLUMNS.map(c => [c.key, c.className]))
 
 export default function Students() {
   const navigate = useNavigate()
   const { getAccent } = useGroupColors()
-  const { currentUser, allowedSucursales, canAccess, puedeDarAltas } = useAuth()
+  const { currentUser, allowedSucursales, canAccess, puedeDarAltas, puedeVer } = useAuth()
+  // Solo quien ve Pagos puede leer los importes; a los demás no se les marca nada.
+  const veoPagos = puedeVer('pagos')
   const isAdmin = currentUser?.role === 'admin'
   const { sucursales: catalogoSucursales, nombreDe } = useSucursales()
 
@@ -59,6 +69,8 @@ export default function Students() {
   const restaurado = useRef(false)
   const [buscaGrupo, setBuscaGrupo] = useState('')
   const [statusFilter, setStatus] = useState('all')
+  const [pagoFilter, setPagoFilter] = useState('all')
+  const [sinPagos, setSinPagos]   = useState(() => new Set())   // ids de alumnos que no han pagado nada
   const [sort, setSort]           = useState('name')
 
   /* CRUD */
@@ -75,7 +87,12 @@ export default function Students() {
       const [s, g] = await Promise.all([fetchStudents(), fetchGroups()])
       // `students.attendance_rate` es el valor sembrado y quedó obsoleto: la tasa
       // real se calcula de las sesiones capturadas, igual que en Grupos y Rankings.
-      const stats = await fetchAttendanceStats(s)
+      const [stats, sp] = await Promise.all([
+        fetchAttendanceStats(s),
+        // Si falla, la lista se muestra igual, solo sin banderas.
+        veoPagos ? fetchAlumnosSinPagos().catch(() => new Set()) : Promise.resolve(new Set()),
+      ])
+      setSinPagos(sp)
       setStudents(s.map(st => ({ ...st, attendanceRate: stats.byStudent[st.id] ?? null })))
       setGroups(g)
       setLoadError(null)
@@ -84,7 +101,7 @@ export default function Students() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [veoPagos])
 
   useEffect(() => { load() }, [load])
 
@@ -119,6 +136,7 @@ export default function Students() {
         && (sucursalFilter === TODAS || grp?.sucursal === sucursalFilter)
         && (groupFilter === 'all' || s.groupId === groupFilter)
         && (statusFilter === 'all' || s.status === statusFilter)
+        && (pagoFilter === 'all' || sinPagos.has(s.id))
     })
     .sort((a, b) => {
       // Los alumnos sin datos van al final en vez de romper el orden con NaN.
@@ -176,6 +194,8 @@ export default function Students() {
           { id:'estado', label:'Estado', value:statusFilter, onChange:setStatus, porDefecto:'all',
             options:[{ value:'all', label:'Todos' },
               ...Object.entries(statusConfig).map(([k,v]) => ({ value:k, label:v.label }))] },
+          ...(veoPagos ? [{ id:'pago', label:'Pago', value:pagoFilter, onChange:setPagoFilter, porDefecto:'all',
+            options:[{ value:'all', label:'Todos' }, { value:'sin-pagos', label:`Sin pagos (${sinPagos.size})` }] }] : []),
           { id:'orden', label:'Ordenar', value:sort, onChange:setSort, porDefecto:'name',
             options:[{ value:'name', label:'Nombre A-Z' }, { value:'grade', label:'Mayor promedio' },
               { value:'attend', label:'Mayor asistencia' }] },
@@ -234,13 +254,17 @@ export default function Students() {
               cells={[
                 /* Alumno */
                 {
-                  className: 'flex-grow min-w-0 sm:min-w-[140px]',
+                  className: COL.name,
                   content: (
                     <DataTableAvatar
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                       statusColor={avatarColor}
                       avatarSrc={s.avatarSrc}
-                      name={s.name}
+                      name={sinPagos.has(s.id) ? <>
+                        <Flag size={12} aria-label="Sin pagos" className="inline -mt-0.5 mr-1" style={{ color:'var(--bad)' }}>
+                          <title>Aún no ha pagado nada</title>
+                        </Flag>{s.name}
+                      </> : s.name}
                       sub={<>
                         {s.matricula && <span className="font-mono font-semibold" style={{ color:'var(--t2)' }}>#{s.matricula} · </span>}
                         <span className="sm:hidden">{grp?.name}</span>
@@ -252,7 +276,7 @@ export default function Students() {
                 },
                 /* Grupo */
                 {
-                  className: 'w-28 hidden md:flex',
+                  className: COL.group,
                   content: (
                     <span
                       className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
@@ -263,7 +287,7 @@ export default function Students() {
                 },
                 /* Asistencia */
                 {
-                  className: 'w-36 hidden lg:flex',
+                  className: COL.att,
                   content: s.attendanceRate === null
                     ? <span className="text-xs" style={{ color:'var(--t3)' }}>Sin datos</span>
                     : (
@@ -276,7 +300,7 @@ export default function Students() {
                 },
                 /* Promedio */
                 {
-                  className: 'w-12 sm:w-24',
+                  className: COL.grade,
                   content: s.avgGrade === null
                     ? <span className="text-sm" style={{ color:'var(--t4)' }}>—</span>
                     : (
@@ -287,7 +311,7 @@ export default function Students() {
                 },
                 /* Tareas */
                 {
-                  className: 'w-32 hidden xl:flex',
+                  className: COL.tasks,
                   content: s.assignmentsTotal > 0
                     ? (
                       <DataTableBar
@@ -301,7 +325,7 @@ export default function Students() {
                 },
                 /* Estado */
                 {
-                  className: 'w-28 hidden md:flex',
+                  className: COL.status,
                   content: (
                     <DataTableBadge
                       label={cfg.label}
@@ -314,7 +338,7 @@ export default function Students() {
                 },
                 /* Contacto */
                 {
-                  className: 'w-40 hidden xl:flex flex-col',
+                  className: COL.contact,
                   content: s.tutor?.name || s.tutor?.email ? (
                     <>
                       <p className="text-xs font-medium truncate" style={{ color:'var(--t2)' }}>
@@ -330,9 +354,9 @@ export default function Students() {
                 },
                 /* Acciones */
                 {
-                  className: 'w-[6.5rem] md:w-32 flex justify-end',
+                  className: COL.action,
                   content: (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5 sm:gap-1">
                       {[
                         { icon: Pencil,   title: 'Editar alumno',           hover: 'var(--info)', act: () => setFormFor({ student: s }) },
                         { icon: ShieldCheck, title: 'Permisos del portal',  hover: 'var(--accent)', act: () => setPermisosFor(s) },
@@ -343,7 +367,7 @@ export default function Students() {
                         <button key={title} title={title}
                           onClick={e => { e.stopPropagation(); act() }}
                           aria-label={title}
-                          className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-colors"
+                          className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center transition-colors"
                           style={{ color:'var(--t2)', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
                           onMouseEnter={e => e.currentTarget.style.color = hover}
                           onMouseLeave={e => e.currentTarget.style.color = 'var(--t2)'}>

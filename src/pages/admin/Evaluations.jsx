@@ -170,8 +170,8 @@ const COLUMNS = [
   { key:'materia', label:'Materia',       className:'w-36 hidden sm:flex' },
   { key:'tipo',    label:'Tipo',          className:'w-36 hidden md:flex' },
   { key:'cal',     label:'Calificación',  className:'w-20 sm:w-28' },
-  { key:'periodo', label:'Periodo',       className:'w-28 hidden lg:flex' },
-  { key:'fecha',   label:'Fecha',         className:'w-24 hidden lg:flex' },
+  { key:'periodo', label:'Periodo',       className:'w-28 hidden xl:flex' },
+  { key:'fecha',   label:'Fecha',         className:'w-24 hidden xl:flex' },
   { key:'acciones',label:'',              className:'w-10 flex justify-end' },
 ]
 
@@ -345,11 +345,11 @@ export default function Evaluations() {
                 ),
               },
               {
-                className: 'w-28 hidden lg:flex',
+                className: 'w-28 hidden xl:flex',
                 content: <span className="text-xs" style={{ color:'var(--t3)' }}>{e.periodo ?? '—'}</span>,
               },
               {
-                className: 'w-24 hidden lg:flex',
+                className: 'w-24 hidden xl:flex',
                 content: <span className="text-xs font-mono" style={{ color:'var(--t3)' }}>{e.fecha}</span>,
               },
               {

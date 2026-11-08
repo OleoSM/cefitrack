@@ -37,7 +37,7 @@ function CeldaDocumento({ etiqueta, doc, onVer, onAprobar, onRechazar, ocupado }
   const trabajando = ocupado === doc?.id
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      <span className="lg:hidden text-[10px] font-bold uppercase tracking-wider w-20 flex-shrink-0"
+      <span className="2xl:hidden text-[10px] font-bold uppercase tracking-wider w-20 flex-shrink-0"
         style={{ color:'var(--t3)' }}>{etiqueta}</span>
       {!doc
         ? <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={estiloEstado(null)}>Sin entregar</span>
@@ -47,20 +47,20 @@ function CeldaDocumento({ etiqueta, doc, onVer, onAprobar, onRechazar, ocupado }
               {doc.status === 'validado' ? 'Validado' : doc.status === 'rechazado' ? 'Rechazado' : 'Por revisar'}
             </span>
             <button title="Ver documento" onClick={() => onVer(doc)}
-              className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+              className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
               style={{ background:'var(--info-soft)', color:'var(--info)' }}>
               <Eye size={12}/>
             </button>
             {doc.status !== 'validado' && (
               <button title="Aprobar" disabled={trabajando} onClick={() => onAprobar(doc)}
-                className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                 style={{ background:'var(--good-soft)', color:'var(--good)' }}>
                 <Check size={12}/>
               </button>
             )}
             {doc.status !== 'rechazado' && (
               <button title="Rechazar" disabled={trabajando} onClick={() => onRechazar({ doc, motivo:'' })}
-                className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                 style={{ background:'var(--bad-soft)', color:'var(--bad)' }}>
                 <X size={12}/>
               </button>
@@ -71,12 +71,15 @@ function CeldaDocumento({ etiqueta, doc, onVer, onAprobar, onRechazar, ocupado }
   )
 }
 
+/* Los 3 documentos (CURP, INE, garantía) caben en columnas solo desde 2xl:
+   con la barra lateral, a 1024–1440 px sumaban más que la fila y el contenido
+   se montaba (medido 2026-11-08). Por debajo se apilan bajo el nombre. */
 const COLUMNS_TC = [
   { key:'alumno',   label:'Alumno',    className:'flex-grow min-w-[150px]' },
   { key:'firma',    label:'Firma T&C', className:'w-40 hidden sm:flex' },
-  { key:'curp',     label:'CURP',      className:'w-52 hidden lg:flex' },
-  { key:'ine',      label:'INE tutor', className:'w-52 hidden lg:flex' },
-  { key:'garantia', label:'Garantía',  className:'w-52 hidden lg:flex' },
+  { key:'curp',     label:'CURP',      className:'w-52 hidden 2xl:flex' },
+  { key:'ine',      label:'INE tutor', className:'w-52 hidden 2xl:flex' },
+  { key:'garantia', label:'Garantía',  className:'w-52 hidden 2xl:flex' },
   { key:'acceso',   label:'Acceso',    className:'w-24 flex' },
 ]
 
@@ -332,7 +335,7 @@ export default function TermsManager() {
               </span>
               {tyc && (
                 <button title="Ver PDF firmado a mano" aria-label="Ver PDF firmado a mano" onClick={() => verDocumento(tyc)}
-                  className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background:'var(--info-soft)', color:'var(--info)' }}>
                   <FileText size={12}/>
                 </button>
@@ -340,12 +343,12 @@ export default function TermsManager() {
               {isSigned && (
                 <>
                   <button title="Ver firma" aria-label="Ver firma" onClick={() => setPreview(s)}
-                    className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
+                    className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
                     style={{ background:'var(--info-soft)', color:'var(--info)' }}>
                     <Eye size={12}/>
                   </button>
                   <button title="Invalidar firma" aria-label="Invalidar firma" onClick={() => setConfirmReset(s.id)}
-                    className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
+                    className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
                     style={{ background:'var(--bad-soft)', color:'var(--bad)' }}>
                     <Trash2 size={12}/>
                   </button>
@@ -357,7 +360,7 @@ export default function TermsManager() {
           /* Garantía — llega por archivo o por firmas dibujadas */
           const garantia = (
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="lg:hidden text-[10px] font-bold uppercase tracking-wider w-20 flex-shrink-0"
+              <span className="2xl:hidden text-[10px] font-bold uppercase tracking-wider w-20 flex-shrink-0"
                 style={{ color:'var(--t3)' }}>Garantía</span>
               <span className="text-[11px] font-bold px-2 py-1 rounded-full flex-shrink-0"
                 style={estiloEstado(s.garantiaEstado)}>
@@ -366,14 +369,14 @@ export default function TermsManager() {
               </span>
               {gar && (
                 <button title="Ver garantía subida" aria-label="Ver garantía subida" onClick={() => verDocumento(gar)}
-                  className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background:'var(--info-soft)', color:'var(--info)' }}>
                   <Eye size={12}/>
                 </button>
               )}
               {(s.garantiaFirmaAlumno || s.garantiaFirmaTutor) && (
                 <button title="Ver firmas de la garantía" aria-label="Ver firmas de la garantía" onClick={() => setGarantiaPreview(s)}
-                  className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
                   <PenLine size={12}/>
                 </button>
@@ -381,7 +384,7 @@ export default function TermsManager() {
               {s.garantiaEstado === 'entregada' && (
                 <button title="Validar garantía" aria-label="Validar garantía" disabled={ocupado === s.id}
                   onClick={() => aprobarGarantia(s.id)}
-                  className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                  className="w-9 h-9 2xl:w-7 2xl:h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                   style={{ background:'var(--good-soft)', color:'var(--good)' }}>
                   <Check size={12}/>
                 </button>
@@ -412,7 +415,7 @@ export default function TermsManager() {
                       </p>
                     </div>
                   </div>
-                  <div className="lg:hidden mt-2 space-y-1.5">
+                  <div className="2xl:hidden mt-2 space-y-1.5">
                     <div className="sm:hidden">{firma}</div>
                     {celdaCurp}
                     {celdaIne}
@@ -422,10 +425,10 @@ export default function TermsManager() {
                 </div>
               )},
               { className: 'w-40 hidden sm:flex', content: firma },
-              { className: 'w-52 hidden lg:flex', content: celdaCurp },
-              { className: 'w-52 hidden lg:flex', content: celdaEcoems
+              { className: 'w-52 hidden 2xl:flex', content: celdaCurp },
+              { className: 'w-52 hidden 2xl:flex', content: celdaEcoems
                 ? <div className="space-y-1.5 w-full">{celdaIne}{celdaEcoems}</div> : celdaIne },
-              { className: 'w-52 hidden lg:flex', content: garantia },
+              { className: 'w-52 hidden 2xl:flex', content: garantia },
               { className: 'w-24 flex', content: (
                 /* Acceso — lo decide la BD al validar todo el expediente */
                 <span className="badge text-[10px] px-2 py-1"

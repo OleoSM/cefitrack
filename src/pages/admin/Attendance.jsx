@@ -28,8 +28,9 @@ import {
   ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
   FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
   ChevronRight, UserCheck, CheckSquare, RotateCw, RefreshCw, CloudOff,
-  Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown, Download, X
+  Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown, Download, X, ListChecks
 } from 'lucide-react'
+import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
 
 const QR_PREFIX   = 'EDUTRACK:'
 const DEBOUNCE_MS = 3000
@@ -44,6 +45,17 @@ const COLUMNS_LISTA = [
   { key:'hora',    label:'Hora',       className:'w-16 sm:w-20 flex justify-end' },
   { key:'retardo', label:'Retardo',    className:'w-16 sm:w-20 flex justify-center' },
 ]
+
+/* Lista manual: el mismo registro que el QR (alumno + hora + retardo), pero
+   marcando una casilla. Sirve cuando no hay cámara o el alumno no trae su QR. */
+const COLUMNS_MANUAL = [
+  { key:'check',   label:'',           className:'w-9 flex justify-center' },
+  { key:'alumno',  label:'Alumno',     className:'flex-grow min-w-0' },
+  { key:'hora',    label:'Hora',       className:'w-14 sm:w-20 flex justify-end' },
+  { key:'retardo', label:'Retardo',    className:'w-16 sm:w-20 flex justify-center' },
+]
+const CLAVE_MODO = 'siga_pase_lista_modo'
+const horaAhora = () => new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' })
 
 export default function Attendance() {
   const navigate = useNavigate()
@@ -93,12 +105,26 @@ export default function Attendance() {
   const [retardos,       setRetardos]      = useState({})     // { studentId: bool }
   const [, forceTick] = useState(0)
 
+  /* ── Modo de pase de lista: QR o manual (se recuerda en este navegador) ── */
+  const [modo, setModoState] = useState(() => {
+    try { return localStorage.getItem(CLAVE_MODO) === 'manual' ? 'manual' : 'qr' } catch { return 'qr' }
+  })
+  const setModo = m => {
+    setModoState(m)
+    try { localStorage.setItem(CLAVE_MODO, m) } catch { /* sin storage */ }
+  }
+  const [buscaManual,  setBuscaManual]  = useState('')
+  const [filtroManual, setFiltroManual] = useState('todos')   // todos | pendientes | presentes
+
   const qrRef          = useRef(null)        // Html5Qrcode instance
   const recentRef      = useRef(new Set())   // debounce set
   const tableScrollRef = useRef(null)
   const groupIdRef     = useRef(selectedGrp) // stable ref so handleDecode stays stable
   const tolExpiredRef  = useRef(false)       // ref estable para handleDecode
   const studentsRef    = useRef([])          // ref estable para handleDecode
+  /* ¿Esta lista ya tuvo registros? Si en manual se desmarca al último, hay
+     que guardar la lista vacía; si no, la base se quedaba con el anterior. */
+  const huboRegistrosRef = useRef(false)
 
   useEffect(() => { groupIdRef.current = selectedGrp }, [selectedGrp])
   useEffect(() => { studentsRef.current = students }, [students])
@@ -180,6 +206,30 @@ export default function Attendance() {
 
   const toggleRetardo = id => setRetardos(prev => ({ ...prev, [id]: !prev[id] }))
 
+  /* Marca o desmarca a mano. Marcar registra la hora de ese momento y aplica
+     la misma regla de retardo que el QR; desmarcar lo quita de la lista. */
+  const marcarManual = (student) => {
+    const presente = scannedLog.some(e => e.student.id === student.id)
+    if (presente) {
+      setScannedLog(prev => prev.filter(e => e.student.id !== student.id))
+      setRetardos(prev => { const n = { ...prev }; delete n[student.id]; return n })
+      setLastScanned(prev => prev?.student.id === student.id ? null : prev)
+      return
+    }
+    const time = horaAhora()
+    setScannedLog(prev => prev.some(e => e.student.id === student.id) ? prev : [...prev, { student, time }])
+    setRetardos(prev => ({ ...prev, [student.id]: tolExpiredRef.current }))
+    setLastScanned({ student, time })
+  }
+  const marcarVarios = (lista) => {
+    const ya = new Set(scannedLog.map(e => e.student.id))
+    const nuevos = lista.filter(s => !ya.has(s.id))
+    if (!nuevos.length) return
+    const time = horaAhora()
+    setScannedLog(prev => [...prev, ...nuevos.filter(s => !prev.some(e => e.student.id === s.id)).map(student => ({ student, time }))])
+    setRetardos(prev => ({ ...prev, ...Object.fromEntries(nuevos.map(s => [s.id, tolExpiredRef.current])) }))
+  }
+
   /* ── Scanner controls ──────────────────────────────────────── */
   const startScanner = useCallback(async () => {
     if (qrRef.current) return
@@ -210,21 +260,22 @@ export default function Attendance() {
   /* ── Effects ────────────────────────────────────────────────── */
   useEffect(() => () => { qrRef.current?.stop().catch(() => {}); qrRef.current = null }, [])
 
+  // La cámara solo se enciende en modo QR; en manual se apaga.
   useEffect(() => {
-    if (view === 'scan' && !showTolModal) {
+    if (view === 'scan' && !showTolModal && modo === 'qr') {
       const t = setTimeout(startScanner, 350)
       return () => clearTimeout(t)
-    } else if (view !== 'scan') {
-      stopScanner()
     }
-  }, [view, showTolModal]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (view !== 'scan' || modo !== 'qr') stopScanner()
+  }, [view, showTolModal, modo]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-scroll table to bottom on new entry
+  // Auto-scroll table to bottom on new entry (solo QR: en manual movería la
+  // lista bajo el dedo cada vez que se marca a alguien).
   useEffect(() => {
-    if (tableScrollRef.current) {
+    if (modo === 'qr' && tableScrollRef.current) {
       tableScrollRef.current.scrollTop = tableScrollRef.current.scrollHeight
     }
-  }, [scannedLog])
+  }, [scannedLog, modo])
 
   // Tick de UI cada segundo mientras hay un cronómetro activo, para refrescar
   // la cuenta regresiva (el valor real se calcula siempre contra tiempo real).
@@ -237,7 +288,8 @@ export default function Attendance() {
   // Guarda la sesión (borrador) en la BD cada vez que cambia algo relevante,
   // con un pequeño debounce para no disparar una escritura por cada escaneo.
   useEffect(() => {
-    if (!(selectedGrp && selectedDate && scannedLog.length > 0)) return
+    if (scannedLog.length > 0) huboRegistrosRef.current = true
+    if (!(selectedGrp && selectedDate && huboRegistrosRef.current)) return
     let vigente = true
     const t = setTimeout(() => {
       setSaveState('saving')
@@ -274,6 +326,7 @@ export default function Attendance() {
       setLastScanned(null)
       return
     }
+    huboRegistrosRef.current = false
     setSelectedGrp(groupId)
     setSelectedDate(today)
     setScannedLog([])
@@ -349,6 +402,7 @@ export default function Attendance() {
 
   const goBack = (force = false) => {
     if (!force && scannedLog.length > 0) { setShowLeaveModal(true); return }
+    huboRegistrosRef.current = false
     stopScanner()
     setView('pick')
     setSelectedGrp(null)
@@ -435,6 +489,7 @@ export default function Attendance() {
     }
     refreshIndex()
     setActionBusy(false)
+    huboRegistrosRef.current = false
     setScannedLog([])
     setRetardos({})
     setFinished(false)
@@ -714,6 +769,15 @@ export default function Attendance() {
   const absentCount  = totalCount - presentCount
   const pct          = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0
 
+  // Lista manual: todo el grupo, filtrado por estado y nombre.
+  const horaDe = Object.fromEntries(scannedLog.map(e => [e.student.id, e.time]))
+  const qManual = buscaManual.trim().toLowerCase()
+  const listaManual = [...groupStudents]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .filter(s => (filtroManual === 'todos' || (filtroManual === 'presentes') === !!horaDe[s.id])
+      && (!qManual || s.name.toLowerCase().includes(qManual) || String(s.matricula ?? '').includes(qManual)))
+  const pendientesVisibles = listaManual.filter(s => !horaDe[s.id])
+
   /* ── Resume session modal ────────────────────────────────── */
   const ResumeModal = resumeSession && (
     <ModalPortal maxWidth="max-w-sm" onClose={actionBusy ? undefined : () => goBack(true)}>
@@ -978,7 +1042,7 @@ export default function Attendance() {
       <KpiGrid cols={4}>
         <KpiCard variant="surface" icon={IconAsistencia} tone="good" label="Presentes" value={presentCount}/>
         <KpiCard variant="surface" icon={IconRetardos} tone="warn" label="Retardos" value={retardoCount}/>
-        <KpiCard variant="surface" icon={IconFaltas} tone="neutral" label="Sin escanear" value={absentCount}/>
+        <KpiCard variant="surface" icon={IconFaltas} tone="neutral" label={modo === 'manual' ? 'Sin marcar' : 'Sin escanear'} value={absentCount}/>
         <KpiCard variant="surface" icon={IconAlumnos} tone="info" label="Total" value={totalCount}
           sub={`${pct}% completado`}/>
       </KpiGrid>
@@ -1014,11 +1078,25 @@ export default function Attendance() {
         </div>
       </div>
 
+      {/* ── Modo: QR o manual ──────────────────────────────── */}
+      <div role="tablist" aria-label="Forma de pasar lista" className="grid grid-cols-2 gap-2 sm:max-w-md">
+        {[['qr', 'Escanear QR', QrCode], ['manual', 'Lista manual', ListChecks]].map(([id, label, Icon]) => (
+          <button key={id} type="button" role="tab" aria-selected={modo === id} onClick={() => setModo(id)}
+            className="min-h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+            style={modo === id
+              ? { background:'var(--accent)', color:'var(--accent-contrast)', border:'1px solid var(--accent)' }
+              : { background:'var(--soft-bg)', color:'var(--t2)', border:'1px solid var(--card-border)' }}>
+            <Icon size={15}/> {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── Main layout ────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
         {/* ── Camera column (lg: 2/5) ─────────────────────── */}
-        <div className="lg:col-span-2 space-y-3">
+        {/* En manual se oculta pero sigue montada: Html5Qrcode necesita su nodo. */}
+        <div className={`lg:col-span-2 space-y-3 ${modo === 'manual' ? 'hidden' : ''}`}>
 
           {/* Camera card */}
           <div className="card overflow-hidden relative" style={{
@@ -1124,7 +1202,7 @@ export default function Attendance() {
         </div>
 
         {/* ── Attendance table (lg: 3/5) ─────────────────── */}
-        <div className="lg:col-span-3 flex flex-col card overflow-hidden" style={{ minHeight: 380 }}>
+        <div className={`${modo === 'manual' ? 'lg:col-span-5' : 'lg:col-span-3'} flex flex-col card overflow-hidden`} style={{ minHeight: 380 }}>
 
           {/* Table top bar */}
           <div className="px-4 py-3 flex items-center justify-between flex-shrink-0"
@@ -1132,7 +1210,7 @@ export default function Attendance() {
             <div className="flex items-center gap-2.5">
               <UserCheck size={14} style={{ color: accentColor }}/>
               <span className="text-sm font-bold" style={{ color: 'var(--t1)' }}>
-                Lista de asistencia
+                {modo === 'manual' ? 'Lista manual' : 'Lista de asistencia'}
               </span>
               {presentCount > 0 && (
                 <span className="text-xs px-2 py-0.5 rounded-full font-bold"
@@ -1146,7 +1224,67 @@ export default function Attendance() {
 
           {/* Table body */}
           <div ref={tableScrollRef} className="flex-1 overflow-y-auto">
-            {scannedLog.length === 0 ? (
+            {modo === 'manual' ? (
+              <div className="p-2 sm:p-3 space-y-3">
+                <BarraFiltros
+                  filtros={[{ id:'estado', label:'Mostrar', value:filtroManual, onChange:setFiltroManual, porDefecto:'todos',
+                    options:[{ value:'todos', label:'Todos' }, { value:'pendientes', label:'Sin marcar' }, { value:'presentes', label:'Presentes' }] }]}
+                  busqueda={{ value:buscaManual, onChange:setBuscaManual, placeholder:'Buscar alumno o matrícula…' }}
+                  resumen={`${presentCount} de ${totalCount}`}
+                  acciones={pendientesVisibles.length > 0 && (
+                    <button type="button" onClick={() => marcarVarios(pendientesVisibles)}
+                      className="btn-secondary flex-shrink-0 text-xs py-2"
+                      title={qManual || filtroManual !== 'todos' ? 'Marca como presentes a los alumnos que se ven en la lista' : 'Marca como presentes a todos los que faltan'}>
+                      <CheckSquare size={14}/> <span className="hidden sm:inline">Marcar&nbsp;</span>{qManual || filtroManual !== 'todos' ? 'visibles' : 'todos'} ({pendientesVisibles.length})
+                    </button>
+                  )}/>
+                <DataTable columns={COLUMNS_MANUAL}>
+                  <ProgressiveList items={listaManual}
+                    emptyLabel={totalCount === 0 ? 'Este grupo no tiene alumnos.' : 'Ningún alumno coincide con el filtro.'}>
+                    {s => {
+                      const hora = horaDe[s.id]
+                      return (
+                        <DataTableRow key={s.id} onClick={() => marcarManual(s)} cells={[
+                          { className:'w-9 flex justify-center', content: (
+                            <span onClick={e => e.stopPropagation()}>
+                              <NeonCheckbox checked={!!hora} onChange={() => marcarManual(s)}
+                                aria-label={`${hora ? 'Quitar asistencia de' : 'Marcar presente a'} ${s.name}`}/>
+                            </span>
+                          )},
+                          { className:'flex-grow min-w-0', content: (
+                            <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+                              <AvatarAlumno student={s} size={24}
+                                style={hora ? { background:'var(--good-solid)', color:'#fff' } : { background:'var(--soft-bg)', color:'var(--t2)' }}/>
+                              <span className="text-xs sm:text-sm font-medium truncate min-w-0"
+                                style={{ color: hora ? 'var(--t1)' : 'var(--t2)' }}>
+                                {s.name}
+                              </span>
+                            </div>
+                          )},
+                          { className:'w-14 sm:w-20 flex justify-end', content: (
+                            <span className="font-mono text-[10px] sm:text-xs font-semibold tabular-nums whitespace-nowrap"
+                              style={{ color: retardos[s.id] ? 'var(--warn)' : hora ? 'var(--t2)' : 'var(--t4)' }}>
+                              {hora ?? '—'}
+                            </span>
+                          )},
+                          { className:'w-16 sm:w-20 flex justify-center', content: hora ? (
+                            <button onClick={e => { e.stopPropagation(); toggleRetardo(s.id) }}
+                              role="switch" aria-checked={!!retardos[s.id]}
+                              aria-label={`Retardo de ${s.name}`}
+                              title={retardos[s.id] ? 'Con retardo — clic para quitar' : 'Marcar retardo'}
+                              className="relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 align-middle"
+                              style={{ background: retardos[s.id] ? 'var(--warn-solid)' : 'var(--t4)' }}>
+                              <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                                style={{ transform: retardos[s.id] ? 'translateX(16px)' : 'translateX(0)' }}/>
+                            </button>
+                          ) : null },
+                        ]}/>
+                      )
+                    }}
+                  </ProgressiveList>
+                </DataTable>
+              </div>
+            ) : scannedLog.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-16 px-6 text-center">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
                   style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
@@ -1208,7 +1346,7 @@ export default function Attendance() {
             <p className="text-xs" style={{ color:'var(--t3)' }}>
               {scannedLog.length > 0
                 ? `${presentCount} de ${totalCount} alumnos registrados`
-                : 'Esperando escaneos…'}
+                : modo === 'manual' ? 'Marca a los alumnos presentes' : 'Esperando escaneos…'}
             </p>
             <div className="flex items-center gap-2">
               {scannedLog.length > 0 && (

@@ -7,7 +7,7 @@ import {
   XCircle, Minus, RotateCcw, ChevronDown,
 } from 'lucide-react'
 import { downloadStampedPdf } from '../../lib/termsPdf'
-import { fetchDocumentos, subirDocumento, guardarGarantia, fetchTerminosActivo } from '../../lib/expedienteData'
+import { fetchDocumentos, subirDocumento, guardarGarantia, fetchTerminosActivo, fetchDocumentoActivo } from '../../lib/expedienteData'
 import { estadoExpediente, leerLectura, guardarLectura } from '../../lib/estadoTerminos'
 import { estadoPerfil } from './EstadoPagina'
 import ModalPortal from '../../components/ui/ModalPortal'
@@ -223,29 +223,25 @@ function HandSignedUpload({ file, onChange }) {
   )
 }
 
-// Respaldo legible cuando el PDF institucional no puede mostrarse.
-const TC_TEXT = `TÉRMINOS Y CONDICIONES — CEFIMAT
-Versión institucional vigente: agosto de 2026
 
-1. SERVICIOS
-CEFIMAT provee servicios educativos de preparación para exámenes de admisión a nivel superior (UNAM, IPN, ECOEMS y otras instituciones).
-
-2. GARANTÍA CEFIMAT
-La garantía de repetición del curso sin costo aplica cuando el alumno cumple simultáneamente con:
-  a) Asistencia mínima del 90% (considerando la regla de 3 retardos = 1 inasistencia)
-  b) Haber presentado todos los exámenes de simulación
-  c) Entregar todas las tareas asignadas y obtener una calificación mínima del 80% en cada una
-
-El incumplimiento de cualquiera de los tres requisitos anula la garantía de forma definitiva.
-
-3. RETARDOS
-Tres (3) retardos equivalen a una (1) inasistencia para efectos del cálculo del porcentaje de asistencia.
-
-4. OBLIGACIONES DEL ALUMNO
-El alumno se compromete a asistir puntualmente, entregar tareas en tiempo y forma, y presentar todos los simulacros programados.
-
-5. VALIDEZ DE LA FIRMA
-La firma digital registrada en esta plataforma tiene carácter de compromiso del alumno. Su validez es responsabilidad exclusiva del firmante.`
+/** PDF incrustado con salida para navegadores que no lo muestran, y descarga. */
+function VisorPdf({ url, descarga }) {
+  return (
+    <>
+      <div className="rounded-xl overflow-hidden" style={{ border:'1px solid var(--card-border)', background:'var(--soft-bg)' }}>
+        <object data={url} type="application/pdf" className="block w-full h-[48vh] min-h-[320px]">
+          <div className="p-6 text-center">
+            <p className="text-sm" style={{ color:'var(--t3)' }}>Tu navegador no puede mostrar el PDF aquí.</p>
+            <a href={url} target="_blank" rel="noreferrer" className="btn-primary inline-flex mt-3">Abrir el documento</a>
+          </div>
+        </object>
+      </div>
+      <a href={url} download={descarga} className="btn-secondary justify-center text-xs w-full">
+        <Download size={13}/> Descargar el PDF para leerlo después
+      </a>
+    </>
+  )
+}
 
 const PRIV_TEXT = `AVISO DE PRIVACIDAD — CEFIMAT
 Versión institucional vigente: agosto de 2026
@@ -268,7 +264,7 @@ CONSERVACIÓN Y SEGURIDAD
 La información se conserva durante el tiempo necesario para prestar los servicios educativos y atender las obligaciones aplicables. CEFIMAT aplica controles administrativos y técnicos para evitar acceso, alteración o divulgación no autorizados.
 
 TUS DERECHOS (ARCO)
-Puedes ejercer tus derechos de Acceso, Rectificación, Cancelación y Oposición escribiendo a privacidad@cefimat.mx.
+Puedes ejercer tus derechos de Acceso, Rectificación, Cancelación y Oposición escribiendo a sucursalneza1@cefimat.com.
 
 TRANSFERENCIAS Y CAMBIOS
 Tus datos no serán transferidos a terceros sin tu consentimiento previo, salvo las excepciones previstas en la Ley Federal de Protección de Datos Personales. Los cambios sustanciales a este aviso se comunicarán por esta plataforma o por los medios de contacto registrados.`
@@ -287,7 +283,7 @@ const PASOS = [
   { id:'docs',     titulo:'Subir tus documentos',            corto:'Documentos', icon:Upload,
     explica:'Sube tu CURP y la identificación (INE) de tu tutor. Sirve una foto clara o un PDF.' },
   { id:'garantia', titulo:'Firmar la garantía del curso',    corto:'Garantía',   icon:FileSignature,
-    explica:'Con tu firma aceptas las condiciones de la garantía: 90 % de asistencia, todos los simulacros, todas las tareas y mínimo un 80 % en cada tarea.' },
+    explica:'Lee la garantía y fírmala. Entre sus requisitos: 90 % de asistencia, el 100 % de las simulaciones, el 100 % de las tareas (mínimo 8/10 en la primera entrega) y al menos el 80 % de los desarrollos de clase.' },
   { id:'firma',    titulo:'Firmar y enviar',                 corto:'Firma',      icon:PenLine,
     explica:'Último paso: firma los Términos y envía tu expediente para que administración lo revise.' },
 ]
@@ -380,6 +376,12 @@ export default function Terms() {
   useEffect(() => { if (s?.id) setLectura(leerLectura(s.id)) }, [s?.id])
   useEffect(() => { if (s?.id) fetchDocumentos(s.id).then(setDocuments).catch(() => {}) }, [s?.id])
   useEffect(() => { fetchTerminosActivo().then(setTermsDocument).catch(() => {}) }, [])
+  const [privDocument, setPrivDocument] = useState(null)
+  const [garantiaDocument, setGarantiaDocument] = useState(null)
+  useEffect(() => {
+    fetchDocumentoActivo('privacidad').then(setPrivDocument).catch(() => {})
+    fetchDocumentoActivo('garantia').then(setGarantiaDocument).catch(() => {})
+  }, [])
 
   // El alumno de useStudentData puede tardar en reflejar lo que se acaba de
   // enviar: se superpone lo hecho en esta sesión para no mostrar un paso
@@ -497,9 +499,10 @@ export default function Terms() {
     } finally { setSubmitting(false) }
   }
 
+  // Se estampa sobre el PDF oficial del T&C (no sobre un resumen).
   const descargarConFirma = () => downloadStampedPdf({
-    studentName: s.name, tcText: TC_TEXT, privText: PRIV_TEXT,
-    signatureDataUrl: firmaGuardada ?? signature, signedAt: signedAt ?? new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' }),
+    studentName: s.name,
+    signatureDataUrl: firmaGuardada ?? signature, signedAt: signedAtRaw ?? new Date().toISOString(),
     termsPdfUrl,
   })
   const descargarEnBlanco = () => {
@@ -604,17 +607,7 @@ export default function Terms() {
         {/* 1 · Términos */}
         {actual.id === 'tc' && (
           <>
-            <div className="rounded-xl overflow-hidden" style={{ border:'1px solid var(--card-border)', background:'var(--soft-bg)' }}>
-              <object data={termsPdfUrl} type="application/pdf" className="block w-full h-[48vh] min-h-[320px]">
-                <div className="p-6 text-center">
-                  <p className="text-sm" style={{ color:'var(--t3)' }}>Tu navegador no puede mostrar el PDF aquí.</p>
-                  <a href={termsPdfUrl} target="_blank" rel="noreferrer" className="btn-primary inline-flex mt-3">Abrir el documento</a>
-                </div>
-              </object>
-            </div>
-            <a href={termsPdfUrl} download="TERMINOS_Y_CONDICIONES_ECOEMS_Y_UNIVERSIDAD.pdf" className="btn-secondary justify-center text-xs w-full">
-              <Download size={13}/> Descargar el PDF para leerlo después
-            </a>
+            <VisorPdf url={termsPdfUrl} descarga="TERMINOS_Y_CONDICIONES_CEFIMAT.pdf"/>
             {estActual.estado === 'hecho'
               ? <Hecho>Leíste y aceptaste los Términos y Condiciones</Hecho>
               : <button type="button" onClick={() => marcarLeido('tc')} className="btn-primary w-full justify-center min-h-11">
@@ -626,11 +619,16 @@ export default function Terms() {
         {/* 2 · Privacidad */}
         {actual.id === 'priv' && (
           <>
-            {/* 75 caracteres por línea como máximo: en monitor el texto legal se
-                estiraba a casi 200 y costaba seguir la línea. */}
-            <div className="rounded-xl p-4 sm:p-5 text-xs sm:text-sm leading-relaxed max-w-[75ch]" style={{ color:'var(--t2)', whiteSpace:'pre-line', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
-              {PRIV_TEXT}
-            </div>
+            {/* El PDF publicado en T&C / Firmas manda; el texto es solo respaldo
+                por si aún no hay uno. 75 caracteres por línea como máximo: en
+                monitor el texto legal se estiraba a casi 200. */}
+            {privDocument?.url
+              ? <VisorPdf url={privDocument.url} descarga="AVISO_DE_PRIVACIDAD_CEFIMAT.pdf"/>
+              : (
+                <div className="rounded-xl p-4 sm:p-5 text-xs sm:text-sm leading-relaxed max-w-[75ch]" style={{ color:'var(--t2)', whiteSpace:'pre-line', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}>
+                  {PRIV_TEXT}
+                </div>
+              )}
             {estActual.estado === 'hecho'
               ? <Hecho>Leíste y aceptaste el Aviso de Privacidad</Hecho>
               : <button type="button" onClick={() => marcarLeido('priv')} className="btn-primary w-full justify-center min-h-11">
@@ -694,6 +692,12 @@ export default function Terms() {
         {actual.id === 'garantia' && (
           <>
             {estActual.estado === 'rechazado' && <Rechazo motivo={estActual.motivo}>Administración rechazó tu garantía. Fírmala de nuevo.</Rechazo>}
+            {/* Se lee antes de firmar: la firma acepta exactamente este documento. */}
+            {garantiaDocument?.url && (estActual.estado === 'hecho'
+              ? <a href={garantiaDocument.url} target="_blank" rel="noreferrer" className="btn-secondary justify-center text-xs w-full">
+                  <FileText size={13}/> Ver la garantía del curso
+                </a>
+              : <VisorPdf url={garantiaDocument.url} descarga="GARANTIA_CEFIMAT.pdf"/>)}
             {alumno.garantiaEstado === 'validada'
               ? <Hecho>Garantía validada por administración</Hecho>
               : estActual.estado === 'hecho'

@@ -16,8 +16,69 @@ import { useSucursales } from '../../hooks/useSucursales'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 import {
   fetchDocumentosAlumnos, validarDocumento, validarGarantia,
-  fetchTerminosActivo, publicarTerminos, urlDocumento,
+  fetchDocumentoActivo, publicarDocumento, TIPOS_DOCUMENTO, urlDocumento,
 } from '../../lib/expedienteData'
+
+/* Un documento institucional (T&C, Aviso de Privacidad o Garantía): su
+   versión activa, verla y publicar una nueva. Cada uno lleva su estado. */
+function DocumentoInstitucional({ tipo, nombre }) {
+  const [activo, setActivo] = useState(null)
+  const [cargado, setCargado] = useState(false)
+  const [subiendo, setSubiendo] = useState(false)
+  const [error, setError] = useState('')
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    fetchDocumentoActivo(tipo).then(setActivo).catch(() => {}).finally(() => setCargado(true))
+  }, [tipo])
+
+  const subir = async file => {
+    if (!file) return
+    setSubiendo(true); setError('')
+    try { setActivo(await publicarDocumento(tipo, file)) }
+    catch (e) { setError(e.message || 'No se pudo publicar el documento.') }
+    finally {
+      setSubiendo(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div className="py-3 first:pt-0 last:pb-0" style={{ borderTop: '1px solid var(--divider)' }}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background:'var(--info-soft)', border:'1px solid var(--info-line)' }}>
+            <FileText size={18} style={{ color:'var(--info)' }}/>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold" style={{ color:'var(--t1)' }}>{nombre}</p>
+            <p className="text-xs mt-0.5 truncate" style={{ color: activo ? 'var(--t3)' : 'var(--warn)' }}>
+              {!cargado ? 'Cargando…' : activo
+                ? `v${activo.version} · ${activo.file_name} · ${new Date(activo.created_at).toLocaleDateString('es-MX')}`
+                : 'Sin documento publicado'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <input ref={inputRef} type="file" accept="application/pdf" className="hidden"
+            aria-label={`Archivo PDF de ${nombre}`}
+            onChange={e => subir(e.target.files?.[0])}/>
+          {activo?.url && <a href={activo.url} target="_blank" rel="noreferrer"
+            className="btn-secondary text-xs"><Eye size={13}/> Ver PDF</a>}
+          <button
+            disabled={subiendo}
+            className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl font-semibold transition-all active:scale-95 disabled:opacity-50"
+            style={{ background:'var(--info-soft)', border:'1px solid var(--info-line)', color:'var(--info)' }}
+            onClick={() => inputRef.current?.click()}>
+            <Upload size={13}/> {subiendo ? 'Subiendo…' : activo ? 'Actualizar' : 'Publicar PDF'}
+          </button>
+        </div>
+      </div>
+      {error && <p className="text-xs mt-2" style={{ color:'var(--bad)' }}>{error}</p>}
+    </div>
+  )
+}
 
 /* Un documento se valida VIÉNDOLO. Antes la celda era un botón con el texto
    del estado que aprobaba de un clic sin abrir el archivo: no era validación,
@@ -96,10 +157,6 @@ export default function TermsManager() {
   const [filter, setFilter]     = useState('todos')
   const [preview, setPreview]   = useState(null)   // alumno seleccionado para ver firma
   const [garantiaPreview, setGarantiaPreview] = useState(null)
-  const [tcVersion, setTcVersion] = useState(null)
-  const [uploadingTerms, setUploadingTerms] = useState(false)
-  const [termsError, setTermsError] = useState('')
-  const termsInputRef = useRef(null)
   const [confirmReset, setConfirmReset] = useState(null) // id del alumno a resetear
   const [rechazo, setRechazo]   = useState(null)  // { doc, motivo }
   const [ocupado, setOcupado]   = useState(null)  // id de la fila en curso
@@ -183,19 +240,6 @@ export default function TermsManager() {
   }
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { fetchTerminosActivo().then(setTcVersion).catch(()=>{}) }, [])
-
-  const uploadTerms = async file => {
-    if (!file) return
-    setUploadingTerms(true)
-    setTermsError('')
-    try { setTcVersion(await publicarTerminos(file)) }
-    catch (error) { setTermsError(error.message || 'No se pudo publicar el documento.') }
-    finally {
-      setUploadingTerms(false)
-      if (termsInputRef.current) termsInputRef.current.value = ''
-    }
-  }
 
   const resetSignature = async (id) => {
     setConfirmReset(null)
@@ -245,41 +289,18 @@ export default function TermsManager() {
         </div>
       )}
 
-      {/* Documento T&C — versión activa */}
+      {/* Documentos institucionales — versión activa de cada uno */}
       <div className="card p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background:'var(--info-soft)', border:'1px solid var(--info-line)' }}>
-              <FileText size={18} style={{ color:'var(--info)' }}/>
-            </div>
-            <div>
-              <p className="text-sm font-bold" style={{ color:'var(--t1)' }}>Documento de T&C activo</p>
-              <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
-                {tcVersion
-                  ? `v${tcVersion.version} · ${tcVersion.file_name} · ${new Date(tcVersion.created_at).toLocaleDateString('es-MX')}`
-                  : 'Sin documento publicado en Supabase'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <input ref={termsInputRef} type="file" accept="application/pdf" className="hidden"
-              onChange={e => uploadTerms(e.target.files?.[0])}/>
-            {tcVersion?.url && <a href={tcVersion.url} target="_blank" rel="noreferrer"
-              className="btn-secondary text-xs"><Eye size={13}/> Ver PDF</a>}
-            <button
-              disabled={uploadingTerms}
-              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl font-semibold transition-all active:scale-95"
-              style={{ background:'var(--info-soft)', border:'1px solid var(--info-line)', color:'var(--info)' }}
-              onClick={() => termsInputRef.current?.click()}>
-              <Upload size={13}/> {uploadingTerms ? 'Subiendo…' : 'Actualizar documento'}
-            </button>
-          </div>
+        <p className="text-sm font-bold mb-1" style={{ color:'var(--t1)' }}>Documentos para el alumno</p>
+        <p className="text-xs mb-4" style={{ color:'var(--t3)' }}>
+          El alumno los lee en su expediente: el Aviso de Privacidad en el paso 1, los Términos en el 2 y la Garantía antes de firmarla.
+        </p>
+        <div>
+          {TIPOS_DOCUMENTO.map(d => <DocumentoInstitucional key={d.tipo} tipo={d.tipo} nombre={d.nombre}/>)}
         </div>
-        {termsError && <p className="text-xs mt-3" style={{ color:'var(--bad)' }}>{termsError}</p>}
-        <div className="mt-3 p-3 rounded-xl text-xs" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--warn)' }}>
+        <div className="mt-4 p-3 rounded-xl text-xs" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--warn)' }}>
           <AlertTriangle size={12} className="inline mr-1.5 -mt-0.5"/>
-          Actualizar el documento <strong>no invalida automáticamente</strong> las firmas existentes. Si el cambio es sustancial, resetea las firmas de los alumnos afectados para que vuelvan a firmar la versión nueva.
+          Actualizar un documento <strong>no invalida automáticamente</strong> las firmas existentes. Si el cambio es sustancial, resetea las firmas de los alumnos afectados para que vuelvan a firmar la versión nueva.
         </div>
       </div>
 

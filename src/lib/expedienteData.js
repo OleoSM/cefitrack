@@ -133,9 +133,18 @@ export async function validarGarantia(studentId) {
   return data
 }
 
-export async function fetchTerminosActivo() {
+/* Documentos institucionales en PDF, versionados y con uno activo por tipo:
+   'tyc' (Términos y Condiciones), 'privacidad' (Aviso de Privacidad) y
+   'garantia' (Garantía del curso). Viven en `terms_documents` + bucket `terminos`. */
+export const TIPOS_DOCUMENTO = [
+  { tipo: 'tyc',        nombre: 'Términos y Condiciones' },
+  { tipo: 'privacidad', nombre: 'Aviso de Privacidad' },
+  { tipo: 'garantia',   nombre: 'Garantía del curso' },
+]
+
+export async function fetchDocumentoActivo(tipo) {
   const { data, error } = await supabase.from('terms_documents').select('*')
-    .eq('is_active', true).maybeSingle()
+    .eq('tipo', tipo).eq('is_active', true).maybeSingle()
   if (error) throw error
   if (!data) return null
   const { data: signed, error: urlError } = await supabase.storage.from('terminos')
@@ -144,23 +153,27 @@ export async function fetchTerminosActivo() {
   return { ...data, url:signed.signedUrl }
 }
 
-export async function publicarTerminos(file) {
+export async function publicarDocumento(tipo, file) {
+  if (!TIPOS_DOCUMENTO.some(t => t.tipo === tipo)) throw new Error('Tipo de documento no válido.')
   if (file?.type !== 'application/pdf') throw new Error('Solo se permiten archivos PDF.')
   if (file.size > 15 * 1024 * 1024) throw new Error('El PDF no puede superar 15 MB.')
   const { data: current, error: readError } = await supabase.from('terms_documents')
-    .select('version').order('version', { ascending:false }).limit(1).maybeSingle()
+    .select('version').eq('tipo', tipo).order('version', { ascending:false }).limit(1).maybeSingle()
   if (readError) throw readError
   const version = (current?.version ?? 0) + 1
-  const path = `versiones/tyc-v${version}-${Date.now()}.pdf`
+  const path = `versiones/${tipo}-v${version}-${Date.now()}.pdf`
   const { error: uploadError } = await supabase.storage.from('terminos')
     .upload(path, file, { contentType:'application/pdf', upsert:false })
   if (uploadError) throw uploadError
   const { error: deactivateError } = await supabase.from('terms_documents')
-    .update({ is_active:false }).eq('is_active',true)
+    .update({ is_active:false }).eq('tipo', tipo).eq('is_active', true)
   if (deactivateError) throw deactivateError
   const { error } = await supabase.from('terms_documents').insert({
-    version, storage_path:path, file_name:file.name, mime_type:file.type, is_active:true,
+    tipo, version, storage_path:path, file_name:file.name, mime_type:file.type, is_active:true,
   })
   if (error) throw error
-  return fetchTerminosActivo()
+  return fetchDocumentoActivo(tipo)
 }
+
+export const fetchTerminosActivo = () => fetchDocumentoActivo('tyc')
+export const publicarTerminos = file => publicarDocumento('tyc', file)

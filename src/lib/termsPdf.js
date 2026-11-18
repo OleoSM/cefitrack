@@ -83,7 +83,7 @@ function darkenSignature(dataUrl) {
 export async function downloadStampedPdf({ studentName, tcText, privText, signatureDataUrl, signedAt, termsPdfUrl = OFFICIAL_TERMS_URL }) {
   if (!signatureDataUrl) throw new Error('signature_required')
 
-  const { PDFDocument, rgb } = await import('pdf-lib')
+  const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib')
   const source = await fetch(termsPdfUrl)
   if (!source.ok) throw new Error('terms_pdf_unavailable')
   const pdf = await PDFDocument.load(await source.arrayBuffer())
@@ -91,10 +91,23 @@ export async function downloadStampedPdf({ studentName, tcText, privText, signat
   const page = pages[pages.length - 1]
   const inked = await darkenSignature(signatureDataUrl)
   const signature = await pdf.embedPng(inked)
+  const font = await pdf.embedFont(StandardFonts.Helvetica)
+  const tinta = rgb(0.18, 0.22, 0.29)
 
-  // Caja de firma de la página 2, encima de “NOMBRE Y FIRMA DEL ESTUDIANTE”.
-  page.drawImage(signature, { x:322, y:137, width:108, height:43 })
-  page.drawText(studentName, { x:334, y:128, size:6.5, color:rgb(0.18, 0.22, 0.29) })
+  /* Campos del ALUMNO (columna izquierda) en la última página del T&C 2027
+     (carta, 4 páginas, publicado el 2026-11-18). Medidos sobre ese PDF: la
+     columna derecha es la del contratante/tutor. Si se publica un T&C con
+     otra maqueta, estas coordenadas hay que volver a medirlas. */
+  const CAJA_FIRMA = { x: 58, y: 188, w: 160, h: 26 }   // sobre la línea de «Firma del alumno»
+  const escala = Math.min(CAJA_FIRMA.w / signature.width, CAJA_FIRMA.h / signature.height)
+  page.drawImage(signature, {
+    x: CAJA_FIRMA.x, y: CAJA_FIRMA.y,
+    width: signature.width * escala, height: signature.height * escala,
+  })
+  page.drawText(studentName, { x: 56, y: 284, size: 9, font, color: tinta })   // «Nombre del alumno»
+  const fecha = new Date(signedAt ?? Date.now())
+    .toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+  page.drawText(fecha, { x: 56, y: 108, size: 9, font, color: tinta })         // «Fecha»
 
   const bytes = await pdf.save()
   const blob = new Blob([bytes], { type:'application/pdf' })

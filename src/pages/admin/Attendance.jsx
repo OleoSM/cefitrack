@@ -27,7 +27,7 @@ import { IconHojaCalificaciones } from '../../components/ui/SigaAdminIcons'
 import {
   ArrowLeft, Camera, CameraOff, QrCode, CheckCircle2,
   FileSpreadsheet, Users, Clock, AlertTriangle, Scan,
-  ChevronRight, UserCheck, CheckSquare, RotateCw, RefreshCw, CloudOff,
+  ChevronRight, ChevronLeft, UserCheck, CheckSquare, RotateCw, RefreshCw, CloudOff,
   Timer, Pause, Play, History, FolderClock, ChevronUp, ChevronDown, Download, X, ListChecks
 } from 'lucide-react'
 import { NeonCheckbox } from '../../components/ui/NeonCheckbox'
@@ -56,6 +56,89 @@ const COLUMNS_MANUAL = [
 ]
 const CLAVE_MODO = 'siga_pase_lista_modo'
 const horaAhora = () => new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' })
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`
+
+/* Calendario del historial: marca los días en que se tomó lista (finalizada o
+   borrador) y al tocar uno lo abre. Arranca en el mes de la última lista. */
+const DIAS_SEMANA = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+function CalendarioListas({ sesiones, fechaAbierta, onElegir }) {
+  const porFecha = new Map(sesiones.map(s => [s.date, s]))
+  const [mes, setMes] = useState(() => ([...porFecha.keys()].sort().at(-1) ?? todayISO()).slice(0, 7))
+  const [anio, numMes] = mes.split('-').map(Number)
+  const primero = new Date(anio, numMes - 1, 1)
+  const huecos = (primero.getDay() + 6) % 7            // la semana empieza en lunes
+  const diasMes = new Date(anio, numMes, 0).getDate()
+  const celdas = [...Array(huecos).fill(null), ...Array.from({ length: diasMes }, (_, i) => i + 1)]
+  const mover = d => {
+    const f = new Date(anio, numMes - 1 + d, 1)
+    setMes(`${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}`)
+  }
+  const hoy = todayISO()
+  const listasDelMes = sesiones.filter(s => s.date.startsWith(mes)).length
+
+  return (
+    <div className="rounded-xl p-3" style={{ background:'var(--card-bg)', border:'1px solid var(--card-border)' }}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <button type="button" onClick={() => mover(-1)} aria-label="Mes anterior"
+          className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ color:'var(--t2)', background:'var(--soft-bg)' }}>
+          <ChevronLeft size={15}/>
+        </button>
+        <div className="text-center min-w-0">
+          <p className="text-sm font-bold" style={{ color:'var(--t1)' }}>
+            {(t => t.charAt(0).toUpperCase() + t.slice(1))(primero.toLocaleDateString('es-MX', { month:'long', year:'numeric' }))}
+          </p>
+          <p className="text-[11px]" style={{ color:'var(--t3)' }}>
+            {listasDelMes ? plural(listasDelMes, 'lista tomada', 'listas tomadas') : 'Sin listas este mes'}
+          </p>
+        </div>
+        <button type="button" onClick={() => mover(1)} aria-label="Mes siguiente"
+          className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ color:'var(--t2)', background:'var(--soft-bg)' }}>
+          <ChevronRight size={15}/>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {DIAS_SEMANA.map((d, i) => (
+          <span key={i} className="text-center text-[10px] font-bold uppercase" style={{ color:'var(--t4)' }}>{d}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {celdas.map((dia, i) => {
+          if (!dia) return <span key={`h${i}`}/>
+          const fecha = `${mes}-${String(dia).padStart(2, '0')}`
+          const ses = porFecha.get(fecha)
+          const esHoy = fecha === hoy
+          const abierta = fecha === fechaAbierta
+          if (!ses) return (
+            <span key={fecha} className="h-9 flex items-center justify-center rounded-lg text-xs tabular-nums"
+              style={{ color: esHoy ? 'var(--t1)' : 'var(--t3)', border: esHoy ? '1px dashed var(--t3)' : '1px solid transparent', fontWeight: esHoy ? 700 : 400 }}>
+              {dia}
+            </span>
+          )
+          const retardos = ses.records.filter(r => r.retardo).length
+          return (
+            <button key={fecha} type="button" onClick={() => onElegir(ses)}
+              title={`${fmtDate(fecha)} · ${plural(ses.records.length, 'presente', 'presentes')}${retardos ? ` · ${plural(retardos, 'retardo', 'retardos')}` : ''} · ${ses.finished ? 'Finalizada' : 'Borrador'}`}
+              aria-label={`Abrir la lista del ${fmtDate(fecha)}`}
+              className="h-9 flex items-center justify-center rounded-lg text-xs font-bold tabular-nums transition-transform active:scale-95"
+              style={{
+                background: ses.finished ? 'var(--good-solid)' : 'var(--warn-solid)', color:'#fff',
+                outline: abierta ? '2px solid var(--accent)' : 'none', outlineOffset: 1,
+              }}>
+              {dia}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[11px]" style={{ color:'var(--t3)' }}>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ background:'var(--good-solid)' }}/> Finalizada</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ background:'var(--warn-solid)' }}/> Borrador</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ border:'1px dashed var(--t3)' }}/> Hoy</span>
+      </div>
+    </div>
+  )
+}
 
 export default function Attendance() {
   const navigate = useNavigate()
@@ -616,6 +699,12 @@ export default function Attendance() {
             <FileSpreadsheet size={15}/> Respaldo completo del grupo (Excel)
           </button>
         )}
+        {sessionIndex.some(s => s.groupId === historyGroupId) && (
+          <CalendarioListas key={historyGroupId}
+            sesiones={sessionIndex.filter(s => s.groupId === historyGroupId)}
+            fechaAbierta={view === 'scan' && selectedGrp === historyGroupId ? selectedDate : null}
+            onElegir={s => applySession(toUiSession(s))}/>
+        )}
         <ProgressiveList items={sessionIndex.filter(s => s.groupId === historyGroupId)} className="space-y-2"
           sizes={{ mobile: 5, tablet: 8, desktop: 12 }} emptyLabel="Este grupo aún no tiene listas guardadas.">
         {s => {
@@ -632,9 +721,9 @@ export default function Attendance() {
                 className="flex-1 min-w-0 text-left active:scale-[.98] transition-transform">
                 <p className="text-sm font-semibold" style={{ color:'var(--t1)' }}>{fmtDate(s.date)}</p>
                 <p className="text-xs mt-0.5" style={{ color:'var(--t3)' }}>
-                  {s.records.length} presentes
+                  {plural(s.records.length, 'presente', 'presentes')}
                   {s.records.filter(r => r.retardo).length > 0 &&
-                    ` · ${s.records.filter(r => r.retardo).length} retardos`}
+                    ` · ${plural(s.records.filter(r => r.retardo).length, 'retardo', 'retardos')}`}
                 </p>
               </button>
               <div className="flex items-center gap-2 flex-shrink-0">

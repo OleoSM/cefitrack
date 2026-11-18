@@ -400,11 +400,6 @@ function LayoutInner() {
               <Menu size={19} />
             </button>
             <h1 className="text-sm font-bold truncate" style={{ color: t.sideT1 }}>{pageTitle}</h1>
-            <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold truncate"
-              style={{ color: t.sideT2, background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.14)' }}>
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: t.sideGood }} />
-              <span className="truncate">Vista de alumno — solo lectura</span>
-            </span>
           </div>
 
           <div className="flex items-center gap-2">

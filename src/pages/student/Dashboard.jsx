@@ -227,7 +227,7 @@ export default function StudentDashboard() {
     asistencia: {
       icon: IconAsistencia, label: 'Asistencia',
       value: asis.pct === null ? '—' : asis.pct, unit: asis.pct === null ? undefined : '%',
-      sub: asis.pct === null ? 'Sin listas aún' : `${asis.counts.presente} presentes`,
+      sub: asis.pct === null ? 'Sin listas aún' : `${asis.counts.presente} ${asis.counts.presente === 1 ? 'presente' : 'presentes'}`,
       tone: tonoAsistencia(asis.pct), onClick: () => navigate('/student/asistencias'),
     },
     tareas: {
@@ -288,7 +288,9 @@ export default function StudentDashboard() {
           )}
           <div className="min-w-0 flex-1">
             <p className="text-sm" style={{ opacity: .6 }}>Bienvenido de vuelta</p>
-            <h1 className="text-lg sm:text-xl font-bold truncate">{s.name}</h1>
+            {/* color explícito: en IPN/UNAM index.css pinta todos los h1 con
+                --t1 (oscuro) y el nombre quedaba ilegible sobre la tarjeta. */}
+            <h1 className="text-lg sm:text-xl font-bold truncate" style={{ color: tintaTarjeta }}>{s.name}</h1>
             <p className="text-xs sm:text-sm mt-0.5 truncate" style={{ opacity: .6 }}>
               {[grp?.name, grp?.subject].filter(Boolean).join(' — ')}
             </p>

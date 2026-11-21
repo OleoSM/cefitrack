@@ -62,11 +62,13 @@ export async function fetchSessionIndex() {
 }
 
 /**
- * Guarda (upsert) la lista completa de un grupo+fecha.
- * `records`: [{ studentId, time, retardo }]
+ * Guarda los CAMBIOS de la lista de un grupo+fecha (no la reemplaza):
+ * `upserts` [{ studentId, time, retardo }] se agregan o actualizan y
+ * `removes` [studentId] se quitan. Así dos dispositivos sobre la misma lista
+ * no se pisan, y los registros que esta pantalla no conoce no se borran.
  */
-export async function saveSessionDb(groupId, date, { tolMin, startedAt, pausedAt, pausedAccumMs, finished }, records) {
-  const { error } = await supabase.rpc('upsert_attendance_list', {
+export async function saveSessionDb(groupId, date, { tolMin, startedAt, pausedAt, pausedAccumMs, finished }, { upserts = [], removes = [] } = {}) {
+  const { error } = await supabase.rpc('merge_attendance_list', {
     p_group_id: groupId,
     p_date: date,
     p_tol_min: tolMin ?? null,
@@ -74,13 +76,36 @@ export async function saveSessionDb(groupId, date, { tolMin, startedAt, pausedAt
     p_paused_at_ms: pausedAt ?? null,
     p_paused_accum_ms: pausedAccumMs ?? 0,
     p_finished: !!finished,
-    p_records: records.map(r => ({
+    p_upserts: upserts.map(r => ({
       student_id: r.studentId,
       status: r.retardo ? 'tardanza' : 'presente',
       time: r.time,
     })),
+    p_removes: removes,
   })
   if (error) throw error
+}
+
+/**
+ * Diferencias entre lo que hay en pantalla (`records`) y lo último que se
+ * sabe guardado en la base (`servidor`: Map studentId → { time, retardo }).
+ */
+export function diffLista(records, servidor) {
+  const actuales = new Map(records.map(r => [r.studentId, r]))
+  const upserts = records.filter(r => {
+    const s = servidor.get(r.studentId)
+    return !s || s.time !== r.time || !!s.retardo !== !!r.retardo
+  })
+  const removes = [...servidor.keys()].filter(id => !actuales.has(id))
+  return { upserts, removes }
+}
+
+/** Mensaje legible para los errores de las listas. */
+export function mensajeErrorLista(err, porDefecto) {
+  const m = err?.message ?? ''
+  if (m.includes('solo_admin_borra_terminadas')) return 'Solo un administrador puede eliminar una lista terminada.'
+  if (m.includes('forbidden')) return 'No tienes acceso a este grupo.'
+  return porDefecto
 }
 
 /**

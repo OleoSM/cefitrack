@@ -333,14 +333,8 @@ export default function GroupShaderCard({
           "transparente". El fondo es la superficie normal de tarjeta, opaca, y
           el color del grupo se afirma en una franja lateral sólida. */}
       <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-        {/* Filo de acento pegado al borde izquierdo. Antes era una barra
-            suelta dentro de la cabecera, a media altura y separada del borde:
-            se leía como un elemento más compitiendo con el avatar en vez de
-            como el distintivo del grupo. */}
-        {!isLight && (
-          <div className="absolute left-0 top-0 bottom-0 w-[3px] z-10"
-            style={{ background: accent }} />
-        )}
+        {/* Sin franja lateral de acento: el usuario la pidió fuera (2026-11-20).
+            El color del grupo ya lo da el fondo de la tarjeta. */}
         {isLight ? (
           <div className="absolute inset-0" style={{ background: surface }} />
         ) : palette.type === 'gradient' ? (

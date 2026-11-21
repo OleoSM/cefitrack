@@ -904,16 +904,99 @@ html[data-movimiento='reducido'] .animate-scale-in { animation: none !important;
     transition-duration: .16s;
     transition-timing-function: cubic-bezier(.2,.8,.2,1);
   }
-  :is(button, [role='button']):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]):not(.w-full):not(.flex-1):not(.btn-primary):not(.btn-secondary):not(.btn-danger):hover { scale: 1.06; }
-  :is(button, [role='button']):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]):not(.w-full):not(.flex-1):not(.btn-primary):not(.btn-secondary):not(.btn-danger):active { scale: .96; }
-  :is(.btn-primary, .btn-secondary, .btn-danger, button.flex-1, button.w-full):not(:disabled):not([data-sin-zoom]):not([data-kpi-card]):not([role='menuitem']):hover { translate: 0 -2px; }
-  :is(.btn-primary, .btn-secondary, .btn-danger, button.flex-1, button.w-full):not(:disabled):not([data-sin-zoom]):not([data-kpi-card]):not([role='menuitem']):active { translate: 0 0; }
+  /* OJO: w-full y flex-1 van como [class~='…'] y no como .w-full: este
+     archivo hace `@apply w-full` (.input-field, .demo-btn) y Tailwind
+     reescribía estos selectores cambiando .w-full por .input-field, con lo
+     que la exclusión desaparecía. */
+  :is(button, [role='button']):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]):not([class~='w-full']):not([class~='flex-1']):not(.btn-primary):not(.btn-secondary):not(.btn-danger):hover { scale: 1.06; }
+  :is(button, [role='button']):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]):not([class~='w-full']):not([class~='flex-1']):not(.btn-primary):not(.btn-secondary):not(.btn-danger):active { scale: .96; }
+  :is(.btn-primary, .btn-secondary, .btn-danger, button[class~='flex-1'], button[class~='w-full']):not(:disabled):not([data-sin-zoom]):not([data-kpi-card]):not([role='menuitem']):hover { translate: 0 -2px; }
+  :is(.btn-primary, .btn-secondary, .btn-danger, button[class~='flex-1'], button[class~='w-full']):not(:disabled):not([data-sin-zoom]):not([data-kpi-card]):not([role='menuitem']):active { translate: 0 0; }
+
+  /* Crecer 6 % o subir 2 px no basta para notarse en botones con fondo en
+     línea (style={{ background }}), que no pueden cambiar de color por CSS.
+     Por eso TODO lo pulsable además se ilumina y, si es ancho (pestañas,
+     tarjetas, filas de menú), se enmarca en el color de acento. */
+  :is(button, [role='button'], a, [role='tab'], [role='option'], [role='menuitem'], [role='switch'], .cursor-pointer, summary):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, filter, outline-color, transform, scale, translate;
+    transition-duration: .16s;
+    transition-timing-function: cubic-bezier(.2,.8,.2,1);
+  }
+  :is(button, [role='button'], a, [role='tab'], [role='option'], [role='menuitem'], [role='switch'], .cursor-pointer, summary):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]):hover {
+    filter: brightness(1.15);
+  }
+  [data-theme-light] :is(button, [role='button'], a, [role='tab'], [role='option'], [role='menuitem'], [role='switch'], .cursor-pointer, summary):not(:disabled):not([aria-disabled='true']):not([data-sin-zoom]):not([data-fila]):hover {
+    filter: brightness(.95);
+  }
+  :is(button[class~='w-full'], button[class~='flex-1'], [role='tab'], [role='option'], [role='menuitem'], .cursor-pointer):not(:disabled):not([data-sin-zoom]):not([data-fila]):not(.nav-item):not(.btn-primary):hover {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+  }
 }
+
+/* ── Tooltips de las gráficas (Recharts) ────────────────────────────────────
+   Recharts pinta cada renglón del tooltip con el color de la serie: en la
+   dona de asistencia salía texto oscuro sobre el fondo oscuro del tooltip y
+   no se leía. Un solo estilo legible para todas las gráficas. */
+.recharts-default-tooltip {
+  background: var(--tooltip-bg) !important;
+  border: 1px solid var(--tooltip-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px -12px rgba(0,0,0,.6);
+  padding: 6px 10px !important;
+}
+.recharts-default-tooltip .recharts-tooltip-item,
+.recharts-default-tooltip .recharts-tooltip-label { color: var(--tooltip-text) !important; font-size: 11px; }
+.recharts-tooltip-wrapper { z-index: 20; pointer-events: none; }
 /* Las tiras con scroll horizontal recortan todo lo que salga de su caja: un
    respiro vertical deja crecer a los chips sin cortarles el borde. */
 .scroll-carril, .overflow-x-auto:has(> button), .overflow-x-auto:has(> [role='tab']) { padding-block: 3px; }
 
-html[data-movimiento='reducido'] :is(button, [role='button'], a) { scale: none !important; translate: none !important; }
+/* ── Todo lo demás que se puede pulsar también responde al hover ────────────
+   Regla del usuario (2026-11-20): ningún elemento interactivo debe limitarse a
+   cambiar el cursor. Los botones ya crecen o se elevan (arriba); aquí entran
+   enlaces, filas de tabla, tarjetas con onClick (.cursor-pointer), opciones
+   de menú y de lista, pestañas que no son <button>, casillas y campos. Mismo
+   criterio: `translate`/`scale` (se suman al transform existente), solo con
+   ratón real y apagado con movimiento reducido. */
+@media (hover: hover) {
+  a:not(.btn-primary):not(.btn-secondary):not(.btn-danger):not([data-sin-zoom]) {
+    transition: color .16s, background-color .16s, opacity .16s, translate .18s cubic-bezier(.2,.8,.2,1);
+  }
+  /* Menú lateral: el renglón se desliza hacia la derecha. */
+  .nav-item:hover { translate: 3px 0; }
+  /* Enlaces sueltos: se elevan 1 px. */
+  a:not(.nav-item):not(.btn-primary):not(.btn-secondary):not(.btn-danger):not([data-sin-zoom]):hover { translate: 0 -1px; }
+
+  /* Filas de tabla: además del fondo, aparece un filo de acento a la izquierda. */
+  [data-fila] { transition: background-color .16s, box-shadow .2s cubic-bezier(.2,.8,.2,1); }
+  [data-fila]:hover { box-shadow: inset 3px 0 0 var(--accent); }
+
+  /* Tarjetas y elementos con puntero que no son <button> ni <a>. */
+  :is(.cursor-pointer, summary, label:has(input[type='checkbox'], input[type='radio']), [role='option'], [role='menuitem'], [role='tab'], [role='switch']):not([data-fila]):not([data-sin-zoom]) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, filter, translate, scale;
+    transition-duration: .16s;
+    transition-timing-function: cubic-bezier(.2,.8,.2,1);
+  }
+  :is(.cursor-pointer, summary):not(button):not(a):not([data-fila]):not([data-kpi-card]):not([data-sin-zoom]):hover {
+    translate: 0 -2px; filter: brightness(1.06);
+  }
+  /* Opciones de menú y de lista: se deslizan como el menú lateral. */
+  :is([role='option'], [role='menuitem']):not([data-sin-zoom]):hover { translate: 3px 0; }
+  /* Pestañas y casillas que no son botones: se iluminan. */
+  :is([role='tab'], [role='switch'], label:has(input[type='checkbox'], input[type='radio'])):not(button):not([data-sin-zoom]):hover { filter: brightness(1.1); }
+
+  /* Celdas editables de la hoja de calificaciones: se enmarcan en acento
+     (moverlas descuadraría la tabla). */
+  td[data-celda] { transition: box-shadow .16s; }
+  td[data-celda]:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+
+  /* Campos: además del borde, un halo suave. */
+  :is(select, .input-field, .input-dark) { transition: border-color .16s, box-shadow .16s; }
+  :is(select, .input-field, .input-dark):not(:disabled):not(:focus):hover { box-shadow: 0 0 0 3px var(--soft-bg); }
+}
+
+html[data-movimiento='reducido'] :is(button, [role='button'], a, [data-fila], .cursor-pointer, summary, label, [role='option'], [role='menuitem'], [role='tab'], [role='switch']) { scale: none !important; translate: none !important; }
 
 /* ── Responsividad: reglas de dispositivo ───────────────────────────────── */
 
@@ -975,3 +1058,23 @@ html[data-movimiento='reducido'] .celda-foco { animation: none; }
 .barra-liga { background: var(--liga-oscuro); }
 [data-theme-light] .barra-liga { background: var(--liga-claro); }
 @media (prefers-reduced-motion: reduce) { .estrella-leyenda { animation: none; } }
+
+/* Pulso de sonar del botón "i" del calendario de Pasar lista: un "ping"
+   sale del icono y se expande desvaneciéndose, le sigue un eco más tenue y
+   luego hay silencio hasta el siguiente ping. Se apaga al abrir la leyenda. */
+@keyframes sonarPing {
+  0%   { transform: scale(.5);  opacity: 0;   border-width: 2.5px; }
+  4%   { transform: scale(.6);  opacity: .75; border-width: 2.5px; }
+  45%  { transform: scale(2.1); opacity: 0;   border-width: .5px; }
+  100% { transform: scale(2.1); opacity: 0;   border-width: .5px; }
+}
+.sonar-info {
+  position: absolute; inset: 0; border-radius: 9999px; pointer-events: none;
+  border: 2px solid var(--accent);
+  animation: sonarPing 3s cubic-bezier(.15,.55,.35,1) infinite;
+}
+.sonar-info-eco { animation-delay: .45s; opacity: 0; filter: opacity(.55); }
+@media (prefers-reduced-motion: reduce) {
+  .sonar-info { animation: none; opacity: .5; transform: none; }
+  .sonar-info-eco { display: none; }
+}

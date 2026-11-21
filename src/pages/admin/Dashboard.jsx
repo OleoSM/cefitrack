@@ -14,6 +14,7 @@ import {
 import { SkeletonBlock } from '../../components/ui/DataTable'
 import { IconAlumnos, IconAsistencia, IconPromedio, IconRiesgo } from '../../components/ui/SigaKpiIcons'
 import { calificacionBase10 } from '../../lib/studentMetrics'
+import { evaluarRiesgo, examenesPorAlumno, REGLA_RIESGO_TEXTO } from '../../lib/riesgo'
 import { useAuth } from '../../context/AuthContext'
 import KpiCard, { KpiGrid } from '../../components/ui/KpiCard'
 import BarraFiltros from '../../components/ui/BarraFiltros'
@@ -67,8 +68,6 @@ function construirTendencia(evaluations, students, grupos) {
    alumno) y el promedio sobre las evaluaciones registradas. Las columnas
    students.attendance_rate y students.avg_grade quedaron obsoletas —vienen en
    null— y students.status es una etiqueta sembrada, no un cálculo. */
-const UMBRAL_ASISTENCIA = 80   // % de asistencia mínimo esperado
-const UMBRAL_PROMEDIO   = 7    // calificación mínima esperada
 
 /** Promedio real por alumno a partir de sus evaluaciones, normalizadas a base 10. */
 function promediosPorAlumno(evaluations) {
@@ -83,20 +82,6 @@ function promediosPorAlumno(evaluations) {
   )
 }
 
-/**
- * Índice de riesgo = cuánto le falta al alumno para llegar a los umbrales.
- * La brecha de promedio se multiplica por 10 para que ambas escalas (0–100 de
- * asistencia y 0–10 de calificación) pesen lo mismo. Sin dato no hay brecha:
- * a nadie se le acusa de riesgo por información que aún no existe.
- */
-function calcularRiesgo({ asist, prom }) {
-  const brechaAsist = asist === null ? 0 : Math.max(0, UMBRAL_ASISTENCIA - asist)
-  const brechaProm  = prom  === null ? 0 : Math.max(0, UMBRAL_PROMEDIO - prom) * 10
-  const motivos = []
-  if (brechaAsist > 0) motivos.push(`Asistencia ${asist}%`)
-  if (brechaProm  > 0) motivos.push(`Promedio ${prom}`)
-  return { riesgo: brechaAsist + brechaProm, motivos }
-}
 
 /** Rendimiento por materia a partir de las evaluaciones capturadas. */
 function construirRendimiento(evaluations) {
@@ -208,11 +193,13 @@ export default function Dashboard() {
   // Promedio real por alumno: se calcula una vez sobre todas las evaluaciones
   // y después se filtra, para no rehacerlo con cada cambio de grupo.
   const promedioReal = useMemo(() => promediosPorAlumno(evaluations), [evaluations])
+  const examenesReal = useMemo(() => examenesPorAlumno(evaluations), [evaluations])
 
   const conMetricas = filteredStudents.map(s => ({
     ...s,
     prom:  promedioReal[s.id] ?? null,
     asist: attByStudent[s.id] ?? null,
+    exam:  examenesReal[s.id] ?? null,
   }))
 
   // Top mejor promedio: empate resuelto por asistencia real, que es
@@ -222,10 +209,13 @@ export default function Dashboard() {
     .sort((a, b) => b.prom - a.prom || (b.asist ?? -1) - (a.asist ?? -1))
     .slice(0, 5)
 
+  // Definición única de riesgo (lib/riesgo.js): faltas, tareas o exámenes.
   const enRiesgo = conMetricas
-    .map(s => ({ ...s, ...calcularRiesgo(s) }))
-    .filter(s => s.riesgo > 0)
-    .sort((a, b) => b.riesgo - a.riesgo)
+    .map(s => ({ ...s, ...evaluarRiesgo({
+      asist: s.asist, examenes: s.exam, tareasHechas: s.assignmentsDone, tareasTotal: s.assignmentsTotal,
+    }) }))
+    .filter(s => s.enRiesgo)
+    .sort((a, b) => b.puntos - a.puntos)
   const topRiesgo = enRiesgo.slice(0, 5)
 
   const notas = conMetricas.map(s => s.prom).filter(Number.isFinite)
@@ -390,7 +380,7 @@ export default function Dashboard() {
         <KpiCard icon={IconRiesgo} label="Alumnos en Riesgo" tone="bad"
           value={enRiesgo.length}
           sub={enRiesgo.length
-            ? `Asistencia < ${UMBRAL_ASISTENCIA}% o promedio < ${UMBRAL_PROMEDIO}`
+            ? 'Por faltas, tareas o exámenes'
             : 'Ninguno por ahora'}
           pill={enRiesgo.length ? { icon: AlertTriangle, text: 'Dar seguimiento' } : null}
           onClick={() => navigate('/admin/alumnos')} />
@@ -615,7 +605,7 @@ export default function Dashboard() {
                 Top 5 · Alumnos en Riesgo
               </h2>
               <p className="text-[11px] mt-0.5" style={{ color: 'var(--t3)' }}>
-                Asistencia real por debajo de {UMBRAL_ASISTENCIA}% o promedio menor a {UMBRAL_PROMEDIO}
+                {REGLA_RIESGO_TEXTO}.
               </p>
             </div>
             <button onClick={()=>navigate('/admin/alumnos')} className="text-xs font-medium hover:underline flex items-center gap-1 flex-shrink-0 min-h-11 px-2" style={{ color: 'var(--t3)' }}>

@@ -5,9 +5,10 @@ import { IconHojaCalificaciones } from '../../components/ui/SigaAdminIcons'
 import DescargarQRModal from '../../components/admin/DescargarQRModal'
 import AltaMasivaModal from '../../components/admin/AltaMasivaModal'
 import {
-  fetchGroups, fetchStudents, fetchAttendanceStats,
+  fetchGroups, fetchStudents, fetchAttendanceStats, fetchEvaluations,
   computeGroupStats, createGroup, updateGroup, deleteGroup,
 } from '../../lib/supabaseData'
+import { evaluarRiesgo, examenesPorAlumno } from '../../lib/riesgo'
 import ConfirmDialog from '../../components/admin/ConfirmDialog'
 import ModalPortal from '../../components/ui/ModalPortal'
 import StudentFormModal from '../../components/admin/StudentFormModal'
@@ -299,6 +300,9 @@ export default function Groups() {
   const [groups, setGroups]     = useState([])
   const [students, setStudents] = useState([])
   const [attendance, setAttendance] = useState({})
+  /* Para contar alumnos en riesgo con la regla única (lib/riesgo.js). */
+  const [asisAlumno, setAsisAlumno] = useState({})
+  const [examAlumno, setExamAlumno] = useState({})
   const [loading, setLoading]   = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [formFor, setFormFor]   = useState(null)   // { group } | { group:null } para alta
@@ -314,11 +318,13 @@ export default function Groups() {
 
   const load = useCallback(async () => {
     try {
-      const [grs, sts] = await Promise.all([fetchGroups(), fetchStudents()])
+      const [grs, sts, evs] = await Promise.all([fetchGroups(), fetchStudents(), fetchEvaluations().catch(() => [])])
       const stats = await fetchAttendanceStats(sts)
       setGroups(grs)
       setStudents(sts)
       setAttendance(stats.byGroup)
+      setAsisAlumno(stats.byStudent)
+      setExamAlumno(examenesPorAlumno(evs))
       setLoadError(null)
     } catch {
       setLoadError('No se pudieron cargar los grupos.')
@@ -500,7 +506,10 @@ export default function Groups() {
         {g => {
           const stats       = computeGroupStats(g, students, attendance)
           const grpStudents = students.filter(s => s.groupId === g.id)
-          const critical    = grpStudents.filter(s => s.status === 'critical' || s.status === 'at-risk').length
+          const critical    = grpStudents.filter(s => evaluarRiesgo({
+            asist: asisAlumno[s.id] ?? null, examenes: examAlumno[s.id] ?? null,
+            tareasHechas: s.assignmentsDone, tareasTotal: s.assignmentsTotal,
+          }).enRiesgo).length
 
           return (
             <GroupShaderCard

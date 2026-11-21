@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Users, Plus, Pencil, Trash2, KeyRound, AlertCircle, RefreshCw, ShieldCheck, Flag } from 'lucide-react'
 import PermisosAlumnoModal from '../../components/admin/PermisosAlumnoModal'
-import { statusConfig, getStatusConfig } from '../../data/mockData'
-import { fetchStudents, fetchGroups, deleteStudent, fetchAttendanceStats } from '../../lib/supabaseData'
+import { fetchStudents, fetchGroups, deleteStudent, fetchAttendanceStats, fetchEvaluations } from '../../lib/supabaseData'
+import { evaluarRiesgo, examenesPorAlumno, REGLA_RIESGO_TEXTO } from '../../lib/riesgo'
 import { fetchAlumnosSinPagos } from '../../lib/pagosData'
 import {
   DataTable, DataTableRow,
-  DataTableAvatar, DataTableBadge, DataTableBar, SkeletonRows,
+  DataTableAvatar, DataTableBar, SkeletonRows,
 } from '../../components/ui/DataTable'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import { useAuth } from '../../context/AuthContext'
@@ -20,7 +20,23 @@ import { useSucursales } from '../../hooks/useSucursales'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
 
-const attColor   = r => r >= 90 ? 'var(--good)' : r >= 75 ? 'var(--info)' : 'var(--bad)'
+// Sin dato (alumno sin listas) es neutral, no rojo: no hay nada que alertar.
+const attColor   = r => r === null || r === undefined ? 'var(--t4)' : r >= 90 ? 'var(--good)' : r >= 75 ? 'var(--info)' : 'var(--bad)'
+
+/* Estado del alumno = regla única de riesgo (lib/riesgo.js). Antes se leía
+   students.status, una etiqueta sembrada que no seguía ninguna regla. */
+const ESTADOS = {
+  riesgo:     { label:'En riesgo',   style:{ background:'var(--bad-soft)',  color:'var(--bad)',  border:'1px solid var(--bad-line)' },  dot:'var(--bad-solid)' },
+  ok:         { label:'Sin alertas', style:{ background:'var(--good-soft)', color:'var(--good)', border:'1px solid var(--good-line)' }, dot:'var(--good-solid)' },
+  'sin-datos':{ label:'Sin datos',   style:{ background:'var(--soft-bg)',   color:'var(--t3)',   border:'1px solid var(--card-border)' }, dot:'var(--t4)' },
+}
+function estadoDe(s, exam) {
+  const r = evaluarRiesgo({ asist: s.attendanceRate, examenes: exam,
+    tareasHechas: s.assignmentsDone, tareasTotal: s.assignmentsTotal })
+  if (r.enRiesgo) return { clave: 'riesgo', motivos: r.motivos }
+  const hayDatos = s.attendanceRate != null || exam != null || s.assignmentsTotal > 0
+  return { clave: hayDatos ? 'ok' : 'sin-datos', motivos: [] }
+}
 const gradeColor = g => g >= 8.5 ? 'text-emerald-400' : g >= 7 ? 'text-blue-400' : 'text-red-400'
 
 /* Qué columna aparece en cada ancho. Medido el 2026-11-08: con la barra
@@ -81,10 +97,12 @@ export default function Students() {
   const [lastCred, setLastCred]   = useState(null)
 
   const [loadError, setLoadError] = useState(null)
+  const [examenes, setExamenes]   = useState({})   // promedio de exámenes por alumno
 
   const load = useCallback(async () => {
     try {
-      const [s, g] = await Promise.all([fetchStudents(), fetchGroups()])
+      const [s, g, evs] = await Promise.all([fetchStudents(), fetchGroups(), fetchEvaluations().catch(() => [])])
+      setExamenes(examenesPorAlumno(evs))
       // `students.attendance_rate` es el valor sembrado y quedó obsoleto: la tasa
       // real se calcula de las sesiones capturadas, igual que en Grupos y Rankings.
       const [stats, sp] = await Promise.all([
@@ -135,7 +153,7 @@ export default function Students() {
       return (s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q) || String(s.matricula ?? '').includes(q))
         && (sucursalFilter === TODAS || grp?.sucursal === sucursalFilter)
         && (groupFilter === 'all' || s.groupId === groupFilter)
-        && (statusFilter === 'all' || s.status === statusFilter)
+        && (statusFilter === 'all' || estadoDe(s, examenes[s.id] ?? null).clave === statusFilter)
         && (pagoFilter === 'all' || sinPagos.has(s.id))
     })
     .sort((a, b) => {
@@ -193,7 +211,7 @@ export default function Students() {
             nombreDe },
           { id:'estado', label:'Estado', value:statusFilter, onChange:setStatus, porDefecto:'all',
             options:[{ value:'all', label:'Todos' },
-              ...Object.entries(statusConfig).map(([k,v]) => ({ value:k, label:v.label }))] },
+              ...Object.entries(ESTADOS).map(([k,v]) => ({ value:k, label:v.label }))] },
           ...(veoPagos ? [{ id:'pago', label:'Pago', value:pagoFilter, onChange:setPagoFilter, porDefecto:'all',
             options:[{ value:'all', label:'Todos' }, { value:'sin-pagos', label:`Sin pagos (${sinPagos.size})` }] }] : []),
           { id:'orden', label:'Ordenar', value:sort, onChange:setSort, porDefecto:'name',
@@ -234,7 +252,8 @@ export default function Students() {
         {loading ? <SkeletonRows/> : (
         <ProgressiveList items={filtered} emptyLabel="No se encontraron alumnos con ese criterio.">
         {s => {
-          const cfg         = getStatusConfig(s.status)
+          const est         = estadoDe(s, examenes[s.id] ?? null)
+          const cfg         = ESTADOS[est.clave]
           const grp         = groups.find(g => g.id === s.groupId)
           const ac          = attColor(s.attendanceRate ?? 0)
           const groupAccent = getAccent(s.groupId)   // mismo color que Groups / Attendance / Registrar
@@ -327,13 +346,11 @@ export default function Students() {
                 {
                   className: COL.status,
                   content: (
-                    <DataTableBadge
-                      label={cfg.label}
-                      dot={cfg.dot}
-                      bg={cfg.bg}
-                      color={cfg.color}
-                      border={cfg.border}
-                    />
+                    <span className="badge text-[10px] px-2 py-1 inline-flex items-center gap-1.5" style={cfg.style}
+                      title={est.motivos.length ? est.motivos.join(' · ') : est.clave === 'riesgo' ? '' : REGLA_RIESGO_TEXTO}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }}/>
+                      {cfg.label}
+                    </span>
                   ),
                 },
                 /* Contacto */

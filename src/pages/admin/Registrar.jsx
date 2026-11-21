@@ -39,6 +39,7 @@ import { tintaSobre } from '../../lib/color'
 import ConfirmDialog from '../../components/admin/ConfirmDialog'
 import AvisoCorreoModal from '../../components/admin/AvisoCorreoModal'
 import { plantillaActividad } from '../../lib/avisosData'
+import { asistenciasEfectivas } from '../../lib/studentMetrics'
 import { useAuth } from '../../context/AuthContext'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -434,14 +435,15 @@ function PaymentCell({ value, onChange, tdStyle }) {
 
 /* Resumen de asistencia de un alumno sobre TODAS las sesiones capturadas del
    grupo. La hoja guarda 1 = presente, 2 = retardo, 0 = falta, y cargarHoja
-   rellena con 0 las sesiones en que el alumno no aparece. Antes sólo se
-   contaban las fechas con registro (las faltas no existían) y los retardos
-   se trataban como falta. Regla del centro: el retardo es asistencia. */
+   rellena con 0 las sesiones en que el alumno no aparece.
+   Regla del centro (2026-11-20): 3 retardos = 1 falta. "present" son las
+   asistencias que cuentan después de aplicar la regla. */
 export function resumenAsistencia(att = {}) {
   const valores = Object.values(att)
   const total   = valores.length
-  const present = valores.filter(v => v === 1 || v === 2).length
-  return { total, present, pct: total > 0 ? (present / total) * 100 : 0 }
+  const retardos = valores.filter(v => v === 2).length
+  const present = asistenciasEfectivas(valores.filter(v => v === 1).length, retardos)
+  return { total, present, retardos, pct: total > 0 ? (present / total) * 100 : 0 }
 }
 
 /* Garantía: 90 % de asistencia, todos los simulacros presentados, todas las

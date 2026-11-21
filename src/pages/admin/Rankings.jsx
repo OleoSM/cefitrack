@@ -12,6 +12,7 @@ import { DataTable, DataTableRow, DataTableAvatar, SkeletonRows } from '../../co
 import ProgressiveList from '../../components/ui/ProgressiveList'
 import { useConfiguracion } from '../../hooks/useConfiguracion'
 import { promedioPonderado, promedioExamenes, statsAsistencia, colorCalificacion } from '../../lib/studentMetrics'
+import { evaluarRiesgo } from '../../lib/riesgo'
 import { useSucursales } from '../../hooks/useSucursales'
 import BarraFiltros from '../../components/ui/BarraFiltros'
 import { useSucursalActiva, TODAS } from '../../hooks/useSucursalActiva'
@@ -91,6 +92,11 @@ export default function Rankings() {
               score: promedioPonderado(x, { evals, attendance }, pesos).promedio,
               examenes: evals.length ? promedioExamenes(evals) : null,
               asisPct: statsAsistencia(attendance).pct,
+              enRiesgo: evaluarRiesgo({
+                asist: statsAsistencia(attendance).pct,
+                examenes: evals.length ? promedioExamenes(evals) : null,
+                tareasHechas: x.assignmentsDone, tareasTotal: x.assignmentsTotal,
+              }).enRiesgo,
             }
           }
         }
@@ -256,7 +262,7 @@ export default function Rankings() {
           return (
             <DataTableRow key={s.id} onClick={() => navigate(`/admin/alumnos/${s.id}`)}
               style={{
-                borderLeft:`4px solid ${s.status==='critical'?'var(--bad)':s.status==='at-risk'?'var(--warn)':'var(--good)'}`,
+                borderLeft:`4px solid ${s.enRiesgo ? 'var(--bad)' : 'var(--good)'}`,
               }}
               cells={[
                 { className:'w-10', content:<MedalIcon pos={i+1}/> },

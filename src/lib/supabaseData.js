@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { todayISO } from './fecha'
+import { asistenciasEfectivas } from './studentMetrics'
 
 /**
  * Inicio de sesión con Supabase Auth.
@@ -47,12 +48,19 @@ export async function loginConAuth(email, password) {
   }
 }
 
-/** Sesión vigente según Supabase, para restaurarla al recargar. */
+/** Sesión vigente según Supabase, para restaurarla al recargar.
+ *  Devuelve null solo si de verdad no hay sesión o la cuenta no sirve. Si lo
+ *  que falla es la RED, lanza un error con `sinRed`: un alumno que abre la
+ *  app en la puerta con datos móviles intermitentes no debe quedar fuera
+ *  (y sin poder enseñar su QR) por un fallo de conexión. */
 export async function sesionActual() {
-  const { data } = await supabase.auth.getSession()
+  const sinRed = () => Object.assign(new Error('sin_red'), { sinRed: true })
+  const { data, error } = await supabase.auth.getSession()
+  if (error) throw sinRed()
   if (!data?.session) return null
-  const { data: perfil } = await supabase
+  const { data: perfil, error: e2 } = await supabase
     .from('profiles').select('id,name,email,role,student_id,activo').eq('id', data.session.user.id).maybeSingle()
+  if (e2) throw sinRed()
   if (!perfil || perfil.activo === false) return null
   return {
     id: perfil.id, name: perfil.name, email: perfil.email,
@@ -255,19 +263,21 @@ export async function fetchAttendanceStats(students) {
   if (error) throw error
 
   const sessionsByGroup = {}
-  const attendedByStudent = {}
+  const presentes = {}, retardos = {}
   for (const s of data.filter(sesionCapturada)) {
     sessionsByGroup[s.group_id] = (sessionsByGroup[s.group_id] ?? 0) + 1
     for (const r of s.attendance_records) {
-      if (r.status === 'presente' || r.status === 'tardanza')
-        attendedByStudent[r.student_id] = (attendedByStudent[r.student_id] ?? 0) + 1
+      if (r.status === 'presente') presentes[r.student_id] = (presentes[r.student_id] ?? 0) + 1
+      if (r.status === 'tardanza') retardos[r.student_id] = (retardos[r.student_id] ?? 0) + 1
     }
   }
 
+  // Regla: 3 retardos = 1 falta (asistenciasEfectivas, studentMetrics.js).
   const byStudent = {}
   for (const st of students) {
     const total = sessionsByGroup[st.groupId] ?? 0
-    byStudent[st.id] = total === 0 ? null : Math.round(((attendedByStudent[st.id] ?? 0) / total) * 100)
+    const asistio = asistenciasEfectivas(presentes[st.id], retardos[st.id])
+    byStudent[st.id] = total === 0 ? null : Math.round((asistio / total) * 100)
   }
 
   const byGroup = {}
@@ -519,6 +529,7 @@ const MENSAJES_ALTA_ALUMNO = {
   email_already_exists: 'Ese correo ya está registrado.',
   group_not_found: 'El grupo seleccionado no existe.',
   falta_total: 'Para registrar un importe escribe también el total del curso.',
+  total_invalido: 'El total del curso debe ser mayor que cero.',
   monto_invalido: 'El importe no puede ser negativo.',
   pago_mayor_al_total: 'El primer pago no puede ser mayor que el total del curso.',
   falta_metodo: 'Elige la forma de pago.',

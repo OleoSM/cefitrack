@@ -22,6 +22,12 @@ export function promedioExamenes(evs) {
   return +(pool.reduce((sum, e) => sum + calificacionBase10(e), 0) / pool.length).toFixed(2)
 }
 
+/* Regla del centro (2026-11-20): 3 retardos = 1 falta, en TODAS las
+   pantallas. Asistencias que cuentan = presentes + retardos − ⌊retardos/3⌋. */
+export function asistenciasEfectivas(presentes = 0, retardos = 0) {
+  return presentes + retardos - Math.floor(retardos / 3)
+}
+
 /* Asistencia real del alumno: 3 retardos = 1 inasistencia. Ya no hay estado
    "justificado" —el centro sólo distingue tardanza de inasistencia—, así que
    toda sesión registrada cuenta. */

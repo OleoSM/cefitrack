@@ -12,6 +12,7 @@ import {
   fetchGroupMetrics, computeGroupStats,
 } from '../../lib/supabaseData'
 import { calificacionBase10 } from '../../lib/studentMetrics'
+import { riesgoDeAlumno, REGLA_RIESGO_TEXTO } from '../../lib/riesgo'
 import { useGroupColors } from '../../hooks/useGroupColors'
 import GroupShaderCard from '../../components/ui/GroupShaderCard'
 import { DataTable, DataTableRow, DataTableAvatar, DataTableBadge, DataTableBar, SkeletonBlock } from '../../components/ui/DataTable'
@@ -157,7 +158,9 @@ export default function GroupDetail() {
         <KpiCard icon={Clock} tone="info" label="Horario del grupo"
           value={<span className="text-sm sm:text-base">{grp.schedule || 'Por definir'}</span>}
           pill={{ icon: MapPin, text: grp.room || 'Aula por asignar' }}/>
-        <KpiCard icon={IconRiesgo} label="Requieren atención" value={students.filter(s=>['critical','at-risk'].includes(s.status)).length} tone="warn" sub={`De ${students.length} alumnos`}/>
+        <KpiCard icon={IconRiesgo} label="Requieren atención" value={metrics ? students.filter(s => riesgoDeAlumno(s, {
+            evals: metrics.evalsByStudent?.[s.id] ?? [], attendance: metrics.attendanceByStudent?.[s.id] ?? [],
+          }).enRiesgo).length : '—'} title={REGLA_RIESGO_TEXTO} tone="warn" sub={`De ${students.length} alumnos`}/>
       </KpiGrid>
 
       <div className="filter-toolbar order-3" role="tablist" aria-label="Detalle del grupo">

@@ -92,7 +92,9 @@ export function AuthProvider({ children }) {
           persist(user)
         }
       })
-      .catch(() => { if (vivo) persist(null) })
+      // Sin red se conserva el usuario guardado: la sesión de Supabase sigue
+      // en el dispositivo y se revalida al volver la conexión.
+      .catch(err => { if (vivo && !err?.sinRed) persist(null) })
     return () => { vivo = false }
   }, [])
 

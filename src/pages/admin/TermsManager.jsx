@@ -26,14 +26,25 @@ function DocumentoInstitucional({ tipo, nombre }) {
   const [cargado, setCargado] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState('')
+  /* PDF elegido que espera confirmación (solo el T&C la pide). */
+  const [pendiente, setPendiente] = useState(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
     fetchDocumentoActivo(tipo).then(setActivo).catch(() => {}).finally(() => setCargado(true))
   }, [tipo])
 
+  /* Regla (2026-11-20): un T&C nuevo obliga a todos a firmar de nuevo. Por eso
+     publicar el T&C pide confirmación; el aviso y la garantía no. */
+  const elegir = file => {
+    if (!file) return
+    if (tipo === 'tyc' && activo) { setPendiente(file); return }
+    subir(file)
+  }
+
   const subir = async file => {
     if (!file) return
+    setPendiente(null)
     setSubiendo(true); setError('')
     try { setActivo(await publicarDocumento(tipo, file)) }
     catch (e) { setError(e.message || 'No se pudo publicar el documento.') }
@@ -63,7 +74,7 @@ function DocumentoInstitucional({ tipo, nombre }) {
         <div className="flex items-center gap-2 flex-shrink-0">
           <input ref={inputRef} type="file" accept="application/pdf" className="hidden"
             aria-label={`Archivo PDF de ${nombre}`}
-            onChange={e => subir(e.target.files?.[0])}/>
+            onChange={e => elegir(e.target.files?.[0])}/>
           {activo?.url && <a href={activo.url} target="_blank" rel="noreferrer"
             className="btn-secondary text-xs"><Eye size={13}/> Ver PDF</a>}
           <button
@@ -75,6 +86,25 @@ function DocumentoInstitucional({ tipo, nombre }) {
           </button>
         </div>
       </div>
+      {pendiente && (
+        <div role="alert" className="mt-3 rounded-xl p-3 space-y-2.5"
+          style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)' }}>
+          <p className="text-xs leading-relaxed" style={{ color:'var(--t2)' }}>
+            <strong style={{ color:'var(--warn)' }}>Publicar «{pendiente.name}» como versión {(activo?.version ?? 0) + 1}.</strong>{' '}
+            Todos los alumnos que ya firmaron tendrán que firmar de nuevo; sus firmas anteriores quedan archivadas.
+            La firma se coloca en la posición medida para el T&C 2027: si el formato del documento cambió, revisa un PDF firmado antes de pedir firmas.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => subir(pendiente)} className="btn-primary text-xs">
+              <Upload size={13}/> Publicar y pedir nueva firma
+            </button>
+            <button type="button" className="btn-secondary text-xs"
+              onClick={() => { setPendiente(null); if (inputRef.current) inputRef.current.value = '' }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       {error && <p className="text-xs mt-2" style={{ color:'var(--bad)' }}>{error}</p>}
     </div>
   )

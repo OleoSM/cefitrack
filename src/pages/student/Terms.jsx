@@ -224,11 +224,13 @@ function HandSignedUpload({ file, onChange }) {
 }
 
 
-/** PDF incrustado con salida para navegadores que no lo muestran, y descarga. */
+/** PDF incrustado (tableta y escritorio) o botón para abrirlo (teléfono).
+ *  En iPhone un <object> con PDF solo enseña la primera página y no deja
+ *  pasar a las demás, así que en pantalla chica se abre en el visor nativo. */
 function VisorPdf({ url, descarga }) {
   return (
     <>
-      <div className="rounded-xl overflow-hidden" style={{ border:'1px solid var(--card-border)', background:'var(--soft-bg)' }}>
+      <div className="hidden sm:block rounded-xl overflow-hidden" style={{ border:'1px solid var(--card-border)', background:'var(--soft-bg)' }}>
         <object data={url} type="application/pdf" className="block w-full h-[48vh] min-h-[320px]">
           <div className="p-6 text-center">
             <p className="text-sm" style={{ color:'var(--t3)' }}>Tu navegador no puede mostrar el PDF aquí.</p>
@@ -236,9 +238,19 @@ function VisorPdf({ url, descarga }) {
           </div>
         </object>
       </div>
-      <a href={url} download={descarga} className="btn-secondary justify-center text-xs w-full">
-        <Download size={13}/> Descargar el PDF para leerlo después
-      </a>
+      <div className="sm:hidden rounded-xl p-4 text-center space-y-3" style={{ border:'1px solid var(--card-border)', background:'var(--soft-bg)' }}>
+        <FileText size={28} className="mx-auto" style={{ color:'var(--accent)' }}/>
+        <p className="text-sm" style={{ color:'var(--t2)' }}>Ábrelo para leerlo completo; luego regresa aquí para continuar.</p>
+        <a href={url} target="_blank" rel="noreferrer" className="btn-primary w-full justify-center min-h-11">Abrir el documento</a>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <a href={url} target="_blank" rel="noreferrer" className="hidden sm:flex btn-secondary justify-center text-xs">
+          <FileText size={13}/> Abrir en pantalla completa
+        </a>
+        <a href={url} download={descarga} className="btn-secondary justify-center text-xs">
+          <Download size={13}/> Descargar el PDF
+        </a>
+      </div>
     </>
   )
 }

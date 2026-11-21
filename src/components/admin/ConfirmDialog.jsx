@@ -12,7 +12,7 @@ export const DANGER_BTN_STYLE = {
  *  `onConfirm` puede devolver `{ ok:false, message }` o lanzar: en ambos casos
  *  el error se muestra y el diálogo sigue abierto. */
 export default function ConfirmDialog({
-  title, message, detail, confirmLabel = 'Eliminar', busyLabel = 'Eliminando…', onConfirm, onClose,
+  title, message, detail, confirmLabel = 'Eliminar', busyLabel = 'Eliminando…', onConfirm, onClose, children,
 }) {
   const [busy, setBusy]   = useState(false)
   const [error, setError] = useState(null)
@@ -48,6 +48,7 @@ export default function ConfirmDialog({
         <div className="p-5 space-y-3">
           <p className="text-sm" style={{ color: 'var(--t2)' }}>{message}</p>
           {detail && <p className="text-xs" style={{ color: 'var(--t3)' }}>{detail}</p>}
+          {children}
 
           {error && (
             <div role="alert" className="rounded-lg px-3 py-2"

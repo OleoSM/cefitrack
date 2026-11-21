@@ -40,10 +40,10 @@ export async function fetchMiDesempeno() {
 /** Planes y pagos del propio alumno (la RLS solo devuelve los suyos y si tiene el apartado). */
 export async function fetchMisPagos(studentId) {
   const [{ data: planes, error: e1 }, { data: pagos, error: e2 }] = await Promise.all([
-    supabase.from('planes_pago').select('id, concepto, total, modalidad, mensualidades, inicio, activo, inscripcion')
+    supabase.from('planes_pago').select('id, concepto, total, modalidad, mensualidades, inicio, activo, inscripcion, dia_limite')
       .eq('student_id', studentId).order('created_at', { ascending: false }),
     supabase.from('pagos').select('id, plan_id, monto, metodo, fecha, periodo, cubre_total, concepto, es_inscripcion')
-      .eq('student_id', studentId).order('fecha', { ascending: false }),
+      .eq('student_id', studentId).is('anulado_at', null).order('fecha', { ascending: false }),
   ])
   if (e1 || e2) throw e1 ?? e2
   return { planes: planes ?? [], pagos: pagos ?? [] }

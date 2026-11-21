@@ -168,10 +168,17 @@ export default function Pagos() {
   /* Formas de pago usadas por cada alumno, para el filtro y la columna. */
   const metodosPorPlan = useMemo(() => {
     const mapa = {}
-    pagos.forEach(p => {
+    pagos.filter(p => !p.anulado).forEach(p => {
       mapa[p.planId] ??= new Set()
       mapa[p.planId].add(p.metodo)
     })
+    return mapa
+  }, [pagos])
+
+  /* Movimientos por plan, para saber si un alumno va atrasado (fecha límite). */
+  const pagosPorPlan = useMemo(() => {
+    const mapa = {}
+    pagos.forEach(p => { (mapa[p.planId] ??= []).push(p) })
     return mapa
   }, [pagos])
 
@@ -179,7 +186,7 @@ export default function Pagos() {
     const q = query.trim().toLowerCase()
     return filas
       .filter(f => {
-        const est = estadoDe(f)
+        const est = estadoDe(f, pagosPorPlan[f.planId] ?? [])
         const met = metodosPorPlan[f.planId]
         return (sucursal === TODAS || f.sucursal === sucursal)
           && (grupo === 'todos' || f.groupId === grupo)
@@ -198,7 +205,7 @@ export default function Pagos() {
         if (orden === 'reciente') return (b.ultimoPago ?? '').localeCompare(a.ultimoPago ?? '')
         return a.studentName.localeCompare(b.studentName)
       })
-  }, [filas, metodosPorPlan, query, sucursal, grupo, estado, metodo, soloAdeudo, orden])
+  }, [filas, metodosPorPlan, pagosPorPlan, query, sucursal, grupo, estado, metodo, soloAdeudo, orden])
 
   /* Totales del conjunto FILTRADO, no del global: si se acota a una sucursal,
      los números de arriba tienen que hablar de esa sucursal. */
@@ -235,9 +242,7 @@ export default function Pagos() {
       <div>
         <h1 className="page-title">Pagos</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
-          Qué tan al corriente va cada alumno, mes a mes, y con qué forma de pago. El avance se
-          calcula sobre los importes cobrados, así que una liquidación de contado llega al 100 %
-          con un solo movimiento.
+          Avance de pago de cada alumno, mes a mes.
         </p>
       </div>
 
@@ -310,7 +315,7 @@ export default function Pagos() {
         {loading ? <SkeletonRows/> : (
           <ProgressiveList items={filtradas} emptyLabel="Ningún alumno coincide con el filtro.">
             {f => {
-              const est = estadoDe(f)
+              const est = estadoDe(f, pagosPorPlan[f.planId] ?? [])
               const met = [...(metodosPorPlan[f.planId] ?? [])]
               return (
                 <DataTableRow key={f.studentId} onClick={() => setDetalle(f.studentId)} cells={[
@@ -393,14 +398,21 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
   const [editandoPlan, setEditandoPlan] = useState(!fila.planId)
   const [error, setError] = useState(null)
   const [borrarFor, setBorrarFor] = useState(null)
+  const [motivo, setMotivo] = useState('')
 
   const calendario = calendarioPlan(fila, pagos)
   const sueltos    = pagosSinMes(fila, pagos)
+  const vencidas   = calendario.filter(m => m.vencida)
+  const activos    = pagos.filter(p => !p.anulado)
 
+  /* Regla: un pago no se borra, se anula. Queda en el historial, tachado, con
+     quién, cuándo y por qué; deja de sumar al avance. */
   const eliminar = async (id) => {
-    const res = await borrarPago(id)
+    if (!motivo.trim()) return { ok: false, message: 'Escribe el motivo de la anulación: queda en el historial.' }
+    const res = await borrarPago(id, motivo.trim())
     if (!res.ok) return res
     setError(null)
+    setMotivo('')
     onCambio()
   }
 
@@ -408,11 +420,19 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
     <ModalPortal onClose={onClose} maxWidth="max-w-3xl" scrollable>
       {borrarFor && (
         <ConfirmDialog
-          title="Eliminar movimiento"
-          message={`Se eliminará el pago de ${mxn(borrarFor.monto)} del ${borrarFor.fecha}.`}
-          detail="El avance y el saldo del alumno se recalculan. Esta acción no se puede deshacer."
+          title="Anular pago"
+          message={`Se anulará el pago de ${mxn(borrarFor.monto)} del ${borrarFor.fecha}.`}
+          detail="Deja de contar para el avance y el saldo, pero sigue visible en el historial como anulado."
+          confirmLabel="Anular pago" busyLabel="Anulando…"
           onConfirm={() => eliminar(borrarFor.id)}
-          onClose={() => setBorrarFor(null)}/>
+          onClose={() => { setBorrarFor(null); setMotivo('') }}>
+          <label className="block space-y-1">
+            <span className="text-xs font-semibold" style={{ color: 'var(--t2)' }}>Motivo</span>
+            <input value={motivo} onChange={e => setMotivo(e.target.value)} maxLength={200} autoFocus
+              placeholder="Ej. importe capturado dos veces"
+              className="input-field w-full text-sm"/>
+          </label>
+        </ConfirmDialog>
       )}
       <div className="flex items-start justify-between gap-3 px-5 py-3.5" style={{ borderBottom:'1px solid var(--divider)' }}>
           <div className="min-w-0">
@@ -451,6 +471,7 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
             <Dato k="Modalidad" v={fila.modalidad === 'contado'
               ? 'Contado' : `${fila.mensualidades} mensualidades`}/>
             <Dato k="Inicio" v={etiquetaMes(fila.inicio)}/>
+            <Dato k="Fecha límite" v={fila.diaLimite ? `Día ${fila.diaLimite} de cada mes` : 'Sin fecha límite'}/>
             <button onClick={() => setEditandoPlan(true)}
               className="btn-secondary ml-auto text-xs py-1.5 px-3">
               <Pencil size={12}/> Editar plan
@@ -482,6 +503,17 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
             <FormInscripcion fila={fila} pagos={pagos}
               onRegistrado={onCambio} onError={setError}/>
 
+            {vencidas.length > 0 && (
+              <div role="alert" className="rounded-xl px-3.5 py-2.5 flex items-start gap-2"
+                style={{ background: 'var(--bad-soft)', border: '1px solid var(--bad-line)' }}>
+                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--bad)' }}/>
+                <span className="text-xs" style={{ color: 'var(--bad)' }}>
+                  {vencidas.length === 1 ? '1 mensualidad vencida' : `${vencidas.length} mensualidades vencidas`}:{' '}
+                  {vencidas.map(m => m.etiqueta).join(', ')}.
+                </span>
+              </div>
+            )}
+
             {/* ── Mes a mes ─────────────────────────────────────────────── */}
             <section className="space-y-2">
               <h3 className="section-title">Pagos mes a mes</h3>
@@ -495,13 +527,14 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                     <div key={m.mes} className="rounded-xl p-3 space-y-1.5"
                       style={{
                         background: 'var(--card-bg)',
-                        border: `1px solid ${m.cubierto ? 'var(--good-line)' : 'var(--card-border)'}`, boxShadow: 'var(--card-shadow)',
+                        border: `1px solid ${m.cubierto ? 'var(--good-line)' : m.vencida ? 'var(--bad-line)' : 'var(--card-border)'}`, boxShadow: 'var(--card-shadow)',
                       }}>
                       <div className="flex items-center justify-between gap-1">
                         <span className="text-xs font-bold" style={{ color: 'var(--t1)' }}>
                           {m.etiqueta}
                         </span>
                         {m.cubierto && <CheckCircle2 size={13} style={{ color: 'var(--good)' }}/>}
+                        {m.vencida && <span className="text-[10px] font-bold" style={{ color: 'var(--bad)' }}>Vencida</span>}
                       </div>
                       <p className="text-sm font-bold tabular-nums"
                         style={{ color: m.cubierto ? 'var(--good)' : 'var(--t2)' }}>
@@ -509,6 +542,8 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                       </p>
                       <p className="text-[10px]" style={{ color: 'var(--t3)' }}>
                         de {mxn(m.esperado)}
+                        {m.abonosAplicados > 0 && ` · ${mxn(m.abonosAplicados)} de abonos sin mes`}
+                        {m.limite && !m.cubierto && ` · vence ${m.limite.slice(8)}/${m.limite.slice(5, 7)}`}
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {m.porContado
@@ -526,10 +561,15 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
             {/* ── Movimientos ──────────────────────────────────────────── */}
             <section className="space-y-2">
               <h3 className="section-title">
-                Movimientos ({pagos.length})
-                {sueltos.length > 0 && (
+                Movimientos ({activos.length})
+                {sueltos.filter(p => !p.anulado).length > 0 && (
                   <span className="font-normal" style={{ color: 'var(--t3)' }}>
-                    {' '}— {sueltos.length} sin mes asignado
+                    {' '}· {sueltos.filter(p => !p.anulado).length} sin mes asignado
+                  </span>
+                )}
+                {pagos.length > activos.length && (
+                  <span className="font-normal" style={{ color: 'var(--t3)' }}>
+                    {' '}· {pagos.length - activos.length} anulado{pagos.length - activos.length === 1 ? '' : 's'}
                   </span>
                 )}
               </h3>
@@ -540,11 +580,16 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                   sizes={{ mobile: 4, tablet: 8, desktop: 12 }}>
                   {p => (
                     <div key={p.id} className="flex items-center gap-2.5 rounded-lg px-3 py-2"
-                      style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)' }}>
+                      style={{ background: 'var(--card-bg)', border: '1px solid var(--divider)', opacity: p.anulado ? .7 : 1 }}>
                       <MetodoBadge metodo={p.metodo}/>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--t1)' }}>
-                          {mxn(p.monto)}
+                          <span style={p.anulado ? { textDecoration: 'line-through', color: 'var(--t3)' } : undefined}>{mxn(p.monto)}</span>
+                          {p.anulado && (
+                            <span className="ml-2 text-[10px] font-semibold" style={{ color: 'var(--bad)' }}>
+                              ANULADO
+                            </span>
+                          )}
                           {p.cubreTotal && (
                             <span className="ml-2 text-[10px] font-semibold" style={{ color: 'var(--good)' }}>
                               LIQUIDA EL TOTAL
@@ -564,14 +609,19 @@ function DetalleAlumno({ fila, pagos, onClose, onCambio }) {
                           {p.nota ? ` · ${p.nota}` : ''}
                           {` · Registro: ${p.registradoPor ?? p.createdByName}`}
                         </p>
+                        {p.anulado && (
+                          <p className="text-[11px]" style={{ color: 'var(--bad)' }}>
+                            Anulado el {p.anuladoAt?.slice(0, 10)}{p.motivoAnulacion ? ` · ${p.motivoAnulacion}` : ''}
+                          </p>
+                        )}
                       </div>
-                      <button onClick={() => setBorrarFor(p)} title="Eliminar movimiento" aria-label="Eliminar movimiento"
+                      {!p.anulado && <button onClick={() => setBorrarFor(p)} title="Anular pago" aria-label="Anular pago"
                         className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
                         style={{ color: 'var(--t3)', background:'var(--soft-bg)', border:'1px solid var(--card-border)' }}
                         onMouseEnter={e => { e.currentTarget.style.color = 'var(--bad)' }}
                         onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)' }}>
                         <Trash2 size={14}/>
-                      </button>
+                      </button>}
                     </div>
                   )}
                 </ProgressiveList>
@@ -637,6 +687,7 @@ function FormPlan({ fila, onCancel, onGuardado }) {
     inicio: fila.inicio ?? claveMes(todayISO()),
     notas: fila.notas ?? '',
     inscripcion: fila.inscripcion ?? '',
+    diaLimite: fila.diaLimite ?? '',
   })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
@@ -652,6 +703,7 @@ function FormPlan({ fila, onCancel, onGuardado }) {
       mensualidades: f.modalidad === 'contado' ? 1 : Number(f.mensualidades),
       inicio: f.inicio, concepto: f.concepto, notas: f.notas || null,
       inscripcion: f.inscripcion === '' ? null : Number(f.inscripcion),
+      diaLimite: f.diaLimite === '' ? null : Number(f.diaLimite),
     })
     setGuardando(false)
     if (!res.ok) { setError(res.message); return }
@@ -698,9 +750,22 @@ function FormPlan({ fila, onCancel, onGuardado }) {
             onChange={e => setF(v => ({ ...v, inicio: `${e.target.value}-01` }))}
             className="input-field text-sm"/>
         </Campo>
+        {/* Opcional: con fecha límite, una mensualidad sin cubrir después de
+            ese día se marca vencida y el alumno pasa a "Atrasado". */}
+        {f.modalidad === 'mensualidades' && (
+          <Campo label="Fecha límite (opcional)">
+            <select value={f.diaLimite} className="input-field text-sm"
+              onChange={e => setF(v => ({ ...v, diaLimite: e.target.value }))}>
+              <option value="">Sin fecha límite</option>
+              {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                <option key={d} value={d}>Día {d} de cada mes</option>
+              ))}
+            </select>
+          </Campo>
+        )}
         <Campo label="Notas" className="col-span-2 sm:col-span-4">
           <input value={f.notas} onChange={e => setF(v => ({ ...v, notas: e.target.value }))}
-            className="input-field text-sm" placeholder="Beca, convenio, descuento…"/>
+            className="input-field text-sm" placeholder="Convenio, acuerdo de pago, adeudo previo…"/>
         </Campo>
       </div>
 

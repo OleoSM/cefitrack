@@ -105,25 +105,27 @@ export async function fetchResumenPagos() {
     // de las mensualidades, así que sumarla al plan descuadraba el saldo.
     inscripcion: num(r.inscripcion),
     inscripcionPagada: num(r.inscripcion_pagada) ?? 0,
+    // Día del mes en que vence cada mensualidad (opcional). Sin él no hay
+    // "vencidas": no se puede atrasar quien no tiene fecha límite.
+    diaLimite: r.dia_limite ?? null,
   }))
 }
 
 /**
  * Ids de los alumnos que todavía no han pagado nada (ni curso ni inscripción).
  *
- * El alta ya no exige pago, así que la lista de Alumnos los marca. Una beca
- * completa (plan con total 0) no cuenta como adeudo. La política de `pagos`
+ * El alta ya no exige pago, así que la lista de Alumnos los marca. No existen
+ * becas (regla del centro): todo plan tiene total > 0. La política de `pagos`
  * solo deja leer a quien tiene el apartado Pagos: quien no lo tiene recibiría
  * a todos como "sin pagos", por eso la pantalla solo lo pide en ese caso.
  */
 export async function fetchAlumnosSinPagos() {
   const { data, error } = await supabase
     .from('v_pagos_resumen')
-    .select('student_id, plan_id, total, pagado, inscripcion_pagada')
+    .select('student_id, pagado, inscripcion_pagada')
   if (error) throw error
   return new Set(data
-    .filter(r => (num(r.pagado) ?? 0) + (num(r.inscripcion_pagada) ?? 0) <= 0
-      && !(r.plan_id && num(r.total) === 0))
+    .filter(r => (num(r.pagado) ?? 0) + (num(r.inscripcion_pagada) ?? 0) <= 0)
     .map(r => r.student_id))
 }
 
@@ -166,6 +168,11 @@ export async function fetchPagos(planIds) {
     registradoPor: p.registrado_por,
     createdBy: p.created_by,
     createdByName: creatorNames[p.created_by] ?? 'Administrador',
+    // Un pago anulado NO se oculta: sigue en el historial, tachado, con motivo.
+    // No suma al avance ni cubre meses.
+    anulado: !!p.anulado_at,
+    anuladoAt: p.anulado_at,
+    motivoAnulacion: p.motivo_anulacion,
   }))
 }
 
@@ -184,6 +191,7 @@ export async function fetchPagosDeAlumnos(studentIds) {
     .from('pagos')
     .select('student_id, monto, concepto, fecha, es_inscripcion')
     .in('student_id', ids)
+    .is('anulado_at', null)
   if (error) throw error
   return data.map(p => ({
     studentId: p.student_id,
@@ -225,6 +233,8 @@ const MENSAJES = {
   pago_not_found: 'El movimiento ya no existe.',
   plan_con_pagos: 'Este plan tiene pagos registrados: desactívalo en lugar de borrarlo.',
   falta_quien_registra: 'Escribe tu nombre en «Registro»: debe constar quién recibió el pago.',
+  pago_mayor_al_total: 'Con este pago se rebasaría el total del curso. Revisa el importe: puede pagar más de una mensualidad, pero no más del total.',
+  pago_ya_anulado: 'Este pago ya está anulado.',
 }
 
 function traducir(error) {
@@ -235,7 +245,7 @@ function traducir(error) {
     return 'Este alumno ya tiene un plan activo. Edita el que existe o desactívalo primero.'
   }
   if (raw.includes('total_check') || raw.includes('monto_check')) {
-    return 'El importe debe ser mayor que cero.'
+    return 'El importe debe ser mayor que cero. No hay becas: todo plan tiene un total.'
   }
   return 'No se pudo guardar. Revisa los datos e inténtalo de nuevo.'
 }
@@ -244,7 +254,7 @@ function traducir(error) {
 export async function guardarPlan({
   id = null, studentId, total, modalidad = 'mensualidades',
   mensualidades = 1, inicio = null, concepto = 'Curso', notas = null, activo = true,
-  inscripcion = null,
+  inscripcion = null, diaLimite = null,
 }) {
   const { data, error } = await supabase.rpc('guardar_plan_pago', {
     p_id: id,
@@ -266,6 +276,11 @@ export async function guardarPlan({
       p_inscripcion: inscripcion,
     })
     if (e2) return { ok: false, message: traducir(e2) }
+    const { error: e3 } = await supabase.rpc('set_dia_limite_plan', {
+      p_plan_id: data?.id ?? id,
+      p_dia: diaLimite ? Number(diaLimite) : null,
+    })
+    if (e3) return { ok: false, message: traducir(e3) }
   }
   return { ok: true, plan: data }
 }
@@ -302,8 +317,9 @@ export async function registrarPago({
   return { ok: true, pago: data }
 }
 
-export async function borrarPago(id) {
-  const { error } = await supabase.rpc('borrar_pago', { p_id: id })
+/** Anula un pago: deja de sumar, pero queda en el historial con su motivo. */
+export async function borrarPago(id, motivo = null) {
+  const { error } = await supabase.rpc('borrar_pago', { p_id: id, p_motivo: motivo })
   if (error) return { ok: false, message: traducir(error) }
   return { ok: true }
 }
@@ -355,27 +371,69 @@ export const mxn = v =>
  * como liquidado y cada mes lo refleja. Repartir 12 000 entre seis meses
  * fabricaría seis movimientos que nunca ocurrieron.
  */
-export function calendarioPlan(fila, pagosDelPlan) {
+export function calendarioPlan(fila, pagosDelPlan, hoy = hoyISO()) {
   if (!fila?.planId || !fila.inicio) return []
-  const contado = pagosDelPlan.some(p => p.cubreTotal)
+  const activos = pagosDelPlan.filter(p => !p.anulado && !p.esInscripcion)
+  const contado = activos.some(p => p.cubreTotal)
   const esperadoPorMes = fila.total / Math.max(1, fila.mensualidades)
 
-  return Array.from({ length: fila.mensualidades }, (_, i) => {
+  const meses = Array.from({ length: fila.mensualidades }, (_, i) => {
     const mes = sumarMeses(fila.inicio, i)
-    const delMes = pagosDelPlan.filter(p => p.periodo === mes)
-    const pagado = delMes.reduce((s, p) => s + p.monto, 0)
+    const delMes = activos.filter(p => p.periodo === mes)
+    return { mes, delMes, pagado: delMes.reduce((s, p) => s + p.monto, 0) }
+  })
+
+  /* Los abonos sin mes (o de un mes fuera del plan) cuentan para el avance;
+     para el calendario se aplican a los meses pendientes más antiguos. Antes
+     el dinero entraba pero ningún mes se marcaba cubierto. */
+  const claves = new Set(meses.map(m => m.mes))
+  let bolsa = activos.filter(p => !p.cubreTotal && (p.periodo === null || !claves.has(p.periodo)))
+    .reduce((s, p) => s + p.monto, 0)
+  for (const m of meses) {
+    const falta = Math.max(0, esperadoPorMes - m.pagado)
+    const aplica = Math.min(falta, bolsa)
+    m.aplicado = aplica
+    bolsa -= aplica
+  }
+
+  return meses.map(m => {
+    const cubierto = contado || m.pagado + m.aplicado >= esperadoPorMes - 0.01
+    const limite = fechaLimite(m.mes, fila.diaLimite)
     return {
-      mes,
-      etiqueta: etiquetaMes(mes),
+      mes: m.mes,
+      etiqueta: etiquetaMes(m.mes),
       esperado: esperadoPorMes,
-      pagado,
-      pagos: delMes,
+      pagado: m.pagado,
+      abonosAplicados: m.aplicado,
+      pagos: m.delMes,
       // Un plan liquidado de contado cubre todos sus meses aunque no haya un
       // movimiento con ese `periodo`.
-      cubierto: contado || pagado >= esperadoPorMes - 0.01,
-      porContado: contado && delMes.length === 0,
+      cubierto,
+      porContado: contado && m.delMes.length === 0,
+      limite,
+      // Vencida solo si el plan tiene fecha límite, ya pasó y no está cubierta.
+      vencida: !cubierto && !!limite && limite < hoy,
     }
   })
+}
+
+/** 'YYYY-MM-DD' de hoy en México. */
+export function hoyISO() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+}
+
+/** Fecha límite de la mensualidad de `mes` ('YYYY-MM-01'): el día pactado,
+ *  recortado al último día del mes (un 31 en febrero vence el 28/29). */
+export function fechaLimite(mes, dia) {
+  if (!dia || !mes) return null
+  const [a, m] = mes.split('-').map(Number)
+  const ultimo = new Date(a, m, 0).getDate()
+  return `${a}-${String(m).padStart(2, '0')}-${String(Math.min(dia, ultimo)).padStart(2, '0')}`
+}
+
+/** Mensualidades vencidas (no cubiertas y con la fecha límite ya pasada). */
+export function mensualidadesVencidas(fila, pagosDelPlan, hoy = hoyISO()) {
+  return calendarioPlan(fila, pagosDelPlan, hoy).filter(m => m.vencida)
 }
 
 /** Movimientos que no cuelgan de ningún mes del calendario: contado y abonos
@@ -383,14 +441,18 @@ export function calendarioPlan(fila, pagosDelPlan) {
 export function pagosSinMes(fila, pagosDelPlan) {
   if (!fila?.planId) return []
   const meses = new Set(calendarioPlan(fila, pagosDelPlan).map(m => m.mes))
-  return pagosDelPlan.filter(p => p.periodo === null || !meses.has(p.periodo))
+  // Los anulados también se listan aquí (tachados): no se oculta nada.
+  return pagosDelPlan.filter(p => p.anulado || p.periodo === null || !meses.has(p.periodo))
 }
 
-/** Estado de cobranza de un alumno, derivado de los importes. */
-export function estadoDe(fila) {
+/** Estado de cobranza de un alumno, derivado de los importes.
+ *  "Sin pagos" usa la misma cuenta que la bandera de Alumnos: ni curso ni
+ *  inscripción. Con fecha límite, una mensualidad vencida lo vuelve "atrasado". */
+export function estadoDe(fila, pagosDelPlan = null) {
   if (!fila.planId) return 'sin-plan'
   if (fila.porcentaje >= 100) return 'liquidado'
-  if (fila.pagado <= 0) return 'sin-pagos'
+  if (fila.pagado <= 0 && (fila.inscripcionPagada ?? 0) <= 0) return 'sin-pagos'
+  if (pagosDelPlan && fila.diaLimite && mensualidadesVencidas(fila, pagosDelPlan).length > 0) return 'atrasado'
   return 'parcial'
 }
 
@@ -398,6 +460,7 @@ export const ESTADO_LABEL = {
   'sin-plan': 'Sin plan',
   'sin-pagos': 'Sin pagos',
   parcial: 'Pago parcial',
+  atrasado: 'Atrasado',
   liquidado: 'Liquidado',
 }
 
@@ -405,5 +468,6 @@ export const ESTADO_COLOR = {
   'sin-plan': 'var(--t3)',
   'sin-pagos': 'var(--bad)',
   parcial: 'var(--warn)',
+  atrasado: 'var(--bad)',
   liquidado: 'var(--good)',
 }

@@ -141,9 +141,9 @@ export async function leerArchivoAlumnos(file, grupo) {
     }
     // Pago inicial opcional: si viene, se valida; si no, solo se avisa.
     const num = v => Number(String(v).replace(/[^\d.]/g, ''))
-    const conTotal = datos.total !== '' && num(datos.total) >= 0
+    const conTotal = datos.total !== '' && num(datos.total) > 0   // no hay becas: total > 0
     const conPago = datos.primerPago !== '' && num(datos.primerPago) > 0
-    if (datos.total !== '' && !conTotal) errores.push('Total del curso no válido')
+    if (datos.total !== '' && !conTotal) errores.push('Total del curso no válido (debe ser mayor que cero)')
     datos.total = conTotal ? String(num(datos.total)) : ''
     datos.primerPago = conPago ? String(num(datos.primerPago)) : ''
     const forma = normalizar(datos.formaPago)
@@ -151,7 +151,7 @@ export async function leerArchivoAlumnos(file, grupo) {
       : forma.includes('credito') || forma.includes('tarjeta') ? 'tarjeta_credito' : forma.includes('efectivo') ? 'efectivo' : ''
     if (conPago) {
       if (!conTotal) errores.push('Hay primer pago pero falta el total del curso')
-      else if (num(datos.primerPago) > num(datos.total) && num(datos.total) > 0) errores.push('El primer pago es mayor que el total')
+      else if (num(datos.primerPago) > num(datos.total)) errores.push('El primer pago es mayor que el total')
       if (!datos.metodo) errores.push('Forma de pago no válida (efectivo, transferencia, tarjeta de crédito o débito)')
     } else {
       avisos.push('Sin pago: se dará de alta y quedará marcado "sin pagos"')

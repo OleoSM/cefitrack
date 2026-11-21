@@ -116,7 +116,7 @@ export default function StudentFormModal({
         metodo: pago.metodo, esInscripcion: pago.esInscripcion, referencia: pago.referencia.trim(),
       } : null
       if (!editing) {
-        if (conTotal && !(pagoListo.total >= 0)) { setError('El total del curso no es válido.'); return }
+        if (conTotal && !(pagoListo.total > 0)) { setError('El total del curso debe ser mayor que cero.'); return }
         if (conMonto && !conTotal) { setError('Para registrar el primer importe escribe también el total del curso.'); return }
         if (!conMonto && !avisoSinPago) { setAvisoSinPago(true); return }
       }
@@ -346,7 +346,7 @@ export default function StudentFormModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
                   <span className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--t3)' }}>Total del curso ($)</span>
-                  <input type="number" min="0" step="0.01" inputMode="decimal" value={pago.total}
+                  <input type="number" min="1" step="0.01" inputMode="decimal" value={pago.total}
                     onChange={e => setP('total', e.target.value)} className="input-field" placeholder="Ej. 9000"/>
                 </label>
                 <label className="block">

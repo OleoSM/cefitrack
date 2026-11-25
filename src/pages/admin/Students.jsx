@@ -60,7 +60,7 @@ const COL = Object.fromEntries(COLUMNS.map(c => [c.key, c.className]))
 export default function Students() {
   const navigate = useNavigate()
   const { getAccent } = useGroupColors()
-  const { currentUser, allowedSucursales, canAccess, puedeDarAltas, puedeVer } = useAuth()
+  const { currentUser, allowedSucursales, canAccess, puedeDarAltas, puedeVer, esDueno } = useAuth()
   // Solo quien ve Pagos puede leer los importes; a los demás no se les marca nada.
   const veoPagos = puedeVer('pagos')
   const isAdmin = currentUser?.role === 'admin'
@@ -192,7 +192,7 @@ export default function Students() {
         <ConfirmDialog
           title="Eliminar alumno"
           message={`Se eliminará a ${deleteFor.name} junto con su cuenta de acceso.`}
-          detail="También se borran sus calificaciones y registros de asistencia. Esta acción no se puede deshacer."
+          detail="También se borran sus calificaciones, asistencias, pagos y expediente. Esta acción no se puede deshacer."
           onConfirm={async () => { const res = await deleteStudent(deleteFor.id); if (res?.ok === false) return res; await load() }}
           onClose={() => setDeleteFor(null)}
         />
@@ -379,7 +379,8 @@ export default function Students() {
                         { icon: ShieldCheck, title: 'Permisos del portal',  hover: 'var(--accent)', act: () => setPermisosFor(s) },
                         { icon: KeyRound, title: 'Restablecer contraseña',  hover: 'var(--warn)', act: () => setResetFor(s) },
                         // Dar de baja: solo con el permiso de altas.
-                        ...(puedeDarAltas ? [{ icon: Trash2, title: 'Eliminar alumno', hover: 'var(--bad)', act: () => setDeleteFor(s) }] : []),
+                        /* Eliminar: solo las cuentas dueñas (dirección), regla del 2026-11-24. */
+                        ...(esDueno ? [{ icon: Trash2, title: 'Eliminar alumno', hover: 'var(--bad)', act: () => setDeleteFor(s) }] : []),
                       ].map(({ icon: Icon, title, hover, act }) => (
                         <button key={title} title={title}
                           onClick={e => { e.stopPropagation(); act() }}

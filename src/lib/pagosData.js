@@ -85,6 +85,7 @@ export async function fetchResumenPagos() {
     institucion: r.institucion,
     avatar: r.avatar,
     avatarSrc: r.avatar ? (src[r.avatar] ?? null) : null,
+    fotoPath: r.foto_path ?? null,
     // Nota libre de la hoja Registrar. Se muestra tal cual, sólo informativa:
     // el porcentaje real sale de los importes, no de esta etiqueta.
     pagoEstado: r.pago_estado,

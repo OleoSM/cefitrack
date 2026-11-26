@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Users } from 'lucide-react'
+import { useFotoUrl } from '../../lib/fotosPerfil'
 import { tintaSobre } from '../../lib/color'
 
 /**
@@ -40,10 +41,7 @@ export default function StudentDock({ students = [], onOpenStudent, accent }) {
               color: accent ? tintaSobre(accent) : 'var(--t1)',
               boxShadow: '0 4px 12px rgba(0,0,0,.2)',
             }}>
-            {student.avatarSrc
-              ? <img src={student.avatarSrc} alt="" loading="lazy"
-                  className="w-full h-full rounded-full object-cover"/>
-              : (student.name ?? '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
+            <ImagenDock student={student}/>
             <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 translate-y-1 opacity-0 group-hover/avatar:translate-y-0 group-hover/avatar:opacity-100 group-focus-visible/avatar:translate-y-0 group-focus-visible/avatar:opacity-100 transition-all duration-200 ease-out whitespace-nowrap rounded-lg px-2 py-1 text-[9px] font-bold"
               style={{ background:'var(--panel-bg)', color:'var(--t1)',
                        border:'1px solid var(--card-border)', boxShadow:'0 8px 24px rgba(0,0,0,.28)' }}>
@@ -64,4 +62,13 @@ export default function StudentDock({ students = [], onOpenStudent, accent }) {
       )}
     </div>
   )
+}
+
+/* Foto subida por el alumno → avatar del catálogo → iniciales. */
+function ImagenDock({ student }) {
+  const foto = useFotoUrl(student.fotoPath)
+  const src = foto ?? student.avatarSrc
+  return src
+    ? <img src={src} alt="" loading="lazy" className="w-full h-full rounded-full object-cover"/>
+    : (student.name ?? '?').split(' ').map(n => n[0]).join('').slice(0, 2)
 }

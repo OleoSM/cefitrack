@@ -1301,6 +1301,7 @@ function RegisterTable({ group, groupStudents, onBack, onDataChange, foco = null
     id: s.id, name: s.name,
     avatar: s.avatar,
     avatarSrc: s.avatarSrc,
+    fotoPath: s.fotoPath,
     groupId: s.groupId,
     pago: s.pagoEstado ?? '',
     garantia: s.garantia ?? '',

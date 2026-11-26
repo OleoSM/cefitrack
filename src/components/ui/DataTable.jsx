@@ -13,6 +13,7 @@
  */
 import { forwardRef } from 'react'
 import { tintaSobre } from '../../lib/color'
+import { useFotoUrl } from '../../lib/fotosPerfil'
 
 /**
  * Las columnas de ancho fijo no deben encogerse, pero la columna flexible SÍ:
@@ -120,15 +121,18 @@ export function DataTableRow({ cells = [], onClick, className = '', style: rowSt
 }
 
 /* ── Avatar cell helper (member-list pattern) ──────────────── */
-export function DataTableAvatar({ initials, statusColor, name, sub, accentColor, avatarSrc }) {
+export function DataTableAvatar({ initials, statusColor, name, sub, accentColor, avatarSrc, fotoPath }) {
+  /* La foto que el alumno subió tiene prioridad sobre el avatar del catálogo. */
+  const foto = useFotoUrl(fotoPath)
+  const imagen = foto ?? avatarSrc
   return (
     <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-hidden min-w-0">
       {/* Avatar con punto de estado. Si el alumno eligió una imagen se muestra
           ésa: es como se reconoce a sí mismo en su portal, y verla aquí ayuda
           a asociar rápido a la persona. Las iniciales quedan de respaldo. */}
       <div className="relative flex-shrink-0">
-        {avatarSrc ? (
-          <img src={avatarSrc} alt="" loading="lazy"
+        {imagen ? (
+          <img src={imagen} alt="" loading="lazy"
             className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover"
             style={{ border:'1px solid var(--card-border)' }}/>
         ) : (

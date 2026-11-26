@@ -272,6 +272,7 @@ export default function Rankings() {
                     <DataTableAvatar
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                       avatarSrc={s.avatarSrc}
+                      fotoPath={s.fotoPath}
                       name={s.name}
                       sub={
                         <span className="flex items-center gap-2">

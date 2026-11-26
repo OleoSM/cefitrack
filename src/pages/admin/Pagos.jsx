@@ -322,6 +322,7 @@ export default function Pagos() {
                   { className: 'flex-grow min-w-[110px] sm:min-w-[130px]', content: (
                     <DataTableAvatar initials={iniciales(f.studentName)} name={f.studentName}
                       avatarSrc={f.avatarSrc}
+                      fotoPath={f.fotoPath}
                       sub={[f.groupName, nombreDe(f.sucursal)].filter(Boolean).join(' · ') || 'Sin grupo'}/>
                   )},
                   { className: 'w-28 hidden lg:flex', content: (

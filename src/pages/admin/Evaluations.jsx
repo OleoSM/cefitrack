@@ -320,6 +320,7 @@ export default function Evaluations() {
                 content: <DataTableAvatar
                   initials={s?.name.split(' ').slice(0,2).map(n=>n[0]).join('') ?? '?'}
                   avatarSrc={s?.avatarSrc}
+                  fotoPath={s?.fotoPath}
                   name={s?.name ?? '—'}
                   sub={groups.find(g => g.id === s?.groupId)?.name}
                 />,

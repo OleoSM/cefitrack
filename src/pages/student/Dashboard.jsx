@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useFotoUrl } from '../../lib/fotosPerfil'
 import { useNavigate } from 'react-router-dom'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -128,6 +129,10 @@ export default function StudentDashboard() {
     const evo     = evolucionPorMateria(evaluations)
     return { pond, ranking, myPos, asis, evs: evaluations, evo }
   }, [s, attendance, evaluations, groupMetrics, pesosGlobales])
+
+  // Foto subida por el alumno → avatar del catálogo (antes de cualquier return).
+  const fotoPropia = useFotoUrl(s?.fotoPath)
+  const imagenAlumno = fotoPropia ?? s?.avatarSrc ?? null
 
   const estado = estadoPerfil({ loading, student: s, error })
   if (estado) return estado
@@ -281,8 +286,8 @@ export default function StudentDashboard() {
           border: `1px solid ${tarjetaClara ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.10)'}`,
         }}>
         <div className="flex items-center gap-4">
-          {s.avatarSrc ? (
-            <img src={s.avatarSrc} alt=""
+          {imagenAlumno ? (
+            <img src={imagenAlumno} alt=""
               className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover flex-shrink-0"
               style={{ background: tarjetaClara ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.10)' }}/>
           ) : (

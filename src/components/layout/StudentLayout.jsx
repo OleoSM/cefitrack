@@ -6,6 +6,7 @@ import { LayoutDashboard, BookOpen, CalendarCheck, QrCode, FolderOpen, LogOut, M
 import { fetchPermisosAlumno, PERMISOS_POR_DEFECTO } from '../../lib/permisosAlumno'
 import { useStudentData } from '../../hooks/useStudentData'
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import { useFotoUrl } from '../../lib/fotosPerfil'
 import clsx from 'clsx'
 import LoadingPage from '../LoadingPage'
 import { StudentThemeProvider, useStudentTheme } from '../../context/StudentThemeContext'
@@ -112,6 +113,9 @@ function LayoutInner() {
   const { appearance, setAppearance, t } = useStudentTheme()
   const accesibilidad = useAccesibilidadEstado()
   const { student, group: grp } = useStudentData()
+  // La foto que el alumno subió va primero; si no hay, el avatar del catálogo.
+  const fotoPropia = useFotoUrl(student?.fotoPath)
+  const imagenAlumno = fotoPropia ?? student?.avatarSrc ?? null
   // Documentos del expediente: se releen al cambiar de pantalla (p. ej. al
   // salir de Términos tras subir algo) y en vivo cuando administración los
   // valida o rechaza.
@@ -356,8 +360,8 @@ function LayoutInner() {
             <div className="relative flex-shrink-0">
               {/* El avatar elegido sustituye a las iniciales; si no hay, se
                   mantienen como respaldo. */}
-              {student?.avatarSrc ? (
-                <img src={student.avatarSrc} alt=""
+              {imagenAlumno ? (
+                <img src={imagenAlumno} alt=""
                   className="w-10 h-10 rounded-full object-cover"
                   style={{ border: `2px solid ${avatarBorder}`, boxShadow:`0 0 0 3px ${appearance === 'default' ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.12)'}` }}/>
               ) : (
@@ -468,7 +472,7 @@ function LayoutInner() {
             <MenuPerfil
               usuario={{ ...currentUser, name: student?.name ?? currentUser?.name }}
               iniciales={initials}
-              foto={student?.avatarSrc}
+              foto={imagenAlumno}
               ajustes={{ appearance, setAppearance, ...accesibilidad }}
               acciones={[
                 { icon: Brush,     titulo: 'Cambiar color de mi tarjeta', onClick: () => navigate('/student/configuracion', { state: { abrir: 'color' } }) },

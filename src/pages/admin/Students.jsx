@@ -279,6 +279,7 @@ export default function Students() {
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                       statusColor={avatarColor}
                       avatarSrc={s.avatarSrc}
+                      fotoPath={s.fotoPath}
                       name={sinPagos.has(s.id) ? <>
                         <Flag size={12} aria-label="Sin pagos" className="inline -mt-0.5 mr-1" style={{ color:'var(--bad)' }}>
                           <title>Aún no ha pagado nada</title>

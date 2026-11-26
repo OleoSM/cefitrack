@@ -265,6 +265,7 @@ export default function GroupDetail() {
                     content: <DataTableAvatar
                       initials={s.name.split(' ').slice(0,2).map(n=>n[0]).join('')}
                       avatarSrc={s.avatarSrc}
+                      fotoPath={s.fotoPath}
                       statusColor={ac}
                       name={s.name}
                       sub={s.email}

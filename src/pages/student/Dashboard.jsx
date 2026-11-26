@@ -4,7 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, ResponsiveContainer,
 } from 'recharts'
-import { ArrowRight, Target, Zap, Trophy, Settings2, Check, GripHorizontal, ChevronRight, MessageCircle } from 'lucide-react'
+import { ArrowRight, Target, Zap, Trophy, Settings2, Check, GripHorizontal, ChevronRight, MessageCircle, Info } from 'lucide-react'
 
 // Contacto de CEFIMAT para dudas que no resuelve el profesor en turno.
 const WHATSAPP = '5572008538'
@@ -109,6 +109,11 @@ export default function StudentDashboard() {
     document.addEventListener('pointerdown', fuera)
     return () => document.removeEventListener('pointerdown', fuera)
   }, [kpiSettingsOpen])
+
+  /* Panel "Cómo se calculan" tras el botón i: el sonar pulsa hasta que se
+     abre por primera vez en esta visita (mismo criterio que el calendario). */
+  const [verCalculo, setVerCalculo] = useState(false)
+  const [calculoVisto, setCalculoVisto] = useState(false)
 
   /* ── Pipeline oficial: promedio ponderado + lugar en el grupo ──
      (los simulacros siguen en mockData; calificaciones y asistencia son de BD) */
@@ -324,6 +329,18 @@ export default function StudentDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+        <button type="button" onClick={() => { setVerCalculo(v => !v); setCalculoVisto(true) }}
+          aria-expanded={verCalculo} aria-controls="calculo-indicadores"
+          aria-label={verCalculo ? 'Ocultar cómo se calculan tus indicadores' : 'Ver cómo se calculan tus indicadores'}
+          title="Cómo se calculan tus indicadores"
+          className="relative w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ color: verCalculo ? 'var(--accent)' : 'var(--t3)' }}>
+          {!calculoVisto && <>
+            <span aria-hidden="true" className="sonar-info"/>
+            <span aria-hidden="true" className="sonar-info sonar-info-eco"/>
+          </>}
+          <Info size={17}/>
+        </button>
         <BotonAyuda titulo="Mi resumen">
           <p>Son tus indicadores principales. Pasa el ratón (o toca) el nombre de cada uno para saber qué mide.</p>
           <p><b>Cambiar el orden:</b> arrastra la pestaña <GripHorizontal size={13} className="inline"/> que está arriba de cada tarjeta. Con teclado, enfócala y usa las flechas ← →.</p>
@@ -374,6 +391,12 @@ export default function StudentDashboard() {
           </div>
         ))}
       </KpiGrid>
+
+      {verCalculo && (
+        <CalculoIndicadores id="calculo-indicadores" pond={pond} asis={asis}
+          tareas={{ hechas: s.assignmentsDone ?? 0, total: s.assignmentsTotal ?? 0 }}
+          myPos={myPos} totalRanking={ranking.length}/>
+      )}
 
       {/* ══ Predicción de escuela ══ */}
       {(lastSim || targetSchool) && (() => {
@@ -645,5 +668,100 @@ export default function StudentDashboard() {
             onClick: () => navigate('/student/calificaciones', { state: { materia: detalle.materia } }) }}/>
       )}
     </div>
+  )
+}
+
+/* ── Cómo se calculan los indicadores ─────────────────────────────────────
+   Explicación exacta de la ponderación, con los números del propio alumno.
+   Usa las mismas funciones que los indicadores (promedioPonderado y
+   statsAsistencia en studentMetrics.js), así que nunca se contradicen. */
+function CalculoIndicadores({ id, pond, asis, tareas, myPos, totalRanking }) {
+  const d = pond.desglose
+  const fmt = v => (v === null || v === undefined ? 'sin datos' : (+v).toFixed(1))
+  const partes = [
+    { nombre: 'Exámenes',   valor: d.examenes.valor,   peso: d.examenes.peso },
+    { nombre: 'Tareas',     valor: d.tareas.valor,     peso: d.tareas.peso },
+    { nombre: 'Asistencia', valor: d.asistencia.valor, peso: d.asistencia.peso },
+  ]
+  const conDatos = partes.filter(p => p.valor !== null)
+  const sumaPesos = conDatos.reduce((a, p) => a + p.peso, 0)
+  const faltasEfectivas = asis.counts.ausente + asis.tardanzasConvertidas
+  const Fila = ({ titulo, children }) => (
+    <div className="space-y-1">
+      <p className="text-xs font-bold" style={{ color: 'var(--t1)' }}>{titulo}</p>
+      <div className="text-[12px] leading-relaxed space-y-1" style={{ color: 'var(--t2)' }}>{children}</div>
+    </div>
+  )
+  return (
+    <section id={id} className="card p-4 sm:p-5 space-y-4" aria-label="Cómo se calculan tus indicadores">
+      <h3 className="section-title">Cómo se calculan tus indicadores</h3>
+
+      <Fila titulo="Promedio general ponderado">
+        <p>Combina tres partes, cada una en escala de 0 a 10, con estos pesos:</p>
+        <ul className="space-y-0.5">
+          {partes.map(p => (
+            <li key={p.nombre} className="flex flex-wrap justify-between gap-x-3 tabular-nums">
+              <span>{p.nombre} · peso {p.peso} %</span>
+              <span style={{ color: p.valor === null ? 'var(--t4)' : 'var(--t1)' }}>{fmt(p.valor)}</span>
+            </li>
+          ))}
+        </ul>
+        <p>
+          Exámenes es el promedio de tus exámenes (si aún no tienes, el de tus evaluaciones). Tareas es
+          entregadas ÷ asignadas × 10. Asistencia es tu porcentaje de asistencia ÷ 10.
+        </p>
+        <p>
+          Promedio = suma de (calificación × peso) ÷ suma de los pesos con datos.
+          {conDatos.length < 3 && conDatos.length > 0 && ` Como aún no hay datos de ${partes.filter(p => p.valor === null).map(p => p.nombre.toLowerCase()).join(' ni ')}, su peso se reparte entre las demás partes (se divide entre ${sumaPesos} en lugar de 100).`}
+        </p>
+        {pond.promedio !== null && (
+          <p className="tabular-nums" style={{ color: 'var(--t1)' }}>
+            {conDatos.map(p => `${fmt(p.valor)} × ${p.peso}`).join(' + ')} = {conDatos.reduce((a, p) => a + p.valor * p.peso, 0).toFixed(1)} ÷ {sumaPesos} = <strong>{pond.promedio}</strong>
+          </p>
+        )}
+      </Fila>
+
+      <Fila titulo="Lugar en grupo">
+        <p>
+          Se ordena a tus compañeros por su promedio general ponderado, de mayor a menor, con la misma
+          fórmula de arriba. Quien todavía no tiene datos no entra en el orden.
+        </p>
+        {myPos > 0 && <p style={{ color: 'var(--t1)' }}>Hoy estás en el lugar <strong>#{myPos}</strong> de {totalRanking}.</p>}
+      </Fila>
+
+      <Fila titulo="Asistencia">
+        <p>Asistencia = (clases − faltas) ÷ clases × 100. Cada 3 retardos cuentan como 1 falta.</p>
+        {asis.pct !== null && (
+          <p className="tabular-nums" style={{ color: 'var(--t1)' }}>
+            {asis.total} clases · {asis.counts.ausente} faltas · {asis.counts.tardanza} retardos (= {asis.tardanzasConvertidas} falta{asis.tardanzasConvertidas === 1 ? '' : 's'})
+            → ({asis.total} − {faltasEfectivas}) ÷ {asis.total} = <strong>{asis.pct} %</strong>
+          </p>
+        )}
+      </Fila>
+
+      <Fila titulo="Tareas entregadas">
+        <p>Tareas entregadas ÷ tareas asignadas. Para la garantía debes entregar todas y sacar mínimo 80 % en cada una.</p>
+        {tareas.total > 0 && (
+          <p className="tabular-nums" style={{ color: 'var(--t1)' }}>
+            {tareas.hechas} ÷ {tareas.total} = <strong>{Math.round((tareas.hechas / tareas.total) * 100)} %</strong>
+          </p>
+        )}
+      </Fila>
+
+      {/* Aviso de errores: el alumno es quien mejor detecta una falta o una
+          calificación mal capturada. */}
+      <div role="note" className="rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3"
+        style={{ background: 'var(--info-soft)', border: '1px solid var(--info-line)' }}>
+        <Info size={16} className="flex-shrink-0" style={{ color: 'var(--info)' }}/>
+        <p className="text-[12px] leading-relaxed flex-1" style={{ color: 'var(--t2)' }}>
+          <strong style={{ color: 'var(--t1)' }}>¿Encontraste un error?</strong> Si una falta, un retardo,
+          una calificación o una tarea no coincide con lo que hiciste, avísanos para corregirlo.
+        </p>
+        <a href={`https://wa.me/52${WHATSAPP}?text=${encodeURIComponent('Hola, encontré un error en mis datos de SIGA:')}`}
+          target="_blank" rel="noreferrer" className="btn-secondary min-h-11 justify-center text-sm flex-shrink-0">
+          <MessageCircle size={15}/> Reportar un error
+        </a>
+      </div>
+    </section>
   )
 }

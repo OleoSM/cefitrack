@@ -173,9 +173,24 @@ function CalendarioListas({ sesiones, fechaAbierta, onElegir, diasClase, onPasar
               {dia}
             </button>
           )
+          /* Cualquier otro día sin lista (no es día de clase, antes de la
+             primera lista, grupo sin horario u hoy) también se puede abrir
+             para pasar lista manual. Solo los días futuros quedan inertes. */
+          if (!ses && onPasarLista && fecha <= hoy) return (
+            <button key={fecha} type="button" onClick={() => onPasarLista(fecha)}
+              title={`${fmtDate(fecha)} · Sin lista. Seleccione el día para registrarla de forma manual.`}
+              aria-label={`Pasar lista manual del ${fmtDate(fecha)}`}
+              className="h-9 flex items-center justify-center rounded-lg text-xs tabular-nums transition-transform active:scale-95"
+              style={{
+                color: esHoy ? 'var(--t1)' : 'var(--t3)', border: esHoy ? '1px dashed var(--t3)' : '1px solid transparent', fontWeight: esHoy ? 700 : 400,
+                outline: abierta ? '2px solid var(--accent)' : 'none', outlineOffset: 1,
+              }}>
+              {dia}
+            </button>
+          )
           if (!ses) return (
             <span key={fecha} className="h-9 flex items-center justify-center rounded-lg text-xs tabular-nums"
-              style={{ color: esHoy ? 'var(--t1)' : 'var(--t3)', border: esHoy ? '1px dashed var(--t3)' : '1px solid transparent', fontWeight: esHoy ? 700 : 400 }}>
+              style={{ color: esHoy ? 'var(--t1)' : 'var(--t4)', border: esHoy ? '1px dashed var(--t3)' : '1px solid transparent', fontWeight: esHoy ? 700 : 400 }}>
               {dia}
             </span>
           )
@@ -226,6 +241,10 @@ function CalendarioListas({ sesiones, fechaAbierta, onElegir, diasClase, onPasar
         <li className="flex items-start gap-2 text-[11px] leading-snug">
           <span className="w-3 h-3 rounded flex-shrink-0 mt-px" style={{ border:'1px dashed var(--t3)' }}/>
           <span style={{ color:'var(--t3)' }}><strong className="font-semibold" style={{ color:'var(--t2)' }}>Hoy.</strong> Fecha actual.</span>
+        </li>
+        <li className="flex items-start gap-2 text-[11px] leading-snug">
+          <span className="w-3 h-3 rounded flex-shrink-0 mt-px" style={{ border:'1px solid var(--card-border)' }}/>
+          <span style={{ color:'var(--t3)' }}><strong className="font-semibold" style={{ color:'var(--t2)' }}>Otros días.</strong> También pueden seleccionarse para pasar lista de forma manual, excepto los días futuros.</span>
         </li>
       </ul>
       )}
@@ -903,7 +922,9 @@ export default function Attendance() {
             <FileSpreadsheet size={15}/> Respaldo completo del grupo (Excel)
           </button>
         )}
-        {sessionIndex.some(s => s.groupId === historyGroupId) && (
+        {/* Siempre visible: aunque el grupo no tenga listas, desde aquí se
+            puede pasar lista manual de cualquier día hasta hoy. */}
+        {historyGroupId && (
           <CalendarioListas key={historyGroupId}
             sesiones={sessionIndex.filter(s => s.groupId === historyGroupId)}
             fechaAbierta={view === 'scan' && selectedGrp === historyGroupId ? selectedDate : null}

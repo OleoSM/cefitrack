@@ -220,6 +220,11 @@ export default function TermsManager() {
       : s.termsStatus !== 'firmado'
     return matchSearch && matchFilter
   })
+  /* Primero lo que espera validación (más pendientes arriba), luego el resto
+     por nombre: el trabajo del día queda al inicio sin tener que filtrar. */
+  const porRevisarDe = s => (s.documents?.filter(d => d.status === 'entregado').length ?? 0)
+    + (s.garantiaEstado === 'entregada' ? 1 : 0)
+  filtered.sort((a, b) => porRevisarDe(b) - porRevisarDe(a) || a.name.localeCompare(b.name))
 
   const load = useCallback(async () => {
     try {
@@ -330,7 +335,7 @@ export default function TermsManager() {
         </div>
         <div className="mt-4 p-3 rounded-xl text-xs" style={{ background:'var(--warn-soft)', border:'1px solid var(--warn-line)', color:'var(--warn)' }}>
           <AlertTriangle size={12} className="inline mr-1.5 -mt-0.5"/>
-          Actualizar un documento <strong>no invalida automáticamente</strong> las firmas existentes. Si el cambio es sustancial, resetea las firmas de los alumnos afectados para que vuelvan a firmar la versión nueva.
+          Publicar un <strong>T&C nuevo</strong> pide a todos los alumnos firmar de nuevo (las firmas anteriores quedan archivadas). Actualizar el Aviso de Privacidad o la Garantía no cambia las firmas.
         </div>
       </div>
 
